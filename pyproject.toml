@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyproject-template"
+version = "0.0.0"
+description = "This is a template for Python project repositories, intended for use by team members."
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.0",
+    "matplotlib>=3.9",
+    "Pillow>=10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.13",
+    "basedpyright>=1.31",
+]
+
+[tool.setuptools]
+packages = ["pyproject"]
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+exclude = [
+    ".git",
+    ".github",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = [
+"E", # pycodestyle (エラー)
+"F", # Pyflakes
+"I", # isort (インポート順)
+"B", # flake8-bugbear (バグの可能性)
+"UP", # pyupgrade (最新構文へのアップグレード)
+"SIM", # flake8-simplify (コードの簡略化)
+"PTH", # flake8-use-pathlib (pathlibの推奨)
+"A", # flake8-builtins (組み込み関数の上書き防止)
+"D", # pydocstyle (docstringチェック)
+"ANN", # flake8-annotations (型ヒントチェック)
+]
+
+ignore = [
+"E501", # 行の長さ制限（厳密すぎる場合は除外）
+"D107", # init メソッドのdocstring必須を解除（クラス側に書くため）
+"D400", # ピリオドを必須にしない
+"D104"
+]
+
+# pydocstyleの標準フォーマットに numpy を指定
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.basedpyright]
+include = [
+    "pyproject",  
+    ]   
+exclude = [
+    "**/__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+]
+typeCheckingMode = "standard"
+pythonVersion = "3.13"
+reportMissingImports = "error"
+reportMissingTypeStubs = false
+# warning は CI を失敗させない
+failOnWarnings = false

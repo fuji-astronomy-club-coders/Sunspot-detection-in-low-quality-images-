@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+  pull_request:
+
+jobs:
+  lint-and-type-check:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install project and development dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Check pyproject dependencies
+        run: python generate_dependencies.py --check
+
+      # ----------------------------------------
+      # Ruff: warning-only rules
+      # ----------------------------------------
+      - name: Ruff check - warnings
+        run: |
+          echo "::group::Ruff warnings"
+          ruff check . \
+            --select I001,D,PTH,UP015,UP017,B905 \
+            --output-format=concise \
+            --exit-zero
+          echo "::endgroup::"
+
+      # ----------------------------------------
+      # Ruff: CI-blocking rules
+      # ----------------------------------------
+      - name: Ruff check - errors
+        run: |
+          ruff check . \
+            --config .github/ci/ruff.toml \
+            --ignore I001,D,PTH,UP015,UP017,B905
+      # ----------------------------------------
+      # basedpyright
+      # ----------------------------------------
+      - name: basedpyright
+        run: basedpyright

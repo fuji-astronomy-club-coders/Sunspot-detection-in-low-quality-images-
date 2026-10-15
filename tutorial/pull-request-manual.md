@@ -86,6 +86,8 @@ git switch -c feature/add-image-loader
 ### 2-3. 編集して commit する
 
 変更を小さな単位で commit します。commit message は「何をしたか」が分かる短い文にしてください。
+squash mergeを前提としているため、より頻度の高いコミットをお願いします。
+メインブランチにコミットされる際にはまとめて一つのコミットになるので、自分用くらいのつもりでコミットしても構いません
 
 ```bash
 git add .

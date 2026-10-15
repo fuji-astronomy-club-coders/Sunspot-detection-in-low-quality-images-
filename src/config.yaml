@@ -1,0 +1,37 @@
+# ============================================================
+# Python Project Configuration
+# File: config.yaml
+# ============================================================
+# 注意:
+# - パスは原則としてプロジェクトルートからの相対パスにする
+# - 秘密情報は記載せず、環境変数から読み込む
+# - このファイルは YAML 形式で保存する（UTF-8）
+# ============================================================
+
+# ↓↓↓↓↓↓↓以下例↓↓↓↓↓↓↓
+
+# ------------------------------------------------------------
+# Application
+# ------------------------------------------------------------
+app:
+  name: "MyPythonProject"
+  version: "0.1.0"
+  description: "Python application"
+  environment: "development" # development / test / production
+  debug: false
+  language: "ja-JP"
+  timezone: "Asia/Tokyo"
+
+# ------------------------------------------------------------
+# Paths
+# 相対パスはプロジェクトルートを基準とする
+# ------------------------------------------------------------
+paths:
+  data_dir: "data"
+  input_dir: "data/input"
+  output_dir: "data/output"
+  cache_dir: ".cache"
+  log_dir: "logs"
+  temp_dir: ".tmp"
+  config_dir: "config"
+  resource_dir: "resources"

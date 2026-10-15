@@ -5,8 +5,9 @@ Ruff / basedpyright / GitHub Actions を使うプロジェクト向けに、VSCo
 ## 目次
 
 1. Linter / Formatter(Ruff・Basedpyright・Python)
-2. GitHub(Pull Requests and Issues・GitHub Actions・GitLens)
-3. そのほか(Git Graph・gitHD・推奨拡張機能の共有)
+2. YAML 設定ファイル
+3. GitHub(Pull Requests and Issues・GitHub Actions・GitLens)
+4. そのほか(Git Graph・gitHD・推奨拡張機能の共有)
 
 ---
 
@@ -111,9 +112,58 @@ Basedpyright を使う場合、標準の Pylance による型チェックと重�
 
 ---
 
-## 2. GitHub
+## 2. YAML 設定ファイル
 
-### 2-1. GitHub Pull Requests and Issues (`GitHub.vscode-pull-request-github`)
+### 2-1. YAML (`redhat.vscode-yaml`)
+
+Red Hat の YAML 拡張機能です。YAML の構文検証、入力補完、フォーマット、JSON Schema による設定内容の検証を利用できます。プロジェクトルートの `config.yaml` などを編集する場合に推奨します。
+
+**手順**
+
+1. 拡張機能 `redhat.vscode-yaml` をインストールする
+2. `.vscode/settings.json` に以下を追加する
+3. `config.yaml` を開き、構文エラーが「問題」パネルに表示されることを確認する
+
+```json
+{
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.formatOnSave": true,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  "yaml.validate": true,
+  "yaml.hover": true,
+  "yaml.completion": true
+}
+```
+
+**使い方**
+
+- 保存時に YAML を整形する
+- インデントや構文の問題は波線と「問題」パネルで確認する
+- キーや値の入力中に補完候補を表示する
+- JSON Schema を用意すると、設定項目の型や必須項目なども検証できる
+
+### 2-2. `config.yaml` に JSON Schema を適用する（任意）
+
+プロジェクト内に `schemas/config.schema.json` を作成し、`config.yaml` の先頭に以下のコメントを追加すると、スキーマに基づく補完と検証を有効にできます。
+
+```yaml
+# yaml-language-server: $schema=./schemas/config.schema.json
+```
+
+スキーマファイルのパスは、`config.yaml` からの相対パスです。スキーマはプロジェクトの実際の設定構造に合わせて作成してください。設定ファイルの構造とスキーマが一致していない場合、意図しない警告が出ることがあります。
+
+### 2-3. TOML (`tamasfe.even-better-toml`)（任意）
+
+`pyproject.toml` を編集する場合に便利な拡張機能です。Python プロジェクトで YAML と TOML の両方を扱う場合に導入できます。YAML 拡張機能の必須依存ではありません。
+
+---
+
+## 3. GitHub
+
+### 3-1. GitHub Pull Requests and Issues (`GitHub.vscode-pull-request-github`)
 
 VSCode 上で PR の作成、レビュー、コメントのやり取り、スレッドの解決を直接行えます。
 
@@ -138,7 +188,7 @@ VSCode 上で PR の作成、レビュー、コメントのやり取り、スレ
 - ブランチをプッシュした後、「Create Pull Request」から PR を作成できる
 - PR のチェックアウトも一覧から 1 クリックで行える
 
-### 2-2. GitHub Actions (`github.vscode-github-actions`)
+### 3-2. GitHub Actions (`github.vscode-github-actions`)
 
 `.github/workflows/ci.yml` などの設定ファイルの編集をサポートし、CI ジョブ(`Lint & Type Check` など)の実行結果やログをエディタ内で確認できます。
 
@@ -163,7 +213,7 @@ VSCode 上で PR の作成、レビュー、コメントのやり取り、スレ
 - ワークフローの YAML を編集すると、自動補完と構文検証が効く
 - ピン留めしたワークフローは、一覧の上部に常に表示される
 
-### 2-3. GitLens (`eamodio.gitlens`)
+### 3-3. GitLens (`eamodio.gitlens`)
 
 行ごとの変更履歴(`git blame`)やコミットグラフの確認など、Git の追跡機能を拡張します。
 
@@ -187,7 +237,7 @@ VSCode 上で PR の作成、レビュー、コメントのやり取り、スレ
 
 ---
 
-## 3. そのほか
+## 4. そのほか
 
 ### 3-1. Git Graph
 
@@ -227,6 +277,8 @@ Git の履歴と差分を確認するための拡張機能です。コミット�
   "recommendations": [
     "charliermarsh.ruff",
     "detachhead.basedpyright",
+    "redhat.vscode-yaml",
+    "tamasfe.even-better-toml",
     "ms-python.python",
     "GitHub.vscode-pull-request-github",
     "github.vscode-github-actions",
@@ -251,6 +303,8 @@ Git Graph や gitHD も共有したい場合は、各拡張機能の ID(拡張�
 - [ ] Python ファイルを保存すると、フォーマットとインポート整頓が自動で実行される
 - [ ] 「問題」パネルに Ruff / Basedpyright の診断結果が表示される
 - [ ] 型エラーが Pylance と二重に表示されていない
+- [ ] `config.yaml` の構文エラーが検出され、保存時に YAML が整形される
+- [ ] （スキーマを設定した場合）`config.yaml` のキーや値が JSON Schema で検証される
 - [ ] GitHub にサインインでき、PR・Issue が一覧に表示される
 - [ ] GitHub Actions のワークフロー実行状況が確認できる
 - [ ] 行末に GitLens の blame 情報が表示される

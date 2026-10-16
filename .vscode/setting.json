@@ -13,4 +13,6 @@
     "basedpyright.analysis.diagnosticMode": "workspace",
   "basedpyright.analysis.autoSearchPaths": true,
   "basedpyright.analysis.useLibraryCodeForTypes": true
+,
+   "python.analysis.typeCheckingMode": "off"
 }

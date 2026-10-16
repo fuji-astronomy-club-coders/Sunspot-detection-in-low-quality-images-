@@ -14,15 +14,5 @@
   "basedpyright.analysis.autoSearchPaths": true,
   "basedpyright.analysis.useLibraryCodeForTypes": true
 ,
-   "python.analysis.typeCheckingMode": "off",
-    "recommendations": [
-    "charliermarsh.ruff",
-    "detachhead.basedpyright",
-    "redhat.vscode-yaml",
-    "tamasfe.even-better-toml",
-    "ms-python.python",
-    "GitHub.vscode-pull-request-github",
-    "github.vscode-github-actions",
-    "eamodio.gitlens"
-  ]
+   "python.analysis.typeCheckingMode": "off"
 }

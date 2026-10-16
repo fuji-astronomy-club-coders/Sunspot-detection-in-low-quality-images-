@@ -9,5 +9,8 @@
       "source.fixAll.ruff": "explicit",
       "source.organizeImports.ruff": "explicit"
     }
-  }
+  },
+    "basedpyright.analysis.diagnosticMode": "workspace",
+  "basedpyright.analysis.autoSearchPaths": true,
+  "basedpyright.analysis.useLibraryCodeForTypes": true
 }

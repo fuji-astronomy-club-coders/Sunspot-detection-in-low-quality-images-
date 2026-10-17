@@ -9,5 +9,36 @@
       "source.fixAll.ruff": "explicit",
       "source.organizeImports.ruff": "explicit"
     }
-  }
+  },
+    "basedpyright.analysis.diagnosticMode": "workspace",
+  "basedpyright.analysis.autoSearchPaths": true,
+  "basedpyright.analysis.useLibraryCodeForTypes": true
+,
+   "python.analysis.typeCheckingMode": "off",
+     "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.formatOnSave": true,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  "yaml.validate": true,
+  "yaml.hover": true,
+  "yaml.completion": true,
+    "githubPullRequests.remotes": ["origin"],
+  "githubPullRequests.focusedMode": true,
+    "github-actions.workflows.pinned.workflows": [
+    ".github/workflows/ci.yml"
+  ],
+    "gitlens.currentLine.enabled": true,
+  "git.autofetch": true,
+    "recommendations": [
+    "charliermarsh.ruff",
+    "detachhead.basedpyright",
+    "redhat.vscode-yaml",
+    "tamasfe.even-better-toml",
+    "ms-python.python",
+    "GitHub.vscode-pull-request-github",
+    "github.vscode-github-actions",
+    "eamodio.gitlens"
+  ]
 }

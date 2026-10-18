@@ -1,0 +1,74 @@
+"""太陽画像にBlack Top-Hat変換を適用し、結果を画像ファイルに保存する。"""
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+# =========================
+# 設定
+# =========================
+KERNEL_SIZE = 20 # 構造要素（カーネル）の大きさ
+INPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー") # 入力画像のパス
+IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
+OUTPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\Black Top-Hat") # 出力画像の保存先
+OUTPUT_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-08-30_1fr_sample"
+
+
+# =========================
+# Black Top-Hat変換
+# =========================
+
+def main() -> None:
+    """Black Top-Hat変換を実行し、結果を画像ファイルに保存する。"""
+    # フォルダ内の画像をファイル名順に取得
+    image_paths = sorted(INPUT_PATH.glob(f"*{IMAGE_EXT}"))
+
+    if not image_paths:
+        raise FileNotFoundError(
+            f"画像が見つかりませんでした: {INPUT_PATH}"
+        )
+
+    # 最初の1枚を読み込む
+    input_path = image_paths[0]
+    image = cv2.imdecode(np.fromfile(input_path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+
+    if image is None:
+        raise FileNotFoundError(
+            f"画像を読み込めませんでした: {input_path}"
+        )
+
+    print(f"処理対象の画像: {input_path.name}")
+    # カーネルを作成
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (KERNEL_SIZE, KERNEL_SIZE)
+    )
+
+    # Black Top-Hat変換
+    result = cv2.morphologyEx(
+        image,
+        cv2.MORPH_BLACKHAT,
+        kernel
+    )
+
+    # 保存先フォルダを作成
+    OUTPUT_PATH.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    # 出力ファイルのパスを作成
+    output_path = OUTPUT_PATH / f"{OUTPUT_NAME}.png"
+
+    # 処理結果を保存
+    success = cv2.imwrite(str(output_path), result)
+
+    if not success:
+        raise OSError(
+            f"画像を保存できませんでした: {output_path}"
+        )
+
+    print(f"処理が完了しました: {output_path}")
+
+if __name__ == "__main__":
+    main()

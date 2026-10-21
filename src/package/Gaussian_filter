@@ -5,33 +5,20 @@ import cv2
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
+version = 1.00
+
+# --------------------------------------------------
+# 設定
+# --------------------------------------------------
+
 SIGMA = 20 #シグマの大きさ
 INPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー") # 入力画像のパス
 IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
 OUTPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\Gaussian_high_pass_filter") # 出力画像の保存先
-OUTPUT_NAME = "GF_" + str(SIGMA) + "sigma_'25-8-30_1fr_sample"
+OUTPUT_NAME = "GF_" + str(SIGMA) + "sigma_'25-8-30_1fr_sample2"
 
-def gaussian_high_pass_filter() -> None:
+def gaussian_high_pass_filter(image:np.ndarray) -> np.ndarray:
     """ガウシアン背景差し引きを行い、結果を画像ファイルに保存する。"""
-    # フォルダ内の画像をファイル名順に取得
-    image_paths = sorted(INPUT_PATH.glob(f"*{IMAGE_EXT}"))
-
-    if not image_paths:
-        raise FileNotFoundError(
-            f"画像が見つかりませんでした: {INPUT_PATH}"
-        )
-
-    # 最初の1枚を読み込む
-    input_path = image_paths[0]
-    image = cv2.imdecode(np.fromfile(input_path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
-
-    if image is None:
-        raise FileNotFoundError(
-            f"画像を読み込めませんでした: {input_path}"
-        )
-
-    print(f"処理対象の画像: {input_path.name}")
-
     # 元画像を浮動小数点型に変換
     image_float = image.astype(np.float32)
 
@@ -40,6 +27,29 @@ def gaussian_high_pass_filter() -> None:
 
     # 背景を差し引く
     result = image_float - background
+
+    return result
+
+if __name__ == "__main__":
+    # フォルダ内の画像をファイル名順に取得
+    image_paths = sorted(INPUT_PATH.glob(f"*{IMAGE_EXT}"))
+    
+    if not image_paths:
+        raise FileNotFoundError(
+            f"画像が見つかりませんでした: {INPUT_PATH}"
+        )
+    
+    # 最初の1枚を読み込む
+    input_path = image_paths[0]
+    image = cv2.imdecode(np.fromfile(input_path, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+
+    if image is None:
+        raise FileNotFoundError(
+            f"画像を読み込めませんでした: {input_path}"
+        )
+        print(f"処理対象の画像: {input_path.name}")
+    
+    result = gaussian_high_pass_filter(image)
 
     # 表示用に0～255へ正規化
     result_min = float(np.min(result))
@@ -70,6 +80,3 @@ def gaussian_high_pass_filter() -> None:
         )
 
     print(f"処理が完了しました: {output_path}")
-
-if __name__ == "__main__":
-    gaussian_high_pass_filter()

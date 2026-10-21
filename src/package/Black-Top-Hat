@@ -7,20 +7,44 @@ import numpy as np
 # =========================
 # 設定
 # =========================
-KERNEL_SIZE = 20 # 構造要素（カーネル）の大きさ
+KERNEL_SIZE = 15 # 構造要素（カーネル）の大きさ
 INPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー") # 入力画像のパス
 IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
 OUTPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\Black Top-Hat") # 出力画像の保存先
-OUTPUT_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_fix-standard_sample"
-CLOSING_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_fix-standard_closing_sample"
+OUTPUT_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_sample2"
+CLOSING_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_closing_sample2"
 
 
 # =========================
 # Black Top-Hat変換
 # =========================
 
-def black_top_hat() -> None:
-    """Black Top-Hat変換を実行し、結果を画像ファイルに保存する。"""
+def black_top_hat(image:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """NumPy配列を受け取り、クロージング画像とBlack Top-Hat画像を返す。"""
+    # カーネルを作成(カーネルサイズ四方に納まる楕円形)
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (KERNEL_SIZE, KERNEL_SIZE)
+    )
+
+    # クロージング処理
+    closing = cv2.morphologyEx(
+        image,
+        cv2.MORPH_CLOSE,
+        kernel,
+        #anchor=(7, 8),
+    )
+
+    # Black Top-Hat変換
+    result = cv2.morphologyEx(
+        image,
+        cv2.MORPH_BLACKHAT,
+        kernel
+    )
+
+    return closing, result
+
+if __name__ == "__main__":
     # フォルダ内の画像をファイル名順に取得
     image_paths = sorted(INPUT_PATH.glob(f"*{IMAGE_EXT}"))
 
@@ -39,29 +63,10 @@ def black_top_hat() -> None:
         )
 
     print(f"処理対象の画像: {input_path.name}")
-    # カーネルを作成(カーネルサイズ四方に納まる楕円形)
-    kernel = cv2.getStructuringElement(
-        cv2.MORPH_ELLIPSE,
-        (KERNEL_SIZE, KERNEL_SIZE)
-    )
 
-    # クロージング処理
-    closing = cv2.morphologyEx(
-        image,
-        cv2.MORPH_CLOSE,
-        kernel,
-        #anchor=(7, 8),
-    )
+    closing, result = black_top_hat(image)
 
-
-    # Black Top-Hat変換
-    result = cv2.morphologyEx(
-        image,
-        cv2.MORPH_BLACKHAT,
-        kernel
-    )
-
-    # 保存先フォルダを作成
+        # 保存先フォルダを作成
     OUTPUT_PATH.mkdir(
         parents=True,
         exist_ok=True
@@ -88,6 +93,3 @@ def black_top_hat() -> None:
         )
 
     print(f"処理が完了しました: {output_path}")
-
-if __name__ == "__main__":
-    black_top_hat()

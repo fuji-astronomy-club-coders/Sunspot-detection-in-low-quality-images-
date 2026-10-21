@@ -18,8 +18,8 @@ from pprint import pprint
 
 import matplotlib.pyplot as plt
 
-from package.config import resolve_path
-from package.utils import load_image
+from src.package.config import resolve_path
+from src.package.utils import load_image
 
 
 def main(config: dict) -> None:

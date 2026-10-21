@@ -4,6 +4,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+version = 1.00
+
 # =========================
 # 設定
 # =========================

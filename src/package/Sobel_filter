@@ -5,6 +5,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
+version = 1.00
+
 # --------------------------------------------------
 # 設定
 # --------------------------------------------------
@@ -13,9 +15,9 @@ INPUT_DIR = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9
 IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
 OUTPUT_DIR = Path(r"C:\Users\2025005585\Desktop\python\Sobel_filter")
 KSIZE = 3
-OUTPUT_NAME_GX = "Sobel_gx_'25-8-30_1f_sample.png"
-OUTPUT_NAME_GY = "Sobel_gy_'25-8-30_1f_sample.png"
-OUTPUT_NAME_G = "Sobel_magnitude_'25-8-30_1f_sample.png"
+OUTPUT_NAME_GX = "Sobel_gx_'25-8-30_1f_sample2.png"
+OUTPUT_NAME_GY = "Sobel_gy_'25-8-30_1f_sample2.png"
+OUTPUT_NAME_G = "Sobel_magnitude_'25-8-30_1f_sample2.png"
 
 
 # --------------------------------------------------
@@ -23,7 +25,7 @@ OUTPUT_NAME_G = "Sobel_magnitude_'25-8-30_1f_sample.png"
 # --------------------------------------------------
 
 def normalize_signed_image(image: np.ndarray) -> np.ndarray:
-    """符号付き微分画像を表示用の8 bit画像に変換する。"""
+    """符号付き微分画像を表示用の8bit画像に変換する。"""
     max_abs = float(np.max(np.abs(image)))
 
     if max_abs == 0:
@@ -48,9 +50,29 @@ def normalize_magnitude_image(image: np.ndarray) -> np.ndarray:
 # メイン処理
 # --------------------------------------------------
 
-def sobel_filter() -> None:
-    """画像を読み込み、Sobel画像を計算して保存する。"""
-    # フォルダ内のTIFF画像を取得
+def sobel_filter(image:np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """画像を読み込み、Sobel filterの計算結果を返す。"""
+    # 微分を計算
+    image_float = image.astype(np.float32)
+
+    gx = cv2.Sobel(
+        image_float, cv2.CV_32F,
+        dx=1, dy=0, ksize=KSIZE,
+    )
+
+    gy = cv2.Sobel(
+        image_float, cv2.CV_32F,
+        dx=0, dy=1, ksize=KSIZE,
+    )
+
+    # 勾配の大きさ
+    g = cv2.magnitude(gx, gy)
+
+    return gx, gy, g
+
+
+if __name__ == "__main__":
+        # フォルダ内のTIFF画像を取得
     image_paths = sorted(INPUT_DIR.glob(f"*{IMAGE_EXT}"))
 
     if not image_paths:
@@ -77,7 +99,7 @@ def sobel_filter() -> None:
     except Exception as e:
         print(f"Pillowでも読み込めませんでした: {e}")
         raise
-    
+
 
     if image is None:
         raise FileNotFoundError(
@@ -94,21 +116,7 @@ def sobel_filter() -> None:
     # 出力フォルダを作成
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 微分を計算
-    image_float = image.astype(np.float32)
-
-    gx = cv2.Sobel(
-        image_float, cv2.CV_32F,
-        dx=1, dy=0, ksize=KSIZE,
-    )
-
-    gy = cv2.Sobel(
-        image_float, cv2.CV_32F,
-        dx=0, dy=1, ksize=KSIZE,
-    )
-
-    # 勾配の大きさ
-    g = cv2.magnitude(gx, gy)
+    gx, gy, g = sobel_filter(image)
 
     # 表示用の8 bit画像に変換
     gx_display = normalize_signed_image(gx)
@@ -124,7 +132,3 @@ def sobel_filter() -> None:
     cv2.imwrite(str(OUTPUT_DIR / OUTPUT_NAME_G), g_display)
 
     print(f"処理が完了しました。出力先: {OUTPUT_DIR}")
-
-
-if __name__ == "__main__":
-    sobel_filter()

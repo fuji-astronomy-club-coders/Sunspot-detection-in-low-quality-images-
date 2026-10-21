@@ -16,9 +16,27 @@
 
 from pprint import pprint
 
+import matplotlib.pyplot as plt
+
+from package.config import resolve_path
+from package.utils import load_image
+
 
 def main(config: dict) -> None:
     """Run the main process."""
     print("Hello World")
     print("===Config===")
     pprint(config)
+
+    # 読み込む画像のパスを指定してください
+    image_path = resolve_path(config["paths"]["input_image"])
+
+    # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
+    image = load_image(image_path)
+
+    # ここから先のコードは正しく画像が読み込まれているかの確認用です。必要に応じてコメントアウトしてください。
+    print(image)
+
+    plt.imshow(image, origin="lower", cmap="gray")
+    plt.colorbar(label="Pixel value")
+    plt.show()

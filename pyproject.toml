@@ -12,6 +12,8 @@ dependencies = [
     "matplotlib>=3.9",
     "Pillow>=10.0",
     "PyYAML==6.0.3",
+    "opencv-python==5.0.0.93",
+    "scipy==1.18.1",
 ]
 
 [project.optional-dependencies]

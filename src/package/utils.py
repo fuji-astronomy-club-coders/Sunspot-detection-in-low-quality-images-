@@ -7,6 +7,7 @@
 アプリケーションのメイン処理は ``src/main.py`` に、
 実行制御はプロジェクトルートの ``run.py`` に配置する。
 """
+<<<<<<< HEAD
 import cv2
 import numpy as np
 
@@ -45,3 +46,38 @@ def closing_circle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
     closed = cv2.morphologyEx(image, cv2.MORPH_CLOSE, adopt_kernel)
 
     return closed
+=======
+
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import numpy.typing as npt
+import tifffile
+from astropy.io import fits
+
+
+def load_image(image_path: str | Path) -> npt.NDArray[Any]:
+    """TIFFまたはFITS画像を読み込み、画素値をNumPy配列で返す。
+
+    Args:
+        image_path: 読み込む画像ファイルのパス。
+
+    Returns:
+        各画素の値を格納したNumPy配列。
+
+    Raises:
+        ValueError: 対応していない画像形式の場合。
+    """
+    path = Path(image_path)
+    suffix = path.suffix.lower()
+
+    if suffix in (".tif", ".tiff"):
+        image = tifffile.imread(path)
+    elif suffix in (".fits", ".fit", ".fts"):
+        image = fits.getdata(path)
+    else:
+        raise ValueError(f"対応していない画像形式です: {path}")
+
+    return np.asarray(image)
+>>>>>>> cd802ab (TIFF画像とFITS画像をNumPy配列に変換する関数を作成 (#3))

@@ -7,27 +7,18 @@ import numpy as np
 version = 1.00
 
 # =========================
-# 設定
-# =========================
-KERNEL_SIZE = 15 # 構造要素（カーネル）の大きさ
-INPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー") # 入力画像のパス
-IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
-OUTPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\Black Top-Hat") # 出力画像の保存先
-OUTPUT_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_sample2"
-CLOSING_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_closing_sample2"
-
-
-# =========================
 # Black Top-Hat変換
 # =========================
 
-def black_top_hat(image:np.ndarray) -> np.ndarray:
+def black_top_hat(image:np.ndarray,kernelSize:int) -> np.ndarray:
     """画像にクロージング処理と Black Top-Hat 変換を適用する。
 
     Parameters
     ----------
     image : numpy.ndarray
         形態学的変換を適用する入力画像。通常は 2 次元のグレースケール画像。
+    kernelSize : int
+        カーネルの直径
 
     Returns
     -------
@@ -39,7 +30,7 @@ def black_top_hat(image:np.ndarray) -> np.ndarray:
     # カーネルを作成(カーネルサイズ四方に納まる楕円形)
     kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE,
-        (KERNEL_SIZE, KERNEL_SIZE)
+        (kernelSize, kernelSize)
     )#縦横のサイズが同じなので楕円が正円になる。
 
     # Black Top-Hat変換
@@ -52,6 +43,17 @@ def black_top_hat(image:np.ndarray) -> np.ndarray:
     return result
 
 if __name__ == "__main__":
+    # =========================
+    # 設定
+    # =========================
+    KERNEL_SIZE = 15 # 構造要素（カーネル）の大きさ
+    INPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー") # 入力画像のパス
+    IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
+    OUTPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\Black Top-Hat") # 出力画像の保存先
+    OUTPUT_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_sample2"
+    CLOSING_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_closing_sample2"
+
+
     # フォルダ内の画像をファイル名順に取得
     image_paths = sorted(INPUT_PATH.glob(f"*{IMAGE_EXT}"))
 
@@ -71,7 +73,7 @@ if __name__ == "__main__":
 
     print(f"処理対象の画像: {input_path.name}")
 
-    closing, result = black_top_hat(image)
+    closing, result = black_top_hat(image,kernelSize = KERNEL_SIZE)
 
         # 保存先フォルダを作成
     OUTPUT_PATH.mkdir(

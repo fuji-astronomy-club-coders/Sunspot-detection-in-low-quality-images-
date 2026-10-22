@@ -18,7 +18,18 @@ OUTPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\Gaussian_high_pass_filte
 OUTPUT_NAME = "GF_" + str(SIGMA) + "sigma_'25-8-30_1fr_sample2"
 
 def gaussian_high_pass_filter(image:np.ndarray) -> np.ndarray:
-    """ガウシアン背景差し引きを行い、結果を画像ファイルに保存する。"""
+    """ガウシアン平滑化した背景を入力画像から差し引く。
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        背景成分を差し引く入力画像。
+
+    Returns
+    -------
+    numpy.ndarray[float32]
+        float32 に変換した入力画像から、``SIGMA`` で平滑化した背景を差し引いた配列。
+    """
     # 元画像を浮動小数点型に変換
     image_float = image.astype(np.float32)
 

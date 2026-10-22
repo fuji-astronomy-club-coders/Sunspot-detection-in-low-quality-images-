@@ -14,7 +14,7 @@ def gaussian_high_pass_filter(image:np.ndarray,sigmaSize:int) -> np.ndarray:
     ----------
     image : numpy.ndarray
         背景成分を差し引く入力画像。
-    sigmaSize : int #TODO:reserch ほんとにintかな？
+    sigmaSize : int
         ガウシアンフィルタのシグマサイズ
 
     Returns

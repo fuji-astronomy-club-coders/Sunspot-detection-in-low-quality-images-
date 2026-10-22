@@ -18,7 +18,7 @@ def black_top_hat(image:np.ndarray,kernelSize:int) -> np.ndarray:
     image : numpy.ndarray
         形態学的変換を適用する入力画像。通常は 2 次元のグレースケール画像。
     kernelSize : int
-        カーネルの直径
+        カーネルの直径。奇数を指定する必要があります。
 
     Returns
     -------

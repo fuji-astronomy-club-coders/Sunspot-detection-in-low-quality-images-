@@ -67,7 +67,7 @@ def sobel_filter(image:np.ndarray,kernelSize:int,return_derivs:bool = False) -> 
     image : numpy.ndarray
         Sobel 演算を適用する入力画像。
     kernelSize : int
-        カーネルサイズ #TODO:serch 勾配算出におけるカーネルとは？
+        カーネルサイズ。中心が半画素ズレるため、奇数を指定する必要があります。
     return_derivs : bool, optional
         `defaut=False` Trueなら`gx`と`gy`も返します。
 

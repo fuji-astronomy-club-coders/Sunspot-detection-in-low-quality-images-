@@ -25,7 +25,18 @@ OUTPUT_NAME_G = "Sobel_magnitude_'25-8-30_1f_sample2.png"
 # --------------------------------------------------
 
 def normalize_signed_image(image: np.ndarray) -> np.ndarray:
-    """符号付き微分画像を表示用の8bit画像に変換する。"""
+    """符号付き微分画像を表示用の 8 bit 画像に正規化する。
+
+    Parameters
+    ----------
+    image : numpy.ndarray[np.float32]
+        正負の値を含む微分画像。sobel_filter 関数の出力 gx または gy が該当する。
+
+    Returns
+    -------
+    numpy.ndarray
+        8bit範囲に変換した画像。入力がすべて 0 の場合は 128 の画像。
+    """
     max_abs = float(np.max(np.abs(image)))
 
     if max_abs == 0:
@@ -36,7 +47,18 @@ def normalize_signed_image(image: np.ndarray) -> np.ndarray:
 
 
 def normalize_magnitude_image(image: np.ndarray) -> np.ndarray:
-    """勾配の大きさを表示用の8 bit画像に変換する。"""
+    """勾配の大きさを表示用の 8 bit 画像に min-max正規化する。
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        勾配の大きさを表す非負の配列。sobel_filter 関数の出力 g が該当する。
+
+    Returns
+    -------
+    numpy.ndarray
+        8bit範囲に min-max正規化をした 画像。最大値が 0 の場合は黒画像。
+    """
     max_value = float(np.max(image))
 
     if max_value == 0:
@@ -51,7 +73,22 @@ def normalize_magnitude_image(image: np.ndarray) -> np.ndarray:
 # --------------------------------------------------
 
 def sobel_filter(image:np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """画像を読み込み、Sobel filterの計算結果を返す。"""
+    """画像の水平方向・垂直方向の Sobel 微分と勾配の大きさを計算する。
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Sobel 演算を適用する入力画像。
+
+    Returns
+    -------
+    gx : numpy.ndarray[np.float32]
+        水平方向の微分画像
+    gy : numpy.ndarray[np.float32]
+        垂直方向の微分画像
+    g : numpy.ndarray[np.float32]
+        ``gx`` と ``gy`` から計算した勾配の大きさ。向きを持たないので、絶対値のユークリッド距離になる。
+    """
     # 微分を計算
     image_float = image.astype(np.float32)
 

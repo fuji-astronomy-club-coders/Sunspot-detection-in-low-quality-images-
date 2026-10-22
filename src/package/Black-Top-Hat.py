@@ -21,7 +21,7 @@ CLOSING_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_closing_sample2"
 # Black Top-Hat変換
 # =========================
 
-def black_top_hat(image:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def black_top_hat(image:np.ndarray) -> np.ndarray:
     """画像にクロージング処理と Black Top-Hat 変換を適用する。
 
     Parameters
@@ -42,14 +42,6 @@ def black_top_hat(image:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         (KERNEL_SIZE, KERNEL_SIZE)
     )#縦横のサイズが同じなので楕円が正円になる。
 
-    # クロージング処理
-    closing = cv2.morphologyEx(
-        image,
-        cv2.MORPH_CLOSE,
-        kernel,
-        #anchor=(7, 8),
-    )
-
     # Black Top-Hat変換
     result = cv2.morphologyEx(
         image,
@@ -57,7 +49,7 @@ def black_top_hat(image:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         kernel
     )
 
-    return closing, result
+    return result
 
 if __name__ == "__main__":
     # フォルダ内の画像をファイル名順に取得

@@ -31,9 +31,9 @@ def black_top_hat(image:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
     Returns
     -------
-    closing : numpy.ndarray
+    closing : numpy.ndarray[float32]
         指定カーネルでクロージング処理を行った画像。カーネル形状は円。
-    result : numpy.ndarray
+    result : numpy.ndarray[float32]
         入力画像に Black Top-Hat 変換を適用した画像。
     """
     # カーネルを作成(カーネルサイズ四方に納まる楕円形)

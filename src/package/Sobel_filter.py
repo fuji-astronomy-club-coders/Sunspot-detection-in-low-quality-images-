@@ -72,22 +72,24 @@ def normalize_magnitude_image(image: np.ndarray) -> np.ndarray:
 # メイン処理
 # --------------------------------------------------
 
-def sobel_filter(image:np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def sobel_filter(image:np.ndarray,return_derivs:bool = False) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """画像の水平方向・垂直方向の Sobel 微分と勾配の大きさを計算する。
 
     Parameters
     ----------
     image : numpy.ndarray
         Sobel 演算を適用する入力画像。
+    return_derivs : bool, optional
+        `defaut=False` Trueなら`gx`と`gy`も返します。
 
     Returns
     -------
+    g : numpy.ndarray[np.float32]
+            ``gx`` と ``gy`` から計算した勾配の大きさ。向きを持たないので、絶対値のユークリッド距離になる。
     gx : numpy.ndarray[np.float32]
         水平方向の微分画像
     gy : numpy.ndarray[np.float32]
         垂直方向の微分画像
-    g : numpy.ndarray[np.float32]
-        ``gx`` と ``gy`` から計算した勾配の大きさ。向きを持たないので、絶対値のユークリッド距離になる。
     """
     # 微分を計算
     image_float = image.astype(np.float32)
@@ -104,9 +106,11 @@ def sobel_filter(image:np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
     # 勾配の大きさ
     g = cv2.magnitude(gx, gy)
-
-    return gx, gy, g
-
+    
+    if return_derivs:
+        return g, gx, gy # ! 順番を変えました10/22 !
+    else:
+        return g
 
 if __name__ == "__main__":
         # フォルダ内のTIFF画像を取得

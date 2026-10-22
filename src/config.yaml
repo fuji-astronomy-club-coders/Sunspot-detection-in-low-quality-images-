@@ -8,7 +8,9 @@
 # - このファイルは YAML 形式で保存する（UTF-8）
 # ============================================================
 
-<<<<<<< HEAD
+paths: # 相対パスはプロジェクトルートを基準とする
+  input_image: 'C:\Users\seigo\Downloads\2025-08-30-0437_9-CapObj - コピー\img00000968.tiff'
+
 Emphasis: #強調処理のパラメータ
   SobelFilter:
     kernelSize:3
@@ -16,12 +18,4 @@ Emphasis: #強調処理のパラメータ
     kernelSize:15
   GaussianFilter:
     sigmaSize:20
-=======
 
-# ------------------------------------------------------------
-# Paths
-# 相対パスはプロジェクトルートを基準とする
-# ------------------------------------------------------------
-paths:
-  input_image: 'C:\Users\seigo\Downloads\2025-08-30-0437_9-CapObj - コピー\img00000968.tiff'
->>>>>>> cd802ab (TIFF画像とFITS画像をNumPy配列に変換する関数を作成 (#3))

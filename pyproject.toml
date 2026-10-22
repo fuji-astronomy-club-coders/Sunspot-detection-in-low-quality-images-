@@ -12,13 +12,10 @@ dependencies = [
     "matplotlib>=3.9",
     "Pillow>=10.0",
     "PyYAML==6.0.3",
-<<<<<<< HEAD
-    "opencv-python==5.0.0.93",
-    "scipy==1.18.1",
-=======
     "tifffile>=2026.2.20",
     "astropy>=7.2.3",
->>>>>>> cd802ab (TIFF画像とFITS画像をNumPy配列に変換する関数を作成 (#3))
+    "opencv-python==5.0.0.93",
+    "scipy==1.18.1"
 ]
 
 [project.optional-dependencies]

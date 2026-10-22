@@ -8,19 +8,6 @@ from PIL import Image
 version = 1.00
 
 # --------------------------------------------------
-# 設定
-# --------------------------------------------------
-
-INPUT_DIR = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー")
-IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
-OUTPUT_DIR = Path(r"C:\Users\2025005585\Desktop\python\Sobel_filter")
-KSIZE = 3
-OUTPUT_NAME_GX = "Sobel_gx_'25-8-30_1f_sample2.png"
-OUTPUT_NAME_GY = "Sobel_gy_'25-8-30_1f_sample2.png"
-OUTPUT_NAME_G = "Sobel_magnitude_'25-8-30_1f_sample2.png"
-
-
-# --------------------------------------------------
 # 表示用画像への変換
 # --------------------------------------------------
 
@@ -72,13 +59,15 @@ def normalize_magnitude_image(image: np.ndarray) -> np.ndarray:
 # メイン処理
 # --------------------------------------------------
 
-def sobel_filter(image:np.ndarray,return_derivs:bool = False) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray]:
+def sobel_filter(image:np.ndarray,kernelSize:int,return_derivs:bool = False) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """画像の水平方向・垂直方向の Sobel 微分と勾配の大きさを計算する。
 
     Parameters
     ----------
     image : numpy.ndarray
         Sobel 演算を適用する入力画像。
+    kernelSize : int
+        カーネルサイズ #TODO:serch 勾配算出におけるカーネルとは？
     return_derivs : bool, optional
         `defaut=False` Trueなら`gx`と`gy`も返します。
 
@@ -96,12 +85,12 @@ def sobel_filter(image:np.ndarray,return_derivs:bool = False) -> np.ndarray | tu
 
     gx = cv2.Sobel(
         image_float, cv2.CV_32F,
-        dx=1, dy=0, ksize=KSIZE,
+        dx=1, dy=0, ksize=kernelSize,
     )
 
     gy = cv2.Sobel(
         image_float, cv2.CV_32F,
-        dx=0, dy=1, ksize=KSIZE,
+        dx=0, dy=1, ksize=kernelSize,
     )
 
     # 勾配の大きさ
@@ -113,6 +102,18 @@ def sobel_filter(image:np.ndarray,return_derivs:bool = False) -> np.ndarray | tu
         return g
 
 if __name__ == "__main__":
+
+    # --------------------------------------------------
+    # 設定
+    # --------------------------------------------------
+    INPUT_DIR = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー")
+    IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
+    OUTPUT_DIR = Path(r"C:\Users\2025005585\Desktop\python\Sobel_filter")
+    KSIZE = 3
+    OUTPUT_NAME_GX = "Sobel_gx_'25-8-30_1f_sample2.png"
+    OUTPUT_NAME_GY = "Sobel_gy_'25-8-30_1f_sample2.png"
+    OUTPUT_NAME_G = "Sobel_magnitude_'25-8-30_1f_sample2.png"
+
         # フォルダ内のTIFF画像を取得
     image_paths = sorted(INPUT_DIR.glob(f"*{IMAGE_EXT}"))
 
@@ -157,7 +158,7 @@ if __name__ == "__main__":
     # 出力フォルダを作成
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    gx, gy, g = sobel_filter(image)
+    gx, gy, g = sobel_filter(image,kernelSize = KSIZE)
 
     # 表示用の8 bit画像に変換
     gx_display = normalize_signed_image(gx)

@@ -22,12 +22,25 @@ CLOSING_NAME = "BTH_" + str(KERNEL_SIZE) + "karnel_'25-8-30_1fr_closing_sample2"
 # =========================
 
 def black_top_hat(image:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """NumPy配列を受け取り、クロージング画像とBlack Top-Hat画像を返す。"""
+    """画像にクロージング処理と Black Top-Hat 変換を適用する。
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        形態学的変換を適用する入力画像。通常は 2 次元のグレースケール画像。
+
+    Returns
+    -------
+    closing : numpy.ndarray
+        指定カーネルでクロージング処理を行った画像。カーネル形状は円。
+    result : numpy.ndarray
+        入力画像に Black Top-Hat 変換を適用した画像。
+    """
     # カーネルを作成(カーネルサイズ四方に納まる楕円形)
     kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE,
         (KERNEL_SIZE, KERNEL_SIZE)
-    )
+    )#縦横のサイズが同じなので楕円が正円になる。
 
     # クロージング処理
     closing = cv2.morphologyEx(

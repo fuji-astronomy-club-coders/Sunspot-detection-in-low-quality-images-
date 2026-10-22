@@ -7,34 +7,26 @@ from scipy.ndimage import gaussian_filter
 
 version = 1.00
 
-# --------------------------------------------------
-# 設定
-# --------------------------------------------------
-
-SIGMA = 20 #シグマの大きさ
-INPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー") # 入力画像のパス
-IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
-OUTPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\Gaussian_high_pass_filter") # 出力画像の保存先
-OUTPUT_NAME = "GF_" + str(SIGMA) + "sigma_'25-8-30_1fr_sample2"
-
-def gaussian_high_pass_filter(image:np.ndarray) -> np.ndarray:
+def gaussian_high_pass_filter(image:np.ndarray,sigmaSize:int) -> np.ndarray:
     """ガウシアン平滑化した背景を入力画像から差し引く。
 
     Parameters
     ----------
     image : numpy.ndarray
         背景成分を差し引く入力画像。
+    sigmaSize : int #TODO:reserch ほんとにintかな？
+        ガウシアンフィルタのシグマサイズ
 
     Returns
     -------
     numpy.ndarray[float32]
-        float32 に変換した入力画像から、``SIGMA`` で平滑化した背景を差し引いた配列。
+        float32 に変換した入力画像から、`sigmaSize`で平滑化した背景を差し引いた配列。
     """
     # 元画像を浮動小数点型に変換
     image_float = image.astype(np.float32)
 
     # 背景画像を作成
-    background = gaussian_filter(image_float, sigma=SIGMA)
+    background = gaussian_filter(image_float, sigma=sigmaSize)
 
     # 背景を差し引く
     result = image_float - background
@@ -42,6 +34,16 @@ def gaussian_high_pass_filter(image:np.ndarray) -> np.ndarray:
     return result
 
 if __name__ == "__main__":
+    # --------------------------------------------------
+    # 設定
+    # --------------------------------------------------
+    SIGMA = 20 #シグマの大きさ
+    INPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー") # 入力画像のパス
+    IMAGE_EXT = ".tiff" # 対象にする画像の拡張子
+    OUTPUT_PATH = Path(r"C:\Users\2025005585\Desktop\python\Gaussian_high_pass_filter") # 出力画像の保存先
+    OUTPUT_NAME = "GF_" + str(SIGMA) + "sigma_'25-8-30_1fr_sample2"
+
+
     # フォルダ内の画像をファイル名順に取得
     image_paths = sorted(INPUT_PATH.glob(f"*{IMAGE_EXT}"))
     
@@ -60,7 +62,7 @@ if __name__ == "__main__":
         )
         print(f"処理対象の画像: {input_path.name}")
     
-    result = gaussian_high_pass_filter(image)
+    result = gaussian_high_pass_filter(image,sigmaSize=SIGMA)
 
     # 表示用に0～255へ正規化
     result_min = float(np.min(result))

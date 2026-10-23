@@ -8,15 +8,17 @@
 # - このファイルは YAML 形式で保存する（UTF-8）
 # ============================================================
 
-
-# ------------------------------------------------------------
-# Paths
-# 相対パスはプロジェクトルートを基準とする
-# ------------------------------------------------------------
-paths:
+paths: # 相対パスはプロジェクトルートを基準とする
   input_image: 'C:\Users\seigo\Downloads\2025-08-30-0437_9-CapObj - コピー\img00000968.tiff'
-
-extraction:
+Emphasis: #強調処理のパラメータ
+  SobelFilter:
+    kernelSize:3
+  BrackTopHat:
+    kernelSize:15
+  GaussianFilter:
+    sigmaSize:20
+extraction: #抽出処理のパラメータ
   count_components:
     c: 1
     space_threshold: 1000
+

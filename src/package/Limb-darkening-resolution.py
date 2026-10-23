@@ -59,7 +59,7 @@ def polynomialFit(image:np.ndarray, alpha: float = 0.85, brightness_boost: float
 
     # 太陽の外側（黒背景）は元の状態を維持
     corrected[~mask] = img_float[~mask]
-    corrected = np.clip(corrected, 0, 255).astype(np.uint8)
+    corrected = np.clip(corrected, 0, 2**16 - 1).astype(np.uint16)
 
     return corrected
 

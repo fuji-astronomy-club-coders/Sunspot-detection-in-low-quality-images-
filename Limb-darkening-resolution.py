@@ -1,13 +1,12 @@
 """周縁減光を補正するプログラム"""
 import glob
 import os
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
 from numpy import dtype, floating, ndarray
-from numpy._typing._nbit_base import _32Bit
 
 # 先輩が作った関数をインポート
 from MIN2ver2 import MIN2_ignore_sunspots

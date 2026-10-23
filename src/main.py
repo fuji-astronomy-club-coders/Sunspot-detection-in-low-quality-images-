@@ -36,10 +36,10 @@ def main(config: dict) -> None:
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
     image = load_image(image_path)
 
-    count, image = count_connected_components(image)
+    count, image = count_connected_components(image,10000)
 
     # ここから先のコードは正しく画像が読み込まれているかの確認用です。必要に応じてコメントアウトしてください。
-    print(image)
+    print(image,count)
 
     plt.imshow(image, origin="lower", cmap="gray")
     plt.colorbar(label="Pixel value")

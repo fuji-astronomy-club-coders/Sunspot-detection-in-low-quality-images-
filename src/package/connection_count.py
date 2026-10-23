@@ -2,19 +2,21 @@ import numpy as np
 from scipy import ndimage
 
 def count_connected_components(
-    binary_image: np.ndarray,
+    image: np.ndarray,
+    threshold: float = 10000,
 ) -> tuple[int, np.ndarray]:
-    """二値画像の連結成分数とラベリング画像を取得する。
+    """画像を二値化し、連結成分数とラベリング画像を返す。
 
     Args:
-        binary_image: 二値化された2次元NumPy配列。
-            背景を0、対象領域を0以外の値で表す。
-
+        image: 二値化前の2次元画像を表すNumPy配列。
+        threshold: 二値化のしきい値。これ未満の画素を対象領域とする。
     Returns:
-        連結成分数とラベリング画像のタプル。
-        背景のラベルは0、各連結成分には1から始まる
-        異なる整数のラベルが割り当てられる。
+        count: 連結成分の個数
+        binary_image: 二値化画像のNumpy配列。0か100かで二値化する。
     """
+    # 二値化：背景を0、対象領域を100にする
+    binary_image = (image < threshold).astype(np.uint8) * 100
+
     labeled_image, count = ndimage.label(binary_image)
 
-    return count, labeled_image
+    return count, binary_image

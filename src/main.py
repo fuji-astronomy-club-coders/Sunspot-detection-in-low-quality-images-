@@ -16,14 +16,12 @@
 
 from pprint import pprint
 
-import matplotlib.pyplot as plt
-
 from src.package import black_top_hat, connection_count, gaussian_filter, sobel_filter, utils
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 
 
-def main(config: dict) -> None:
+def main(config: dict) -> int:
     """Run the main process."""
     print("Starting main process...")
     print("\n\n===Config===")
@@ -52,6 +50,7 @@ def main(config: dict) -> None:
     if emphasisMethod == "SobelFilter":
         image = sobel_filter.sobel_filter(
             image=image,
+            return_derivs=False,
             **config["Emphasis"]["SobelFilter"]
         )
     elif emphasisMethod == "BlackTopHat":
@@ -67,15 +66,24 @@ def main(config: dict) -> None:
     else:
         raise ValueError(f"Unknown emphasis method: {emphasisMethod}")
 
-    count, image = connection_count.count_connected_components(
-        image,
-        **config["Extraction"]["count_components"]
-    )
+    extractionConfig = config["Extraction"]
+    extractionMethod = extractionConfig["method"]
 
-    # ここから先のコードは正しく画像が読み込まれているかの確認用です。必要に応じてコメントアウトしてください。
-    print(image)
+    if extractionMethod == "count_components":
+        count, image = connection_count.count_connected_components(
+            image,  # pyright: ignore[reportArgumentType]
+            **config["Extraction"]["count_components"]
+        )
+    else:
+        raise ValueError(f"Unknown extraction method: {extractionMethod}")
+
+    print(bool(image))
     print("連結成分の個数：",count)
 
+    return count
+
+    """
     plt.imshow(image, origin="lower", cmap="gray")
     plt.colorbar(label="Pixel value")
     plt.show()
+    """

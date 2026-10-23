@@ -21,4 +21,8 @@ Extraction: #抽出処理のパラメータ
   count_components:
     c: 1
     space_threshold: 1000
+LimbDarkingResolution:
+  polynomialFit:
+    alpha: 0.85
+    brightness_boost: 1.1
 

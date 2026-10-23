@@ -7,7 +7,7 @@ import numpy as np
 from numpy import dtype, floating, ndarray
 
 # 先輩が作った関数をインポート
-from MIN2ver2 import MIN2_ignore_sunspots
+from src.module.MIN2ver2 import MIN2_ignore_sunspots as min2
 
 
 def polynomialFit(input_image_path: str, output_image_path: str, alpha: float = 0.85, brightness_boost: float = 1.1) -> None:

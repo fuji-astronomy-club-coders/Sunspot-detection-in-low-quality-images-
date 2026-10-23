@@ -1,89 +1,97 @@
 """周縁減光を補正するプログラム"""
+import glob
+import os
+from typing import Any
+from pathlib import Path
+
 import cv2
 import numpy as np
+from numpy import dtype, floating, ndarray
+from numpy._typing._nbit_base import _32Bit
 
-# 1. ファイルの設定
-input_image_path = 'img00000001.tiff'
-output_image_path = 'after-Limb-darkening.tiff'
+# 先輩が作った関数をインポート
+from MIN2ver2 import MIN2_ignore_sunspots
 
-# 補正の強さ（0.7〜1.0。1.0で完全にフラット）
-alpha = 0.85
-# 全体の明るさ調整（1.0でそのまま）
-brightness_boost = 1.1
 
-# 画像の読み込み
-img = cv2.imread(input_image_path, cv2.IMREAD_GRAYSCALE)
-if img is None:
-    print("画像が見つかりません。")
-    exit()
+def correct_limb_darkening(input_image_path, output_image_path, alpha=0.85, brightness_boost=1.1):
+    """周縁減光を距離マップと先輩の関数で補正する関数"""
+    # 画像の読み込み
+    img = cv2.imread(input_image_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        print(f"画像が見つかりません: {input_image_path}")
+        return
 
-h, w = img.shape
-img_float = img.astype(np.float32)
+    h, w = img.shape
+    img_float: ndarray[Any, dtype[floating]] = img.astype(np.float32)
 
-# 2. 最小二乗法で正確な中心と半径を求める
-_, thresh = cv2.threshold(img, 30, 255, cv2.THRESH_BINARY)
-contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    # 1. 先輩の関数（MIN2_ignore_sunspots）を使って正確な中心と半径を取得する
+    try:
+        cx, cy, max_radius = MIN2_ignore_sunspots(img)  # pyright: ignore[reportAssignmentType]
+        cx, cy, max_radius = int(cx), int(cy), int(max_radius)  # pyright: ignore[reportArgumentType]
+    except Exception as e:
+        print(f"関数の実行に失敗しました: {e}")
+        cx, cy = w // 2, h // 2
+        max_radius = int(min(cx, cy, w - cx, h - cy))
 
-if contours:
-    largest_contour = max(contours, key=cv2.contourArea)
-    pts = largest_contour.reshape(-1, 2).astype(np.float32)
-    X, Y = pts[:, 0], pts[:, 1]
+    # 2. 画像全体について「中心からの距離（マップ）」を計算する
+    Y_indices, X_indices = np.indices((h, w), dtype=np.float32)
+    distance_map = np.sqrt((X_indices - cx)**2 + (Y_indices - cy)**2)
+
+    # 3. 距離ごとの平均輝度（減光プロファイル）を計算する
+    mask = distance_map <= max_radius
+    max_r_int = int(max_radius)
+
+    profile = np.zeros(max_r_int + 1, dtype=np.float32)
+    for r in range(max_r_int + 1):
+        ring_mask = (distance_map >= r - 0.5) & (distance_map < r + 0.5) & mask
+        if np.any(ring_mask):
+            profile[r] = np.mean(img_float[ring_mask])
+        else:
+            profile[r] = profile[r-1] if r > 0 else 1.0
+
+    # 0割を防ぐ処理 ＆ 滑らかにする
+    profile = np.clip(profile, 1, 255)
+    profile = cv2.GaussianBlur(profile.reshape(-1, 1), (15, 1), 0).flatten()
+
+    # 4. 背景モデルを復元してフラット化する
+    distance_clipped = np.clip(distance_map, 0, max_r_int).astype(int)
+    background_model = profile[distance_clipped]
+
+    mean_brightness = np.mean(profile[profile > 0])
+    flattened = (img_float / background_model) * mean_brightness
+
+    # 5. 補正の強さ（alpha）と明るさ調整を反映
+    corrected = img_float * (1.0 - alpha) + flattened * alpha
+    corrected = corrected * brightness_boost
+
+    # 太陽の外側（黒背景）は元の状態を維持
+    corrected[~mask] = img_float[~mask]
+    corrected = np.clip(corrected, 0, 255).astype(np.uint8)
+
+    # 6. 保存
+    cv2.imwrite(output_image_path, corrected)
+    print(f"補正完了: {output_image_path}")
+
+
+if __name__ == "__main__":
+    # 「img」から始まるtiffファイルだけを自動でまとめて選ぶ
+    image_paths = glob.glob('img*.tiff')
     
-    A_mat = np.column_stack([X, Y, np.ones_like(X)])
-    B_vec = -(X**2 + Y**2)
-    params, _, _, _ = np.linalg.lstsq(A_mat, B_vec, rcond=None)
-    A, B, C = params
-    
-    cx = -A / 2
-    cy = -B / 2
-    max_radius = int(np.sqrt(cx**2 + cy**2 - C))
-    cx, cy = int(cx), int(cy)
-else:
-    cx, cy = w // 2, h // 2
-    max_radius = int(min(cx, cy, w - cx, h - cy))
-
-# 3. 画像全体について「中心からの距離（マップ）」を計算する
-Y_indices, X_indices = np.indices((h, w), dtype=np.float32)
-distance_map = np.sqrt((X_indices - cx)**2 + (Y_indices - cy)**2)
-
-# 4. 距離ごとの平均輝度（減光プロファイル）を効率よく計算する
-# 太陽の半径の内側だけで平均をとる
-mask = distance_map <= max_radius
-max_r_int = int(max_radius)
-
-# 距離ごとの明るさを入れる配列を作る
-profile = np.zeros(max_r_int + 1, dtype=np.float32)
-for r in range(max_r_int + 1):
-    # 半径 r のまわりの画素を抽出して平均をとる（少し幅を持たせる）
-    ring_mask = (distance_map >= r - 0.5) & (distance_map < r + 0.5) & mask
-    if np.any(ring_mask):
-        profile[r] = np.mean(img_float[ring_mask])
+    if not image_paths:
+        print("対象の画像ファイルが見つかりませんでした")
     else:
-        profile[r] = profile[r-1] if r > 0 else 1.0
+        # 保存用のフォルダを自動で作る
+        output_dir = 'corrected_images'
+        os.makedirs(output_dir, exist_ok=True)
 
-# 0割を防ぐ処理 ＆ 滑らかにする
-profile = np.clip(profile, 1, 255)
-# 輪郭付近のノイズを防ぐため軽く平滑化
-profile = cv2.GaussianBlur(profile.reshape(-1, 1), (15, 1), 0).flatten()
+        print(f"合計 {len(image_paths)} 枚の画像を処理します...")
 
-# 5. 各画素の距離に対応する「理想の明るさ（背景モデル）」を2D画像として復元する
-# 距離マップの値をインデックスとして使って、背景画像を作る
-distance_clipped = np.clip(distance_map, 0, max_r_int).astype(int)
-background_model = profile[distance_clipped]
-
-# 全体の平均輝度を基準にして割り算する
-mean_brightness = np.mean(profile[profile > 0])
-flattened = (img_float / background_model) * mean_brightness
-
-# 太陽の外側（黒い背景部分）は元画像の黒を維持する処理
-# 6. 補正の強さ（alpha）と明るさブーストを反映
-corrected = img_float * (1.0 - alpha) + flattened * alpha
-corrected = corrected * brightness_boost
-
-# 太陽の外側は黒に戻す、かつ0〜255に収める
-corrected[~mask] = img_float[~mask]
-corrected = np.clip(corrected, 0, 255).astype(np.uint8)
-
-# 7. 保存
-cv2.imwrite(output_image_path, corrected)
-print(f"補正が完了しました！保存ファイル: {output_image_path}")
+        # 1枚ずつ順番に一括処理！
+        for path in image_paths:
+            filename = Path(path).name
+            output_path = os.path.join(output_dir, f'after_{filename}')
+            
+            print(f"処理中: {filename} ...")
+            correct_limb_darkening(input_image_path=path, output_image_path=output_path)
+            
+        print("すべての画像の自動処理が完了しました！")

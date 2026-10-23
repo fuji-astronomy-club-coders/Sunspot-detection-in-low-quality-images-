@@ -34,6 +34,19 @@ def main(config: dict) -> None:
 
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
     image = utils.load_image(image_path)    
+
+    darkingConfig = config["LimbDarkingResolution"]
+    darkingMethod = darkingConfig["method"]
+    
+    if darkingMethod == "polynomialFit":
+        image = ldr.polynomialFit(
+            image=image,
+            **config["LimbDarkingResolution"]["polynomialFit"]
+        )
+    else:
+        raise ValueError(f"Unknown limb darking resolution method: {darkingMethod}")
+
+
     count, image = connection_count.count_connected_components(
         image,
         **config["Extraction"]["count_components"]

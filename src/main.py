@@ -39,7 +39,7 @@ def main(config: dict) -> int:
     if darkingMethod == "polynomialFit":
         image = ldr.polynomialFit(
             image=image,
-            **config["LimbDarkingResolution"]["polynomialFit"]
+            **darkingConfig["polynomialFit"]
         )
     else:
         raise ValueError(f"Unknown limb darking resolution method: {darkingMethod}")
@@ -51,17 +51,17 @@ def main(config: dict) -> int:
         image = sobel_filter.sobel_filter(
             image=image,
             return_derivs=False,
-            **config["Emphasis"]["SobelFilter"]
+            **emphasisConfig["SobelFilter"]
         )
     elif emphasisMethod == "BlackTopHat":
         image = black_top_hat.black_top_hat(
             image=image,
-            **config["Emphasis"]["BlackTopHat"]
+            **emphasisConfig["BlackTopHat"]
         )
     elif emphasisMethod == "GaussianFilter":
         image = gaussian_filter.gaussian_high_pass_filter(
             image=image,
-            **config["Emphasis"]["GaussianFilter"]
+            **emphasisConfig["GaussianFilter"]
         )
     else:
         raise ValueError(f"Unknown emphasis method: {emphasisMethod}")
@@ -72,7 +72,7 @@ def main(config: dict) -> int:
     if extractionMethod == "count_components":
         count, image = connection_count.count_connected_components(
             image,  # pyright: ignore[reportArgumentType]
-            **config["Extraction"]["count_components"]
+            **extractionConfig["count_components"]
         )
     else:
         raise ValueError(f"Unknown extraction method: {extractionMethod}")

@@ -17,7 +17,7 @@ Emphasis: #強調処理のパラメータ
     kernelSize:15
   GaussianFilter:
     sigmaSize:20
-extraction: #抽出処理のパラメータ
+Extraction: #抽出処理のパラメータ
   count_components:
     c: 1
     space_threshold: 1000

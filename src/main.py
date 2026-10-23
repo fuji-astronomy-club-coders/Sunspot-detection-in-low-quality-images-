@@ -36,7 +36,7 @@ def main(config: dict) -> None:
     image = load_image(image_path)
     count, image = count_connected_components(
         image,
-        **config["extraction"]["count_components"]
+        **config["Extraction"]["count_components"]
     )
 
     # ここから先のコードは正しく画像が読み込まれているかの確認用です。必要に応じてコメントアウトしてください。

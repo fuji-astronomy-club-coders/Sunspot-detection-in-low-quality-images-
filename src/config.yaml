@@ -8,9 +8,10 @@
 # - このファイルは YAML 形式で保存する（UTF-8）
 # ============================================================
 
-paths: # 相対パスはプロジェクトルートを基準とする
+Paths: # 相対パスはプロジェクトルートを基準とする
   input_image: 'C:\Users\seigo\Downloads\2025-08-30-0437_9-CapObj - コピー\img00000968.tiff'
 Emphasis: #強調処理のパラメータ
+  chosen_method: 'SobelFilter' # 'SobelFilter', 'BrackTopHat', 'GaussianFilter'のいずれかを選択
   SobelFilter:
     kernelSize:3
   BrackTopHat:

@@ -30,7 +30,7 @@ def main(config: dict) -> None:
     pprint(config)
 
     # 読み込む画像のパスを指定してください
-    image_path = resolve_path(config["paths"]["input_image"])
+    image_path = resolve_path(config["Paths"]["input_image"])
 
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
     image = load_image(image_path)

@@ -73,24 +73,26 @@ def polynomialFit(input_image_path: str, output_image_path: str, alpha: float = 
 
 
 if __name__ == "__main__":
+
+    input_dir = '.'
     # 「img」から始まるtiffファイルだけを自動でまとめて選ぶ
-    image_paths = glob.glob('img*.tiff')
+    image_paths = list(Path(input_dir).glob('img*.tiff'))
     
     if not image_paths:
         print("対象の画像ファイルが見つかりませんでした")
     else:
         # 保存用のフォルダを自動で作る
-        output_dir = 'corrected_images'
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir = Path('corrected_images')
+        output_dir.mkdir(exist_ok=True)
 
         print(f"合計 {len(image_paths)} 枚の画像を処理します...")
 
         # 1枚ずつ順番に一括処理！
         for path in image_paths:
             filename = Path(path).name
-            output_path = os.path.join(output_dir, f'after_{filename}')
+            output_path = output_dir / f'after_{filename}'
             
             print(f"処理中: {filename} ...")
-            polynomialFit(input_image_path=path, output_image_path=output_path)
+            polynomialFit(input_image_path=str(path), output_image_path=str(output_path))
             
         print("すべての画像の自動処理が完了しました！")

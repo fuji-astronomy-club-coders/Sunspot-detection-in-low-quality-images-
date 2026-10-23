@@ -18,23 +18,23 @@ from pprint import pprint
 
 import matplotlib.pyplot as plt
 
-from src.package.config import resolve_path
-from src.package.connection_count import count_connected_components
-from src.package.utils import load_image
+from src.package import config as configMOD
+from src.package import connection_count, utils
+from src.package import limb_darking_resolution as ldr
 
 
 def main(config: dict) -> None:
     """Run the main process."""
-    print("Hello World")
-    print("===Config===")
+    print("Starting main process...")
+    print("\n\n===Config===")
     pprint(config)
+    print("============\n\n")
 
-    # 読み込む画像のパスを指定してください
-    image_path = resolve_path(config["Paths"]["input_image"])
+    image_path = configMOD.resolve_path(config["Paths"]["input_image"])
 
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
-    image = load_image(image_path)
-    count, image = count_connected_components(
+    image = utils.load_image(image_path)    
+    count, image = connection_count.count_connected_components(
         image,
         **config["Extraction"]["count_components"]
     )

@@ -1,6 +1,4 @@
 """周縁減光を補正するプログラム"""
-import glob
-import os
 from pathlib import Path
 from typing import Any
 

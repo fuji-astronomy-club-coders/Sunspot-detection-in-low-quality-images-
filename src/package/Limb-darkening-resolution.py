@@ -19,8 +19,8 @@ def polynomialFit(image:np.ndarray, alpha: float = 0.85, brightness_boost: float
 
     # 1. 先輩の関数（MIN2_ignore_sunspots）を使って正確な中心と半径を取得する
     try:
-        cx, cy, max_radius = min2(img_float)  # pyright: ignore[reportAssignmentType]
-        cx, cy, max_radius = int(cx), int(cy), int(max_radius)  # pyright: ignore[reportArgumentType]
+        (cx, cy), max_radius = min2(img_float)
+        cx, cy, max_radius = int(cx), int(cy), int(max_radius)  
     except Exception as e:
         print(f"関数の実行に失敗しました: {e}")
         cx, cy = w // 2, h // 2

@@ -29,10 +29,12 @@ def load_image(image_path: str | Path) -> npt.NDArray[Any]:
     Args:
         image_path: 読み込む画像ファイルのパス。
 
-    Returns:
+    Returns
+    -------
         各画素の値を格納したNumPy配列。
 
-    Raises:
+    Raises
+    ------
         ValueError: 対応していない画像形式の場合。
     """
     path = Path(image_path)

@@ -17,7 +17,8 @@ def count_connected_components(
         c: 閾値を決める係数。μ-cσ（μ:平均値、σ:標準偏差）以下の画素を黒点とする。デフォルトは1。
         space_threshold: 宇宙空間を判定する閾値。この値以下の画素を宇宙空間とする。デフォルトは1000。
 
-    Returns:
+    Returns
+    -------
         count: 黒点候補の連結成分数。
         binary_image: 黒点候補を黒（0）、その他を白（255）とした画像。
     """

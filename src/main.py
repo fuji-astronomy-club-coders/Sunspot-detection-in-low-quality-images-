@@ -18,8 +18,8 @@ from pprint import pprint
 
 import matplotlib.pyplot as plt
 
+from src.package import black_top_hat, connection_count, gaussian_filter, sobel_filter, utils
 from src.package import config as configMOD
-from src.package import connection_count, utils
 from src.package import limb_darking_resolution as ldr
 
 
@@ -46,6 +46,26 @@ def main(config: dict) -> None:
     else:
         raise ValueError(f"Unknown limb darking resolution method: {darkingMethod}")
 
+    emphasisConfig = config["Emphasis"]
+    emphasisMethod = emphasisConfig["method"]
+
+    if emphasisMethod == "SobelFilter":
+        image = sobel_filter.sobel_filter(
+            image=image,
+            **config["Emphasis"]["SobelFilter"]
+        )
+    elif emphasisMethod == "BlackTopHat":
+        image = black_top_hat.black_top_hat(
+            image=image,
+            **config["Emphasis"]["BlackTopHat"]
+        )
+    elif emphasisMethod == "GaussianFilter":
+        image = gaussian_filter.gaussian_high_pass_filter(
+            image=image,
+            **config["Emphasis"]["GaussianFilter"]
+        )
+    else:
+        raise ValueError(f"Unknown emphasis method: {emphasisMethod}")
 
     count, image = connection_count.count_connected_components(
         image,

@@ -1,24 +1,46 @@
-"""Count connected components in a thresholded image."""
+
+"""Count connected components in a thresholded solar image."""
+
 import numpy as np
 from scipy import ndimage
 
 
 def count_connected_components(
     image: np.ndarray,
-    threshold: float = 10000,
+    c: float = 1,
+    space_threshold: float = 1000,
 ) -> tuple[int, np.ndarray]:
-    """画像を二値化し、連結成分数とラベリング画像を返す。
+    """太陽像を二値化し、黒点候補の連結成分数を返す。
 
     Args:
-        image: 二値化前の2次元画像を表すNumPy配列。
-        threshold: 二値化のしきい値。これ未満の画素を対象領域とする。
-    Returns:
-        count: 連結成分の個数
-        binary_image: 二値化画像のNumpy配列。0か100かで二値化する。
-    """
-    # 二値化：背景を0、対象領域を100にする
-    binary_image = (image < threshold).astype(np.uint8) * 100
+        image: 二値化前の2次元太陽画像を表すNumPy配列。
+        c: 閾値を決める係数。μ-cσ（μ:平均値、σ:標準偏差）以下の画素を黒点とする。デフォルトは1。
+        space_threshold: 宇宙空間を判定する閾値。この値以下の画素を宇宙空間とする。デフォルトは1000。
 
-    labeled_image, count = ndimage.label(binary_image)  # pyright: ignore[reportGeneralTypeIssues]
+    Returns:
+        count: 黒点候補の連結成分数。
+        binary_image: 黒点候補を黒（0）、その他を白（255）とした画像。
+    """
+    # 太陽像の領域を抽出
+    solar_mask = image > space_threshold
+
+    # 太陽像の画素だけで平均値と標準偏差を計算
+    solar_pixels = image[solar_mask]
+    if solar_pixels.size == 0:
+        return 0, np.full(image.shape, 255, dtype=np.uint8)
+
+    mean = np.mean(solar_pixels)
+    std = np.std(solar_pixels)
+
+    # 閾値を計算
+    threshold = mean - c * std
+
+    # 黒点候補を黒（0）、その他を白（255）にする
+    sunspot_mask = solar_mask & (image < threshold)
+    binary_image = np.full(image.shape, 255, dtype=np.uint8)
+    binary_image[sunspot_mask] = 0
+
+    # 連結成分を数える
+    _, count = ndimage.label(sunspot_mask)  # pyright: ignore[reportGeneralTypeIssues]
 
     return count, binary_image

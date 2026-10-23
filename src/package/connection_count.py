@@ -1,5 +1,7 @@
+"""Count connected components in a thresholded image."""
 import numpy as np
 from scipy import ndimage
+
 
 def count_connected_components(
     image: np.ndarray,
@@ -17,6 +19,6 @@ def count_connected_components(
     # 二値化：背景を0、対象領域を100にする
     binary_image = (image < threshold).astype(np.uint8) * 100
 
-    labeled_image, count = ndimage.label(binary_image)
+    labeled_image, count = ndimage.label(binary_image)  # pyright: ignore[reportGeneralTypeIssues]
 
     return count, binary_image

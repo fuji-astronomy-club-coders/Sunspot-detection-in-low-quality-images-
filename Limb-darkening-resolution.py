@@ -12,7 +12,7 @@ from numpy import dtype, floating, ndarray
 from MIN2ver2 import MIN2_ignore_sunspots
 
 
-def correct_limb_darkening(input_image_path, output_image_path, alpha=0.85, brightness_boost=1.1):
+def polynomialFit(input_image_path, output_image_path, alpha=0.85, brightness_boost=1.1):
     """周縁減光を距離マップと先輩の関数で補正する関数"""
     # 画像の読み込み
     img = cv2.imread(input_image_path, cv2.IMREAD_GRAYSCALE)
@@ -91,6 +91,6 @@ if __name__ == "__main__":
             output_path = os.path.join(output_dir, f'after_{filename}')
             
             print(f"処理中: {filename} ...")
-            correct_limb_darkening(input_image_path=path, output_image_path=output_path)
+            polynomialFit(input_image_path=path, output_image_path=output_path)
             
         print("すべての画像の自動処理が完了しました！")

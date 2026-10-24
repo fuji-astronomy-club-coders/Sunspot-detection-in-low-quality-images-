@@ -96,8 +96,7 @@ def save_processing_summary(
     count: int,
     output_path: Path,
 ) -> None:
-    """処理段階ごとの画像と実行情報を1枚の画像に保存する。"""
-
+    """output_imageから呼び出される、画像のレイアウトを決める関数"""
     # 日本語フォントを追加
     for font_name in ("Yu Gothic", "Meiryo", "MS Gothic"):
         if font_name in available_fonts:
@@ -160,14 +159,15 @@ def save_processing_summary(
 
 
 def output_image(
-    raw_image,
-    limb_corrected_image,
-    emphasized_image,
-    binary_image,
-    config,
-    image_path,
-    count,
-):
+    raw_image: np.ndarray,
+    limb_corrected_image: np.ndarray,
+    emphasized_image: np.ndarray,
+    binary_image: np.ndarray,
+    config: dict[str, Any],
+    image_path: Path | str,
+    count: int,
+) -> None:
+    """処理段階ごとの画像と実行情報を1枚の画像に保存する。"""
     images = [
         ("1. Raw Image", raw_image),
         ("2. Limb Darkening Corrected", limb_corrected_image),

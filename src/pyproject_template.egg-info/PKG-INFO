@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: pyproject-template
+Version: 0.0.0
+Summary: This is a template for Python project repositories, intended for use by team members.
+Requires-Python: >=3.13
+License-File: LICENSE
+Requires-Dist: numpy>=2.0
+Requires-Dist: matplotlib>=3.9
+Requires-Dist: Pillow>=10.0
+Requires-Dist: PyYAML==6.0.3
+Requires-Dist: tifffile>=2026.2.20
+Requires-Dist: astropy>=7.2.3
+Requires-Dist: opencv-python==5.0.0.93
+Requires-Dist: scipy==1.18.1
+Provides-Extra: dev
+Requires-Dist: ruff>=0.13; extra == "dev"
+Requires-Dist: basedpyright>=1.31; extra == "dev"
+Dynamic: license-file

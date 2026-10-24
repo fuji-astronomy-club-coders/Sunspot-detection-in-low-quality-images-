@@ -7,6 +7,7 @@
 アプリケーションのメイン処理は ``src/main.py`` に、
 実行制御はプロジェクトルートの ``run.py`` に配置する。
 """
+import json
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +16,11 @@ import numpy as np
 import numpy.typing as npt
 import tifffile
 from astropy.io import fits
+from PIL import Image as PlImage
+from PIL import PngImagePlugin
 
 
-def load_image(image_path: str | Path) -> npt.NDArray[Any]:
+def loadImage(image_path: str | Path) -> npt.NDArray[Any]:
     """TIFFまたはFITS画像を読み込み、画素値をNumPy配列で返す。
 
     Args:
@@ -32,6 +35,9 @@ def load_image(image_path: str | Path) -> npt.NDArray[Any]:
         ValueError: 対応していない画像形式の場合。
     """
     path = Path(image_path)
+    if not path.exists():
+        raise ValueError(f"存在しないパスです: {path}")
+
     suffix = path.suffix.lower()
 
     if suffix in (".tif", ".tiff"):
@@ -39,11 +45,55 @@ def load_image(image_path: str | Path) -> npt.NDArray[Any]:
     elif suffix in (".fits", ".fit", ".fts"):
         image = fits.getdata(path)
     else:
-        raise ValueError(f"対応していない画像形式です: {path}")
-
+        raise ValueError(f"対応していない画像形式です: {suffix}")
+    if image is None:
+        raise ValueError(f"failed to load the image: {image_path}")
     return np.asarray(image)
 
-def closing_circle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
+def svImage_withInfo(image: np.ndarray, info: dict | str, path: str | Path) -> None:
+    """画像をメタデータ(PngInfo)とともに保存します。
+
+    Parameters
+    ----------
+    image : np.ndarray
+        保存する画像データ(np.ndarray)。
+    info : dict | str
+        画像に付与するメタデータやパラメータ。
+        辞書型の場合は各キー・バリューがPNGのテキストチャンクとして保存されます。
+        文字列の場合は {"info": 文字列} として保存されます。
+    path : str | Path
+        保存先のファイルパス。
+    
+    Returns
+    -------
+    None
+    """
+    file_path = Path(path)
+    # 保存先の親ディレクトリを作成
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    im = PlImage.fromarray(image)
+
+    # メタデータ（PngInfo）を作成
+    metadata = PngImagePlugin.PngInfo()
+    valid_info = info if isinstance(info, dict) else {"info": info}
+
+    for key, value in valid_info.items():
+        # 辞書型の場合はJSON文字列に変換、それ以外は文字列に変換
+        param_str = json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else str(value)
+        
+        # キーと値のペアでパラメータを追加
+        metadata.add_text(key, param_str)
+
+    try:
+        # パラメータを含めて保存
+        im.save(file_path, pnginfo=metadata)
+        print(f"画像を保存しました: {file_path}")
+    except Exception as e:
+        print(f"画像の保存に失敗しました: {file_path} (エラー: {e})")
+
+
+def closingCircle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
     """
     楕円形またはカスタムカーネルを使用して、画像に対するモルフォロジー閉じ処理(Closing)を実行します。
 

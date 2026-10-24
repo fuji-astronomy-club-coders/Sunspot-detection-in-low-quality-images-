@@ -9,7 +9,7 @@ from numpy import dtype, floating, ndarray
 # 先輩が作った関数をインポート
 from src.module.MIN2ver2 import MIN2_ignore_sunspots as min2
 
-
+version = "0.0.1"
 def polynomialFit(image:np.ndarray, alpha: float = 0.85, brightness_boost: float = 1.1) -> np.ndarray:
     """周縁減光を距離マップと先輩の関数で補正する関数"""
     # 画像の読み込み

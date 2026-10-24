@@ -4,8 +4,9 @@
 import numpy as np
 from scipy import ndimage
 
+version = "1.00"
 
-def count_connected_components(
+def countConnectedComponents(
     image: np.ndarray,
     c: float = 1,
     space_threshold: float = 1000,

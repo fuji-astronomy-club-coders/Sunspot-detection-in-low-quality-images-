@@ -10,6 +10,11 @@
 
 Paths: # 相対パスはプロジェクトルートを基準とする
   input_image: 'C:\Users\seigo\Downloads\2025-08-30-0437_9-CapObj - コピー\img00000968.tiff'
+  output_folder: '.\results'
+  folder_names: #output_folderに対する相対パス
+    LimbDarkingResolution: LimbDarkResol
+    Emphasis: Emphasis
+    Extraction: Extract
 
 #周縁減光補正
 LimbDarkingResolution:
@@ -32,9 +37,9 @@ Emphasis:
 
 #抽出処理
 Extraction:
-  chosen_method: 'count_components' # 'count_components'のいずれかを選択
+  chosen_method: 'countComponents' # 'countComponents'のいずれかを選択
   # ---各methodのパラメータ---
-  count_components:
+  countComponents:
     c: 1
     space_threshold: 1000
 

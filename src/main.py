@@ -14,7 +14,12 @@
     - ``run.py`` から受け取った設定に基づく処理の実行
 """
 
+from pathlib import Path
 from pprint import pprint
+from typing import Any
+
+from numpy import dtype, ndarray
+from numpy._typing._shape import _AnyShape
 
 from src.package import black_top_hat, connection_count, gaussian_filter, sobel_filter, utils
 from src.package import config as configMOD
@@ -31,62 +36,100 @@ def main(config: dict) -> int:
     image_path = configMOD.resolve_path(config["Paths"]["input_image"])
 
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
-    image = utils.load_image(image_path)    
+    image = utils.loadImage(image_path)    
+
+    moduleVersions = {}
 
     try:
         darkingConfig = config["LimbDarkingResolution"]
         darkingMethod = darkingConfig["method"]
-        
+
+        svFolder = Path(config["path"]["outputfolder"]) / config["path"]["folder_names"]["LimbDarkingResolution"]
+
         if darkingMethod == "polynomialFit":
-            image = ldr.polynomialFit(
+            moduleVersions["LimbDarkingResolution"] = ldr.version
+            image: ndarray[_AnyShape, dtype[Any]] = ldr.polynomialFit(
                 image=image,
                 **darkingConfig["polynomialFit"]
             )
+            
+            imgName = f"polynomialFit_alpha{darkingConfig["polynomialFit"]["alpha"]}_boost{darkingConfig["polynomialFit"]["brightness_boost"]}.png"
 
+        # elif darkingMethod == "~~~~":
+        # ...
+        
         else:
             raise ValueError(f"Unknown limb darking resolution method: {darkingMethod}")
+        
+
     except Exception as e:
         raise RuntimeError(f"[Fatal]: 周縁減光補正に失敗しました。:{e}") from e
+
+    utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
 
     try:
         emphasisConfig = config["Emphasis"]
         emphasisMethod = emphasisConfig["method"]
 
+        svFolder = Path(config["path"]["outputfolder"]) / config["path"]["folder_names"]["Emphasis"]
+
         if emphasisMethod == "SobelFilter":
-            image = sobel_filter.sobel_filter(
+            moduleVersions["Emphasis"] = sobel_filter.version
+
+            imgName = f"SobelFilter_{emphasisConfig['SobelFilter']['ksize']}.png"
+
+            image = sobel_filter.sobel_filter(  # pyright: ignore[reportAssignmentType]
                 image=image,
                 return_derivs=False,
                 **emphasisConfig["SobelFilter"]
             )
         elif emphasisMethod == "BlackTopHat":
+
+            imgName = f"BlackTopHat_{emphasisConfig['BlackTopHat']['kernel_size']}.png"
+
+            moduleVersions["Emphasis"] = black_top_hat.version
             image = black_top_hat.black_top_hat(
                 image=image,
                 **emphasisConfig["BlackTopHat"]
             )
         elif emphasisMethod == "GaussianFilter":
+
+            imgName = f"GaussianFilter_{emphasisConfig['GaussianFilter']['sigma']}.png"
+
+            moduleVersions["Emphasis"] = gaussian_filter.version
             image = gaussian_filter.gaussian_high_pass_filter(
                 image=image,
                 **emphasisConfig["GaussianFilter"]
             )
         else:
             raise ValueError(f"Unknown emphasis method: {emphasisMethod}")
+        
     except Exception as e:
         raise RuntimeError(f"[Fatal]: 強調処理に失敗しました。:{e}") from e
+    
+    utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
 
     try:
         extractionConfig = config["Extraction"]
         extractionMethod = extractionConfig["method"]
 
-        if extractionMethod == "count_components":
-            count, image = connection_count.count_connected_components(
+        svFolder = config["path"]["outputfolder"] / config["path"]["folder_names"]["Extraction"]
+
+        if extractionMethod == "countComponents":
+
+            imgName = f"countComponents_{extractionConfig['countComponents']['connectivity']}.png"
+
+            count, image = connection_count.countConnectedComponents(
                 image,  # pyright: ignore[reportArgumentType]
-                **extractionConfig["count_components"]
+                **extractionConfig["countComponents"]
             )
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
     except Exception as e:
         raise RuntimeError(f"[Fatal]: 連結成分の抽出に失敗しました。:{e}") from e
-        
+    
+    utils.svImage_withInfo(image,{"result": {"count": count}, "config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
+
     print(bool(image))
     print("連結成分の個数：",count)
 

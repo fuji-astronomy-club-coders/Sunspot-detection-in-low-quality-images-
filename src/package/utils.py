@@ -20,7 +20,7 @@ from PIL import Image as PlImage
 from PIL import PngImagePlugin
 
 
-def load_image(image_path: str | Path) -> npt.NDArray[Any]:
+def loadImage(image_path: str | Path) -> npt.NDArray[Any]:
     """TIFFまたはFITS画像を読み込み、画素値をNumPy配列で返す。
 
     Args:
@@ -93,7 +93,7 @@ def svImage_withInfo(image: np.ndarray, info: dict | str, path: str | Path) -> N
         print(f"画像の保存に失敗しました: {file_path} (エラー: {e})")
 
 
-def closing_circle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
+def closingCircle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
     """
     楕円形またはカスタムカーネルを使用して、画像に対するモルフォロジー閉じ処理(Closing)を実行します。
 

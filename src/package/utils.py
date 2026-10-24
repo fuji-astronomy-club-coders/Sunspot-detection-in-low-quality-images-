@@ -132,10 +132,18 @@ def save_processing_summary(
         fontsize=11,
         va="top",
     )
+
+    # Paths を除外した設定値を表示する
+    display_config = {
+        key: value
+        for key, value in config.items()
+        if key != "Paths"
+    }
+
     ax_info.text(
         0.48,
-        0.62,
-        "設定値:\n" + pformat(config, sort_dicts=False),
+        0.95,
+        "設定値:\n" + pformat(display_config, sort_dicts=False),
         fontsize=8,
         va="top",
     )

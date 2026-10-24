@@ -8,10 +8,14 @@
 実行制御はプロジェクトルートの ``run.py`` に配置する。
 """
 import json
+
+from datetime import datetime
 from pathlib import Path
+from pprint import pformat
 from typing import Any
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import tifffile
@@ -120,10 +124,7 @@ def closingCircle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
         引数`kernel` が整数でも numpy 配列でもない場合。
     """
     if isinstance(kernel, int):
-        adopt_kernel = cv2.getStructuringElement(
-            cv2.MORPH_ELLIPSE,
-            (kernel, kernel)
-        )
+        adopt_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel, kernel))
     elif isinstance(kernel, np.ndarray):
         adopt_kernel = kernel
     else:

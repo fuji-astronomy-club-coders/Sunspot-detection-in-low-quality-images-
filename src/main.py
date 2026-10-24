@@ -40,6 +40,7 @@ def main(config: dict) -> int:
     image = utils.loadImage(image_path)    
 
     moduleVersions = {}
+    raw_image = image
 
     try:
         darkingConfig = config["LimbDarkingResolution"]
@@ -67,6 +68,7 @@ def main(config: dict) -> int:
         raise RuntimeError(f"[Fatal]: 周縁減光補正に失敗しました。:{e}") from e
 
     utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
+    limb_corrected_image = image
 
     try:
         emphasisConfig = config["Emphasis"]
@@ -99,8 +101,7 @@ def main(config: dict) -> int:
 
             moduleVersions["Emphasis"] = gaussian_filter.version
             image = gaussian_filter.gaussian_high_pass_filter(
-                image=image,
-                **emphasisConfig["GaussianFilter"]
+                image=image, **emphasisConfig["GaussianFilter"]
             )
         else:
             raise ValueError(f"Unknown emphasis method: {emphasisMethod}")
@@ -109,6 +110,8 @@ def main(config: dict) -> int:
         raise RuntimeError(f"[Fatal]: 強調処理に失敗しました。:{e}") from e
     
     utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
+
+    emphasized_image = image
 
     try:
         extractionConfig = config["Extraction"]
@@ -133,9 +136,19 @@ def main(config: dict) -> int:
 
     print("連結成分の個数：",count)
 
-    plt.imshow(image, origin="lower", cmap="gray")
-    plt.colorbar(label="Pixel value")
-    plt.show()
+    # print(bool(image))
+    print("連結成分の個数：", count)
+    binary_image = image
+
+    # 検証用画像を出力
+    utils.output_image(
+        raw_image,
+        limb_corrected_image,
+        emphasized_image,
+        binary_image,
+        config,
+        image_path,
+        count,
+    )
 
     return count
-    

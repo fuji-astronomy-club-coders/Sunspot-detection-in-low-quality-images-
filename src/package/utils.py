@@ -32,6 +32,9 @@ def load_image(image_path: str | Path) -> npt.NDArray[Any]:
         ValueError: 対応していない画像形式の場合。
     """
     path = Path(image_path)
+    if not path.exists():
+        raise ValueError(f"存在しないパスです: {path}")
+
     suffix = path.suffix.lower()
 
     if suffix in (".tif", ".tiff"):
@@ -39,8 +42,9 @@ def load_image(image_path: str | Path) -> npt.NDArray[Any]:
     elif suffix in (".fits", ".fit", ".fts"):
         image = fits.getdata(path)
     else:
-        raise ValueError(f"対応していない画像形式です: {path}")
-
+        raise ValueError(f"対応していない画像形式です: {suffix}")
+    if image is None:
+        raise ValueError(f"failed to load the image: {image_path}")
     return np.asarray(image)
 
 def closing_circle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:

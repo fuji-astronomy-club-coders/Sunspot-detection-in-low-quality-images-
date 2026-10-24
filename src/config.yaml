@@ -29,11 +29,11 @@ Emphasis:
   chosen_method: 'SobelFilter' # 'SobelFilter', 'BrackTopHat', 'GaussianFilter'のいずれかを選択
   # ---各methodのパラメータ---
   SobelFilter:
-    kernelSize:3
+    kernelSize: 3
   BrackTopHat:
-    kernelSize:15
+    kernelSize: 15
   GaussianFilter:
-    sigmaSize:20
+    sigmaSize: 20
 
 #抽出処理
 Extraction:

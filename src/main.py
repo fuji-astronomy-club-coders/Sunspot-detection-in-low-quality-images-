@@ -18,6 +18,7 @@ from pathlib import Path
 from pprint import pprint
 from typing import Any
 
+import matplotlib.pyplot as plt
 from numpy import dtype, ndarray
 from numpy._typing._shape import _AnyShape
 
@@ -42,7 +43,7 @@ def main(config: dict) -> int:
 
     try:
         darkingConfig = config["LimbDarkingResolution"]
-        darkingMethod = darkingConfig["method"]
+        darkingMethod = darkingConfig["chosen_method"]
 
         svFolder = Path(config["path"]["outputfolder"]) / config["path"]["folder_names"]["LimbDarkingResolution"]
 
@@ -69,7 +70,7 @@ def main(config: dict) -> int:
 
     try:
         emphasisConfig = config["Emphasis"]
-        emphasisMethod = emphasisConfig["method"]
+        emphasisMethod = emphasisConfig["chosen_method"]
 
         svFolder = Path(config["path"]["outputfolder"]) / config["path"]["folder_names"]["Emphasis"]
 
@@ -111,7 +112,7 @@ def main(config: dict) -> int:
 
     try:
         extractionConfig = config["Extraction"]
-        extractionMethod = extractionConfig["method"]
+        extractionMethod = extractionConfig["chosen_method"]
 
         svFolder = config["path"]["outputfolder"] / config["path"]["folder_names"]["Extraction"]
 
@@ -130,13 +131,11 @@ def main(config: dict) -> int:
     
     utils.svImage_withInfo(image,{"result": {"count": count}, "config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
 
-    print(bool(image))
     print("連結成分の個数：",count)
 
-    return count
-
-    """
     plt.imshow(image, origin="lower", cmap="gray")
     plt.colorbar(label="Pixel value")
     plt.show()
-    """
+
+    return count
+    

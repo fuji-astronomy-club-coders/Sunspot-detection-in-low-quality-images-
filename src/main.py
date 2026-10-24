@@ -14,35 +14,128 @@
     - ``run.py`` から受け取った設定に基づく処理の実行
 """
 
+from pathlib import Path
 from pprint import pprint
+from typing import Any
 
 import matplotlib.pyplot as plt
+from numpy import dtype, ndarray
+from numpy._typing._shape import _AnyShape
 
-from src.package.config import resolve_path
-from src.package.connection_count import count_connected_components
-from src.package.utils import load_image
+from src.package import black_top_hat, connection_count, gaussian_filter, sobel_filter, utils
+from src.package import config as configMOD
+from src.package import limb_darking_resolution as ldr
 
 
-def main(config: dict) -> None:
+def main(config: dict) -> int:
     """Run the main process."""
-    print("Hello World")
-    print("===Config===")
+    print("Starting main process...")
+    print("\n\n===Config===")
     pprint(config)
+    print("============\n\n")
 
-    # 読み込む画像のパスを指定してください
-    image_path = resolve_path(config["paths"]["input_image"])
+    image_path = configMOD.resolve_path(config["Paths"]["input_image"])
 
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
-    image = load_image(image_path)
-    count, image = count_connected_components(
-        image,
-        **config["Extraction"]["count_components"]
-    )
+    image = utils.loadImage(image_path)    
 
-    # ここから先のコードは正しく画像が読み込まれているかの確認用です。必要に応じてコメントアウトしてください。
-    print(image)
+    moduleVersions = {}
+
+    try:
+        darkingConfig = config["LimbDarkingResolution"]
+        darkingMethod = darkingConfig["chosen_method"]
+
+        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["LimbDarkingResolution"]
+
+        if darkingMethod == "polynomialFit":
+            moduleVersions["LimbDarkingResolution"] = ldr.version
+            image: ndarray[_AnyShape, dtype[Any]] = ldr.polynomialFit(
+                image=image,
+                **darkingConfig["polynomialFit"]
+            )
+            
+            imgName = f"polynomialFit_alpha{darkingConfig["polynomialFit"]["alpha"]}_boost{darkingConfig["polynomialFit"]["brightness_boost"]}.png"
+
+        # elif darkingMethod == "~~~~":
+        # ...
+        
+        else:
+            raise ValueError(f"Unknown limb darking resolution method: {darkingMethod}")
+        
+
+    except Exception as e:
+        raise RuntimeError(f"[Fatal]: 周縁減光補正に失敗しました。:{e}") from e
+
+    utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
+
+    try:
+        emphasisConfig = config["Emphasis"]
+        emphasisMethod = emphasisConfig["chosen_method"]
+
+        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["Emphasis"]
+
+        if emphasisMethod == "SobelFilter":
+            moduleVersions["Emphasis"] = sobel_filter.version
+
+            imgName = f"SobelFilter_kernel{emphasisConfig['SobelFilter']['kernelSize']}.png"
+
+            image = sobel_filter.sobel_filter(  # pyright: ignore[reportAssignmentType]
+                image=image,
+                return_derivs=False,
+                **emphasisConfig["SobelFilter"]
+            )
+        elif emphasisMethod == "BlackTopHat":
+
+            imgName = f"BlackTopHat_kernel{emphasisConfig['BlackTopHat']['kernelSize']}.png"
+
+            moduleVersions["Emphasis"] = black_top_hat.version
+            image = black_top_hat.black_top_hat(
+                image=image,
+                **emphasisConfig["BlackTopHat"]
+            )
+        elif emphasisMethod == "GaussianFilter":
+
+            imgName = f"GaussianFilter_sigma{emphasisConfig['GaussianFilter']['sigma']}.png"
+
+            moduleVersions["Emphasis"] = gaussian_filter.version
+            image = gaussian_filter.gaussian_high_pass_filter(
+                image=image,
+                **emphasisConfig["GaussianFilter"]
+            )
+        else:
+            raise ValueError(f"Unknown emphasis method: {emphasisMethod}")
+        
+    except Exception as e:
+        raise RuntimeError(f"[Fatal]: 強調処理に失敗しました。:{e}") from e
+    
+    utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
+
+    try:
+        extractionConfig = config["Extraction"]
+        extractionMethod = extractionConfig["chosen_method"]
+
+        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["Extraction"]
+
+        if extractionMethod == "countComponents":
+
+            imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}.png"
+
+            count, image = connection_count.countConnectedComponents(
+                image,  # pyright: ignore[reportArgumentType]
+                **extractionConfig["countComponents"]
+            )
+        else:
+            raise ValueError(f"Unknown extraction method: {extractionMethod}")
+    except Exception as e:
+        raise RuntimeError(f"[Fatal]: 連結成分の抽出に失敗しました。:{e}") from e
+    
+    utils.svImage_withInfo(image,{"result": {"count": count}, "config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
+
     print("連結成分の個数：",count)
 
     plt.imshow(image, origin="lower", cmap="gray")
     plt.colorbar(label="Pixel value")
     plt.show()
+
+    return count
+    

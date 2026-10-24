@@ -9,7 +9,7 @@
 # ============================================================
 
 Paths: # 相対パスはプロジェクトルートを基準とする
-  input_image: 'C:\Users\seigo\Downloads\2025-08-30-0437_9-CapObj - コピー\img00000968.tiff'
+  input_image: '?Dialog?' # You can use "?Dialog?" to select a file interactively
   output_folder: '.\results'
   folder_names: #output_folderに対する相対パス
     LimbDarkingResolution: LimbDarkResol

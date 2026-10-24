@@ -33,50 +33,60 @@ def main(config: dict) -> int:
     # 画像の明るさ（画素値）を取得し、変数image（numpy配列）に代入します。
     image = utils.load_image(image_path)    
 
-    darkingConfig = config["LimbDarkingResolution"]
-    darkingMethod = darkingConfig["method"]
-    
-    if darkingMethod == "polynomialFit":
-        image = ldr.polynomialFit(
-            image=image,
-            **darkingConfig["polynomialFit"]
-        )
-    else:
-        raise ValueError(f"Unknown limb darking resolution method: {darkingMethod}")
+    try:
+        darkingConfig = config["LimbDarkingResolution"]
+        darkingMethod = darkingConfig["method"]
+        
+        if darkingMethod == "polynomialFit":
+            image = ldr.polynomialFit(
+                image=image,
+                **darkingConfig["polynomialFit"]
+            )
 
-    emphasisConfig = config["Emphasis"]
-    emphasisMethod = emphasisConfig["method"]
+        else:
+            raise ValueError(f"Unknown limb darking resolution method: {darkingMethod}")
+    except Exception as e:
+        raise RuntimeError(f"[Fatal]: 周縁減光補正に失敗しました。:{e}") from e
 
-    if emphasisMethod == "SobelFilter":
-        image = sobel_filter.sobel_filter(
-            image=image,
-            return_derivs=False,
-            **emphasisConfig["SobelFilter"]
-        )
-    elif emphasisMethod == "BlackTopHat":
-        image = black_top_hat.black_top_hat(
-            image=image,
-            **emphasisConfig["BlackTopHat"]
-        )
-    elif emphasisMethod == "GaussianFilter":
-        image = gaussian_filter.gaussian_high_pass_filter(
-            image=image,
-            **emphasisConfig["GaussianFilter"]
-        )
-    else:
-        raise ValueError(f"Unknown emphasis method: {emphasisMethod}")
+    try:
+        emphasisConfig = config["Emphasis"]
+        emphasisMethod = emphasisConfig["method"]
 
-    extractionConfig = config["Extraction"]
-    extractionMethod = extractionConfig["method"]
+        if emphasisMethod == "SobelFilter":
+            image = sobel_filter.sobel_filter(
+                image=image,
+                return_derivs=False,
+                **emphasisConfig["SobelFilter"]
+            )
+        elif emphasisMethod == "BlackTopHat":
+            image = black_top_hat.black_top_hat(
+                image=image,
+                **emphasisConfig["BlackTopHat"]
+            )
+        elif emphasisMethod == "GaussianFilter":
+            image = gaussian_filter.gaussian_high_pass_filter(
+                image=image,
+                **emphasisConfig["GaussianFilter"]
+            )
+        else:
+            raise ValueError(f"Unknown emphasis method: {emphasisMethod}")
+    except Exception as e:
+        raise RuntimeError(f"[Fatal]: 強調処理に失敗しました。:{e}") from e
 
-    if extractionMethod == "count_components":
-        count, image = connection_count.count_connected_components(
-            image,  # pyright: ignore[reportArgumentType]
-            **extractionConfig["count_components"]
-        )
-    else:
-        raise ValueError(f"Unknown extraction method: {extractionMethod}")
+    try:
+        extractionConfig = config["Extraction"]
+        extractionMethod = extractionConfig["method"]
 
+        if extractionMethod == "count_components":
+            count, image = connection_count.count_connected_components(
+                image,  # pyright: ignore[reportArgumentType]
+                **extractionConfig["count_components"]
+            )
+        else:
+            raise ValueError(f"Unknown extraction method: {extractionMethod}")
+    except Exception as e:
+        raise RuntimeError(f"[Fatal]: 連結成分の抽出に失敗しました。:{e}") from e
+        
     print(bool(image))
     print("連結成分の個数：",count)
 

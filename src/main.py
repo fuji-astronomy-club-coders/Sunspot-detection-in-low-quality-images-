@@ -20,6 +20,8 @@ from src.package import black_top_hat, connection_count, gaussian_filter, sobel_
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 
+import matplotlib.pyplot as plt
+
 
 def main(config: dict) -> int:
     """Run the main process."""
@@ -35,7 +37,7 @@ def main(config: dict) -> int:
 
     try:
         darkingConfig = config["LimbDarkingResolution"]
-        darkingMethod = darkingConfig["method"]
+        darkingMethod = darkingConfig["chosen_method"]
         
         if darkingMethod == "polynomialFit":
             image = ldr.polynomialFit(
@@ -50,7 +52,7 @@ def main(config: dict) -> int:
 
     try:
         emphasisConfig = config["Emphasis"]
-        emphasisMethod = emphasisConfig["method"]
+        emphasisMethod = emphasisConfig["chosen_method"]
 
         if emphasisMethod == "SobelFilter":
             image = sobel_filter.sobel_filter(
@@ -75,7 +77,7 @@ def main(config: dict) -> int:
 
     try:
         extractionConfig = config["Extraction"]
-        extractionMethod = extractionConfig["method"]
+        extractionMethod = extractionConfig["chosen_method"]
 
         if extractionMethod == "count_components":
             count, image = connection_count.count_connected_components(
@@ -87,13 +89,12 @@ def main(config: dict) -> int:
     except Exception as e:
         raise RuntimeError(f"[Fatal]: 連結成分の抽出に失敗しました。:{e}") from e
         
-    print(bool(image))
+    #print(bool(image))
     print("連結成分の個数：",count)
 
-    return count
-
-    """
     plt.imshow(image, origin="lower", cmap="gray")
     plt.colorbar(label="Pixel value")
     plt.show()
-    """
+
+    return count
+    

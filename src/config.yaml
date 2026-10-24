@@ -9,7 +9,7 @@
 # ============================================================
 
 Paths: # 相対パスはプロジェクトルートを基準とする
-  input_image: 'C:\Users\seigo\Downloads\2025-08-30-0437_9-CapObj - コピー\img00000968.tiff'
+  input_image: 'C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー\img00000001.tiff'
 
 #周縁減光補正
 LimbDarkingResolution:
@@ -24,11 +24,11 @@ Emphasis:
   chosen_method: 'SobelFilter' # 'SobelFilter', 'BrackTopHat', 'GaussianFilter'のいずれかを選択
   # ---各methodのパラメータ---
   SobelFilter:
-    kernelSize:3
+    kernelSize: 3
   BrackTopHat:
-    kernelSize:15
+    kernelSize: 15
   GaussianFilter:
-    sigmaSize:20
+    sigmaSize: 20
 
 #抽出処理
 Extraction:

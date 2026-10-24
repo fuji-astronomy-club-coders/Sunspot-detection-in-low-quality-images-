@@ -1,8 +1,9 @@
 """Run the application"""
 
+from tkinter.filedialog import askopenfilename
+
 from src.main import main
 from src.package.config import config
-from tkinter.filedialog import askopenfilename
 
 if config["Paths"]["input_image"] == "?Dialog?":
     # ファイル選択ダイアログを表示して、ユーザーに画像ファイルを選択させる

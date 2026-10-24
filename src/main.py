@@ -45,7 +45,7 @@ def main(config: dict) -> int:
         darkingConfig = config["LimbDarkingResolution"]
         darkingMethod = darkingConfig["chosen_method"]
 
-        svFolder = Path(config["path"]["outputfolder"]) / config["path"]["folder_names"]["LimbDarkingResolution"]
+        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["LimbDarkingResolution"]
 
         if darkingMethod == "polynomialFit":
             moduleVersions["LimbDarkingResolution"] = ldr.version
@@ -72,12 +72,12 @@ def main(config: dict) -> int:
         emphasisConfig = config["Emphasis"]
         emphasisMethod = emphasisConfig["chosen_method"]
 
-        svFolder = Path(config["path"]["outputfolder"]) / config["path"]["folder_names"]["Emphasis"]
+        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["Emphasis"]
 
         if emphasisMethod == "SobelFilter":
             moduleVersions["Emphasis"] = sobel_filter.version
 
-            imgName = f"SobelFilter_{emphasisConfig['SobelFilter']['ksize']}.png"
+            imgName = f"SobelFilter_kernel{emphasisConfig['SobelFilter']['kernelSize']}.png"
 
             image = sobel_filter.sobel_filter(  # pyright: ignore[reportAssignmentType]
                 image=image,
@@ -86,7 +86,7 @@ def main(config: dict) -> int:
             )
         elif emphasisMethod == "BlackTopHat":
 
-            imgName = f"BlackTopHat_{emphasisConfig['BlackTopHat']['kernel_size']}.png"
+            imgName = f"BlackTopHat_kernel{emphasisConfig['BlackTopHat']['kernelSize']}.png"
 
             moduleVersions["Emphasis"] = black_top_hat.version
             image = black_top_hat.black_top_hat(
@@ -95,7 +95,7 @@ def main(config: dict) -> int:
             )
         elif emphasisMethod == "GaussianFilter":
 
-            imgName = f"GaussianFilter_{emphasisConfig['GaussianFilter']['sigma']}.png"
+            imgName = f"GaussianFilter_sigma{emphasisConfig['GaussianFilter']['sigma']}.png"
 
             moduleVersions["Emphasis"] = gaussian_filter.version
             image = gaussian_filter.gaussian_high_pass_filter(
@@ -114,11 +114,11 @@ def main(config: dict) -> int:
         extractionConfig = config["Extraction"]
         extractionMethod = extractionConfig["chosen_method"]
 
-        svFolder = config["path"]["outputfolder"] / config["path"]["folder_names"]["Extraction"]
+        svFolder = Path(config["Paths"]["output_folder"]) / config["Paths"]["folder_names"]["Extraction"]
 
         if extractionMethod == "countComponents":
 
-            imgName = f"countComponents_{extractionConfig['countComponents']['connectivity']}.png"
+            imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}.png"
 
             count, image = connection_count.countConnectedComponents(
                 image,  # pyright: ignore[reportArgumentType]

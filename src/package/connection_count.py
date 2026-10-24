@@ -15,7 +15,7 @@ def countConnectedComponents(
 
     Args:
         image: 二値化前の2次元太陽画像を表すNumPy配列。
-        c: 閾値を決める係数。μ-cσ（μ:平均値、σ:標準偏差）以下の画素を黒点とする。デフォルトは1。
+        c: 閾値を決める係数。μ+cσ（μ:平均値、σ:標準偏差）以下の画素を黒点とする。デフォルトは1。
         space_threshold: 宇宙空間を判定する閾値。この値以下の画素を宇宙空間とする。デフォルトは1000。
 
     Returns
@@ -35,14 +35,18 @@ def countConnectedComponents(
     std = np.std(solar_pixels)
 
     # 閾値を計算
-    threshold = mean - c * std
+    threshold = mean + c * std
 
     # 黒点候補を黒（0）、その他を白（255）にする
-    sunspot_mask = solar_mask & (image < threshold)
+    sunspot_mask = solar_mask & (image > threshold)
     binary_image = np.full(image.shape, 255, dtype=np.uint8)
     binary_image[sunspot_mask] = 0
 
     # 連結成分を数える
     _, count = ndimage.label(sunspot_mask)  # pyright: ignore[reportGeneralTypeIssues]
+
+    print("太陽領域の画素数:", np.count_nonzero(solar_mask))
+    print("閾値:", threshold)
+    print("黒点候補の画素数:", np.count_nonzero(sunspot_mask))
 
     return count, binary_image

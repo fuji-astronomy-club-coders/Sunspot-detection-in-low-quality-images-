@@ -9,8 +9,7 @@
 # ============================================================
 
 Paths: # 相対パスはプロジェクトルートを基準とする
-  input_image: 'C:\Users\2025005585\Desktop\python\raw_data\2025-08-30-0437_9-CapObj - コピー\2025-08-30-0437_9-CapObj - コピー\img00000001.tiff'
-
+  input_image: 'C:\Users\seigo\Downloads\2025-08-30-0437_9-CapObj - コピー\img00000968.tiff'
 #周縁減光補正
 LimbDarkingResolution:
   chosen_method: 'polynomialFit' # 'polynomialFit'のいずれかを選択

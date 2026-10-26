@@ -134,9 +134,9 @@ def main(config: dict) -> int:
     
     utils.svImage_withInfo(image,{"result": {"count": count}, "config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
 
-    print("連結成分の個数：",count)
-
-    # print(bool(image))
+    plt.imshow(image, origin="lower", cmap="gray")
+    plt.colorbar(label="Pixel value")
+    plt.show()
     print("連結成分の個数：", count)
     binary_image = image
 

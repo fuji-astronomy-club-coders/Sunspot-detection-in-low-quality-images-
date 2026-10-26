@@ -8,7 +8,6 @@
 実行制御はプロジェクトルートの ``run.py`` に配置する。
 """
 import json
-
 from datetime import datetime
 from pathlib import Path
 from pprint import pformat
@@ -20,13 +19,9 @@ import numpy as np
 import numpy.typing as npt
 import tifffile
 from astropy.io import fits
+from matplotlib import font_manager
 from PIL import Image as PlImage
 from PIL import PngImagePlugin
-
-from datetime import datetime
-from pprint import pformat
-import matplotlib.pyplot as plt
-from matplotlib import font_manager
 
 
 def loadImage(image_path: str | Path) -> npt.NDArray[Any]:

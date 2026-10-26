@@ -121,7 +121,7 @@ def main(config: dict) -> int:
 
         if extractionMethod == "countComponents":
 
-            imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}.png"
+            imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}.png"
 
             count, image = connection_count.countConnectedComponents(
                 image,  # pyright: ignore[reportArgumentType]
@@ -134,10 +134,6 @@ def main(config: dict) -> int:
     
     utils.svImage_withInfo(image,{"result": {"count": count}, "config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
 
-    plt.imshow(image, origin="lower", cmap="gray")
-    plt.colorbar(label="Pixel value")
-    plt.show()
-    print("連結成分の個数：", count)
     binary_image = image
 
     # 検証用画像を出力
@@ -150,5 +146,9 @@ def main(config: dict) -> int:
         image_path,
         count,
     )
+    plt.imshow(image, origin="lower", cmap="gray")
+    plt.colorbar(label="Pixel value")
+    plt.show()
+    
 
     return count

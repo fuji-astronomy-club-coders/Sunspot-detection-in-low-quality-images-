@@ -42,4 +42,5 @@ Extraction:
   countComponents:
     c: 1
     space_threshold: 1000
+    min_area: 20
 

@@ -97,7 +97,7 @@ def main(config: dict) -> int:
             )
         elif emphasisMethod == "GaussianFilter":
 
-            imgName = f"GaussianFilter_sigma{emphasisConfig['GaussianFilter']['sigma']}.png"
+            imgName = f"GaussianFilter_sigma{emphasisConfig['GaussianFilter']['sigmaSize']}.png"
 
             moduleVersions["Emphasis"] = gaussian_filter.version
             image = gaussian_filter.gaussian_high_pass_filter(

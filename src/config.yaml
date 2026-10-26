@@ -26,11 +26,11 @@ LimbDarkingResolution:
 
 #強調処理
 Emphasis:
-  chosen_method: 'SobelFilter' # 'SobelFilter', 'BrackTopHat', 'GaussianFilter'のいずれかを選択
+  chosen_method: 'BlackTopHat' # 'SobelFilter', 'BlackTopHat', 'GaussianFilter'のいずれかを選択
   # ---各methodのパラメータ---
   SobelFilter:
     kernelSize: 3
-  BrackTopHat:
+  BlackTopHat:
     kernelSize: 15
   GaussianFilter:
     sigmaSize: 20

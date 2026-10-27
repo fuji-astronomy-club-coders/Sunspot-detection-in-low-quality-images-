@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 from numpy import dtype, ndarray
 from numpy._typing._shape import _AnyShape
 
-from src.package import black_top_hat, connection_count, gaussian_filter, sobel_filter, utils
+from src.package import black_top_hat, connection_count, gaussian_filter, sobel_filter, watershed, utils
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 
@@ -127,6 +127,19 @@ def main(config: dict) -> int:
                 image,  # pyright: ignore[reportArgumentType]
                 **extractionConfig["countComponents"]
             )
+        elif extractionMethod == "watershed":
+            imgName = f"watershed_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}_minDistance{extractionConfig['watershed']['min_distance']}.png"
+
+            count, image = connection_count.countConnectedComponents(
+                image,  # pyright: ignore[reportArgumentType]
+                **extractionConfig["countComponents"]
+            )
+
+            count, image = watershed.watershedCount(
+                image,
+                extractionConfig["countComponents"]["min_area"],
+                extractionConfig["watershed"]["min_distance"]
+			)
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
     except Exception as e:

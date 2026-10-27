@@ -37,10 +37,12 @@ Emphasis:
 
 #抽出処理
 Extraction:
-  chosen_method: 'countComponents' # 'countComponents'のいずれかを選択
+  chosen_method: 'watershed' # 'countComponents', 'watershed'のいずれかを選択
   # ---各methodのパラメータ---
-  countComponents:
+  countComponents: # ここのパラメータはwatershedと共用です
     c: 1
     space_threshold: 1000
-    min_area: 20
+    min_area: 2
+  watershed:
+    min_distance: 5
 

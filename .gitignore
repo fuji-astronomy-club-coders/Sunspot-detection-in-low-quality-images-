@@ -5,5 +5,5 @@
 .venv/
 build/
 dist/
-result/
-output/
+/results/
+/output/

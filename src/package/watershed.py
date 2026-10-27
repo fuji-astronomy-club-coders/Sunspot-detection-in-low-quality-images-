@@ -1,11 +1,12 @@
 
 """二値化済みの太陽画像にWatershedを適用するモジュール。"""
 
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy import ndimage
-from skimage.segmentation import watershed
-import matplotlib.pyplot as plt
 from skimage.feature import peak_local_max
+from skimage.segmentation import watershed
+
 
 def watershedCount(
     binary_image: np.ndarray,

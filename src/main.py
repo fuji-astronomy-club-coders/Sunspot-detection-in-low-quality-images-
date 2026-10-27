@@ -22,7 +22,14 @@ import matplotlib.pyplot as plt
 from numpy import dtype, ndarray
 from numpy._typing._shape import _AnyShape
 
-from src.package import black_top_hat, connection_count, gaussian_filter, sobel_filter, watershed, utils
+from src.package import (
+    black_top_hat,
+    connection_count,
+    gaussian_filter,
+    sobel_filter,
+    utils,
+    watershed,
+)
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 

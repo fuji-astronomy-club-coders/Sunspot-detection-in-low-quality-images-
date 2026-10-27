@@ -52,6 +52,10 @@ def loadImage(image_path: str | Path) -> npt.NDArray[Any]:
         raise ValueError(f"対応していない画像形式です: {suffix}")
     if image is None:
         raise ValueError(f"failed to load the image: {image_path}")
+    
+    # NaNを光度0に置き換える
+    image = np.nan_to_num(image, nan=0.0)
+    
     return np.asarray(image)
 
 def svImage_withInfo(image: np.ndarray, info: dict | str, path: str | Path) -> None:

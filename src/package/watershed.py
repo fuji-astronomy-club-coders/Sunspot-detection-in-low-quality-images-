@@ -12,7 +12,7 @@ def watershedCount(
     binary_image: np.ndarray,
     min_area: int = 5,
     min_distance: int = 5,
-) -> tuple[int, np.ndarray]:
+) -> tuple[int, np.ndarray, np.ndarray]:
     """Watershedで黒点候補を分割し、個数を数える。
 
     Args:
@@ -29,7 +29,13 @@ def watershedCount(
 
     # 黒点候補が存在しない場合
     if not np.any(sunspot_mask):
-        return 0, np.full(binary_image.shape, 255, dtype=np.uint8)
+        empty_image = np.full(
+            (*binary_image.shape, 3),
+            255,
+            dtype=np.uint8,
+        )
+        empty_labels = np.zeros(binary_image.shape, dtype=np.intp)
+        return 0, empty_image, empty_labels
 
     # 距離変換：各画素から背景までの距離を求める
     distance_result = ndimage.distance_transform_edt(sunspot_mask)
@@ -74,14 +80,18 @@ def watershedCount(
     filtered_mask = keep_mask[labels]
 
     # 小さな領域を除外したラベル画像を作成
-    colored_labels = np.where(filtered_mask, labels, 0)
+    filtered_labels = np.where(filtered_mask, labels, 0)
 
-    # ラベル画像をカラフルなRGB画像に変換
-    normalized_labels = colored_labels.astype(np.float64)
+     # ラベル画像をカラフルなRGB画像に変換
+    normalized_labels = filtered_labels.astype(np.float64)
     max_label = int(normalized_labels.max())
 
     if max_label > 0:
         normalized_labels /= max_label
+
+    result_image = (
+        plt.get_cmap("nipy_spectral")(normalized_labels)[..., :3] * 255
+    ).astype(np.uint8)
 
     result_image = (plt.get_cmap("nipy_spectral")(normalized_labels)[..., :3] * 255).astype(np.uint8)
 
@@ -92,4 +102,4 @@ def watershedCount(
     print("Watershedのマーカー数:", marker_count)
     print("Watershed後の領域数:", len(np.unique(labels)) - 1)
 
-    return count, result_image
+    return count, result_image, filtered_labels

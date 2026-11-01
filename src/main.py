@@ -26,6 +26,7 @@ from src.package import (
     black_top_hat,
     connection_count,
     gaussian_filter,
+    mask,
     sobel_filter,
     utils,
     watershed,
@@ -130,23 +131,36 @@ def main(config: dict) -> int:
 
             imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}.png"
 
-            count, image = connection_count.countConnectedComponents(
+            count, image, binary_image = connection_count.countConnectedComponents(
                 image,  # pyright: ignore[reportArgumentType]
                 **extractionConfig["countComponents"]
+            )
+            regions = mask.selectMaskRegions(binary_image)
+            count, image = mask.applyMask(
+                binary_image, # pyright: ignore[reportArgumentType]
+                regions,
+                count
             )
         elif extractionMethod == "watershed":
             imgName = f"watershed_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}_minDistance{extractionConfig['watershed']['min_distance']}.png"
 
-            count, image = connection_count.countConnectedComponents(
+            count, image, binary_image = connection_count.countConnectedComponents(
                 image,  # pyright: ignore[reportArgumentType]
                 **extractionConfig["countComponents"]
             )
 
-            count, image = watershed.watershedCount(
+            count, image, binary_image = watershed.watershedCount(
                 image,
                 extractionConfig["countComponents"]["min_area"],
                 extractionConfig["watershed"]["min_distance"]
-			)
+            )
+
+            regions = mask.selectMaskRegions(binary_image)
+            count, image = mask.applyMask(
+                binary_image, # pyright: ignore[reportArgumentType]
+                regions,
+                count
+            )
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
     except Exception as e:

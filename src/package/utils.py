@@ -390,17 +390,20 @@ def save_sunspot_exclusion_csv(
     label_image: np.ndarray,
     mask_regions: list[dict[str, Any]],
     output_path: str | Path,
+    min_area_exclusions: list[tuple[np.ndarray, list[int], str, int]] | None = None,
 ) -> int:
-    """マスクで除外された黒点と、除外元のマスク領域を CSV に保存する。
+    """マスクと minArea で除外された黒点を、要因別に CSV へ保存する。
 
     Parameters
     ----------
     label_image : numpy.ndarray
-        マスク適用前の黒点ラベル画像。
+        minArea 適用後、マスク適用前の黒点ラベル画像。
     mask_regions : list[dict[str, Any]]
         マスク領域ごとの座標と重複黒点ラベルを含む詳細情報。
     output_path : str | pathlib.Path
-        除外一覧 CSV の保存先。
+        CSV の保存先。
+    min_area_exclusions : list[tuple[numpy.ndarray, list[int], str, int]] | None
+        (フィルター前ラベル画像, 除外ラベル, 除外段階, 最小面積) の一覧。
 
     Returns
     -------
@@ -435,20 +438,34 @@ def save_sunspot_exclusion_csv(
         "bbox_width_px",
         "bbox_height_px",
         "area_px",
+        "excluded_by_factor",
+        "exclusion_stage",
+        "min_area_threshold_px",
         "excluded_by_mask_ids",
         "excluded_by_mask_regions",
     ]
+    rows: list[dict[str, Any]] = []
 
-    excluded_labels = sorted(exclusions_by_label)
-    with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(field_names)
-        for sunspot_id, spot_label in enumerate(excluded_labels, start=1):
-            y_coordinates, x_coordinates = np.nonzero(label_image == spot_label)
+    def append_exclusions(
+        source_labels: np.ndarray,
+        excluded_labels: list[int],
+        factor: str,
+        stage: str,
+        min_area_threshold: int | None = None,
+        masks_by_label: dict[int, list[dict[str, int]]] | None = None,
+    ) -> None:
+        """指定されたラベル画像から除外候補の統計行を追加する。"""
+        if source_labels.ndim != 2:
+            raise ValueError("除外候補のラベル画像は2次元配列にしてください。")
+        for spot_label in sorted(set(excluded_labels)):
+            y_coordinates, x_coordinates = np.nonzero(source_labels == spot_label)
             if x_coordinates.size == 0:
                 LOGGER.warning(
-                    "マスク除外一覧にある黒点ラベル %d が元のラベル画像に存在しません。",
+                    "除外一覧にある黒点ラベル %d が元のラベル画像に存在しません。"
+                    " factor=%s, stage=%s",
                     spot_label,
+                    factor,
+                    stage,
                 )
                 continue
 
@@ -456,37 +473,79 @@ def save_sunspot_exclusion_csv(
             max_x = int(x_coordinates.max())
             min_y = int(y_coordinates.min())
             max_y = int(y_coordinates.max())
-            excluded_by_masks = exclusions_by_label[spot_label]
+            excluded_by_masks = (masks_by_label or {}).get(spot_label, [])
             mask_ids = [mask["mask_id"] for mask in excluded_by_masks]
-            writer.writerow(
-                [
-                    sunspot_id,
-                    spot_label,
-                    round(float(x_coordinates.mean()), 6),
-                    round(float(y_coordinates.mean()), 6),
-                    min_x,
-                    min_y,
-                    max_x - min_x + 1,
-                    max_y - min_y + 1,
-                    int(x_coordinates.size),
-                    ";".join(str(mask_id) for mask_id in mask_ids),
-                    json.dumps(excluded_by_masks, ensure_ascii=False),
-                ]
+            rows.append(
+                {
+                    "label": int(spot_label),
+                    "centroid_x_px": round(float(x_coordinates.mean()), 6),
+                    "centroid_y_px": round(float(y_coordinates.mean()), 6),
+                    "bbox_x_px": min_x,
+                    "bbox_y_px": min_y,
+                    "bbox_width_px": max_x - min_x + 1,
+                    "bbox_height_px": max_y - min_y + 1,
+                    "area_px": int(x_coordinates.size),
+                    "excluded_by_factor": factor,
+                    "exclusion_stage": stage,
+                    "min_area_threshold_px": (
+                        min_area_threshold if min_area_threshold is not None else ""
+                    ),
+                    "excluded_by_mask_ids": ";".join(
+                        str(mask_id) for mask_id in mask_ids
+                    ),
+                    "excluded_by_mask_regions": (
+                        json.dumps(excluded_by_masks, ensure_ascii=False)
+                        if excluded_by_masks
+                        else ""
+                    ),
+                }
             )
 
+    append_exclusions(
+        label_image,
+        sorted(exclusions_by_label),
+        "mask",
+        "mask",
+        masks_by_label=exclusions_by_label,
+    )
+    for source_labels, excluded_labels, stage, min_area_threshold in (
+        min_area_exclusions or []
+    ):
+        append_exclusions(
+            source_labels,
+            excluded_labels,
+            "minArea",
+            stage,
+            min_area_threshold,
+        )
+
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=field_names)
+        writer.writeheader()
+        for sunspot_id, row in enumerate(rows, start=1):
+            writer.writerow({"sunspot_id": sunspot_id, **row})
+
+    mask_excluded_count = len(exclusions_by_label)
+    min_area_excluded_count = sum(
+        len(excluded_labels)
+        for _source_labels, excluded_labels, _stage, _min_area in (
+            min_area_exclusions or []
+        )
+    )
     LOGGER.info(
-        "黒点除外一覧 CSV を保存しました: %s (除外黒点数: %d)",
+        "黒点除外一覧 CSV を保存しました: %s (合計: %d、mask: %d、minArea: %d)",
         csv_path,
-        len(excluded_labels),
+        len(rows),
+        mask_excluded_count,
+        min_area_excluded_count,
     )
     for label, masks in exclusions_by_label.items():
         LOGGER.debug(
-            "除外黒点 label=%d: mask_ids=%s",
+            "除外黒点 label=%d: factor=mask, mask_ids=%s",
             label,
             [mask["mask_id"] for mask in masks],
         )
-    return len(excluded_labels)
-
+    return len(rows)
 def closingCircle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
     """
     楕円形またはカスタムカーネルを使用して、画像に対するモルフォロジー閉じ処理(Closing)を実行します。

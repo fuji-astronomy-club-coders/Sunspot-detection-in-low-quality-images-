@@ -12,9 +12,30 @@ tutorial
 - `tutorial\vscode-setup.md` : VScodeの拡張機能の設定
 - `tutorial\env-setup.md` : pythonの仮想環境などの環境構築マニュアル
 
+## Windowsでの起動
+
+Windowsでは、プロジェクトルートの `run.bat` から起動できます。
+
+```bat
+run.bat
+```
+
+通常起動ではPATH上のPythonを使用し、仮想環境は新規作成しません。Python 3.13以上が必要で、`pyproject.toml` の依存パッケージは起動時にインストールされます。
+
+仮想環境を使用する場合は、次のいずれかを指定します。
+
+```bat
+run.bat --venv
+run.bat -v
+```
+
+この場合のみ、プロジェクトルートの `.venv` を作成または再利用します。詳細は [総合利用説明書](docs/user_guide.md) を参照してください。
+
+依存パッケージを事前に用意したPython環境から直接起動する場合は、従来どおり `python run.py` も使用できます。
+
 ## 実行結果・ログの保存先
 
-アプリケーションを `python run.py` で実行すると、設定ファイルの内容と実行環境を含むログが自動的に保存されます。
+アプリケーションを `run.bat`（Windows）または `python run.py` で実行すると、設定ファイルの内容と実行環境を含むログが自動的に保存されます。
 
 - 保存先: `Paths.output_folder/session_YYYYMMDD_HHMMSS_xxxxxx/`
 - セッションフォルダー直下に、周縁減光補正・強調・抽出の各画像を保存
@@ -47,3 +68,9 @@ CSV の列名・値の意味・座標系・複数マスクに重なった場合�
 - ダイアログ下部にはカーソル位置と現在の X・Y 表示範囲を表示します。
 
 マスク選択ダイアログには、画像の表示に使用したカラーマップと画素値の最小値・最大値を示すカラーバーを表示します。最終確認画面では、チェックマーク付きの **Mask Fill** と **無効黒点** のチェックボックスで、それぞれマスク範囲の半透明塗りつぶしと、マスクで除外された黒点（赤色オーバーレイ）の表示を切り替えられます。初期状態は `Display.show_mask_fill` と `Display.show_invalid_sunspots` で設定します。塗りつぶしの色と不透明度は `Display.mask_fill_color` と `Display.mask_fill_alpha` で設定します。
+
+## 利用説明書
+
+- [総合利用説明書](docs/user_guide.md)：起動手順、3つのダイアログ、設定項目、出力ファイル、ログの読み方を説明します。
+- [CSV出力ガイド](docs/csv_output_guide.md)：CSVの各列、座標系、除外理由の詳細を説明します。
+- [画像確認ダイアログ操作ガイド](docs/image_viewer_guide.md)：最終結果確認画面の操作方法を説明します。

@@ -174,17 +174,19 @@ class _MaskCanvas(QWidget):
         QRectF
             画像の描画先領域。
         """
-        # 右側にカラーバーと数値ラベルの領域を確保する。
-        plot_width = max(1, self.width() - 116)
+        # 右側にカラーバーと数値ラベルを確保し、画像の四辺にも余白を設ける。
+        margin = 20
+        plot_width = max(1, self.width() - 116 - margin * 2)
+        plot_height = max(1, self.height() - margin * 2)
         scale = min(
             plot_width / self.image_width,
-            self.height() / self.image_height,
+            plot_height / self.image_height,
         )
         shown_width = self.image_width * scale
         shown_height = self.image_height * scale
         return QRectF(
-            (plot_width - shown_width) / 2,
-            (self.height() - shown_height) / 2,
+            margin + (plot_width - shown_width) / 2,
+            margin + (plot_height - shown_height) / 2,
             shown_width,
             shown_height,
         )

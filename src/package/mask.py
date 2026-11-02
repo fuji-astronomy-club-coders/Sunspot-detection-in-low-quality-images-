@@ -129,6 +129,32 @@ class _MaskCanvas(QWidget):
             int(rgb_image.strides[0]),
             QImage.Format.Format_RGB888,
         ).copy()
+
+        finite_values = np.nan_to_num(
+            image.astype(np.float64),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+        self._minimum = float(finite_values.min())
+        self._maximum = float(finite_values.max())
+
+        # 画像と同じ OpenCV カラーマップで、上端が最大値・下端が最小値の
+        # 縦向きカラーバーを作成する。
+        gradient_values = np.arange(255, -1, -1, dtype=np.uint8).reshape(256, 1)
+        gradient_bgr = _to_display_image(
+            gradient_values,
+            str(options.get("colormap", "HOT")),
+        )
+        gradient_rgb = cv2.cvtColor(gradient_bgr, cv2.COLOR_BGR2RGB)
+        self._colorbar_qimage = QImage(
+            gradient_rgb.tobytes(),
+            1,
+            256,
+            int(gradient_rgb.strides[0]),
+            QImage.Format.Format_RGB888,
+        ).copy()
+
         self._options = options
         self.regions: list[tuple[int, int, int, int]] = []
         self._drawing = False
@@ -148,14 +174,16 @@ class _MaskCanvas(QWidget):
         QRectF
             画像の描画先領域。
         """
+        # 右側にカラーバーと数値ラベルの領域を確保する。
+        plot_width = max(1, self.width() - 116)
         scale = min(
-            self.width() / self.image_width,
+            plot_width / self.image_width,
             self.height() / self.image_height,
         )
         shown_width = self.image_width * scale
         shown_height = self.image_height * scale
         return QRectF(
-            (self.width() - shown_width) / 2,
+            (plot_width - shown_width) / 2,
             (self.height() - shown_height) / 2,
             shown_width,
             shown_height,
@@ -261,6 +289,24 @@ class _MaskCanvas(QWidget):
         painter.setPen(inner_border)
         painter.drawRect(image_border)
 
+        colorbar = QRectF(target.right() + 14, target.top(), 16, target.height())
+        painter.drawImage(colorbar, self._colorbar_qimage)
+        colorbar_pen = QPen(QColor(235, 235, 235), 1)
+        colorbar_pen.setCosmetic(True)
+        painter.setPen(colorbar_pen)
+        painter.drawRect(colorbar)
+        painter.setPen(QColor(240, 240, 240))
+        painter.drawText(
+            QRectF(colorbar.right() + 5, colorbar.top() - 8, 78, 20),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            f"{self._maximum:g}",
+        )
+        painter.drawText(
+            QRectF(colorbar.right() + 5, colorbar.bottom() - 12, 78, 20),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            f"{self._minimum:g}",
+        )
+
         scale_x = target.width() / self.image_width
         scale_y = target.height() / self.image_height
 
@@ -268,6 +314,7 @@ class _MaskCanvas(QWidget):
         if len(color_values) != 3:
             color_values = [0, 255, 0]
         color = QColor(*reversed(color_values))
+
         pen = QPen(color, float(self._options["rectangle_thickness"]))
         pen.setCosmetic(True)
         painter.setPen(pen)

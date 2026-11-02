@@ -16,6 +16,8 @@
 
 import logging
 from typing import Any
+
+import numpy as np
 from numpy import dtype, ndarray
 from numpy._typing._shape import _AnyShape
 
@@ -151,6 +153,8 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     
     utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
 
+    # マスク適用前の強調画像も従来どおり保存し、後からマスク適用版と区別できるようにする。
+    emphasis_img_name = imgName
     emphasized_image = image
 
     try:
@@ -188,6 +192,48 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         regions = mask.selectMaskRegions(
             binary_image, config.get("MaskDialog", {}).get("display")
         )
+
+        # 選択した除外領域を0で埋め、強調画像のマスク適用版も保存する。
+        # 0は Black Top-Hat / Sobel の応答を抑制し、Gaussian 高域通過画像でも
+        # 中立値として扱える。元の強調画像は変更せず、別ファイルに出力する。
+        masked_emphasized_image = emphasized_image.copy()
+        mask_output_regions = []
+        image_height, image_width = masked_emphasized_image.shape[:2]
+        for x, y, width, height in regions:
+            x1 = max(0, int(x))
+            y1 = max(0, int(y))
+            x2 = min(image_width, int(x + width))
+            y2 = min(image_height, int(y + height))
+            if x1 >= x2 or y1 >= y2:
+                continue
+            masked_emphasized_image[y1:y2, x1:x2] = 0
+            mask_output_regions.append(
+                {
+                    "x": x1,
+                    "y": y1,
+                    "width": x2 - x1,
+                    "height": y2 - y1,
+                }
+            )
+
+        masked_emphasis_path = svFolder / (
+            emphasis_img_name.removesuffix(".png") + "_masked.png"
+        )
+        utils.svImage_withInfo(
+            masked_emphasized_image,
+            {
+                "config": config,
+                "moduleVersions": moduleVersions,
+                "mask": {
+                    "applied": True,
+                    "fill_value": 0,
+                    "coordinate_origin": "top-left",
+                    "regions": mask_output_regions,
+                },
+            },
+            masked_emphasis_path,
+        )
+        LOGGER.info("マスク適用済み強調画像を保存しました: %s", masked_emphasis_path)
         if run_logger is not None:
             run_logger.record_event(
                 "mask_regions_selected",
@@ -283,7 +329,16 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     )
     # 対話的な最終確認は設定で有効化した場合のみ PyQt ダイアログで表示する。
     if config.get("Display", {}).get("show_final_image", False):
-        show_final_preview(image)
+        invalid_sunspot_mask = np.isin(
+            sunspot_labels,
+            mask_details["excluded_candidate_labels"],
+        )
+        show_final_preview(
+            image,
+            regions,
+            config.get("Display", {}),
+            invalid_sunspot_mask,
+        )
     
 
     LOGGER.info("Processing completed: %d sunspots detected", count)

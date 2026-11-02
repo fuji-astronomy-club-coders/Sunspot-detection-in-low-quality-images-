@@ -58,7 +58,10 @@ MaskDialog:
     window_height: 800
     rectangle_color: [0, 255, 0]
     rectangle_thickness: 2
-
 # 実行後の結果画像プレビュー
 Display:
   show_final_image: false # trueにするとPyQtで最終解析画像を表示
+  show_mask_fill: true # 最終確認画面で選択したマスク範囲を塗りつぶす
+  show_invalid_sunspots: true # 最終確認画面でマスクにより除外された黒点を表示する
+  mask_fill_color: [0, 255, 0] # 塗りつぶし色（RGB）
+  mask_fill_alpha: 72 # 不透明度（0: 透明 ～ 255: 不透明）

@@ -135,7 +135,9 @@ def main(config: dict) -> int:
                 image,  # pyright: ignore[reportArgumentType]
                 **extractionConfig["countComponents"]
             )
-            regions = mask.selectMaskRegions(binary_image)
+            regions = mask.selectMaskRegions(
+                binary_image, config.get("MaskDialog", {}).get("display")
+            )
             count, image = mask.applyMask(
                 binary_image, # pyright: ignore[reportArgumentType]
                 regions,
@@ -155,7 +157,9 @@ def main(config: dict) -> int:
                 extractionConfig["watershed"]["min_distance"]
             )
 
-            regions = mask.selectMaskRegions(binary_image)
+            regions = mask.selectMaskRegions(
+                binary_image, config.get("MaskDialog", {}).get("display")
+            )
             count, image = mask.applyMask(
                 binary_image, # pyright: ignore[reportArgumentType]
                 regions,

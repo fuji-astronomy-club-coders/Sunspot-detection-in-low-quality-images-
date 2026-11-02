@@ -2,6 +2,7 @@
 """二値化済みの太陽画像にWatershedを適用するモジュール。"""
 
 import logging
+from typing import Literal, TypedDict, overload
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,11 +13,41 @@ from skimage.segmentation import watershed
 LOGGER = logging.getLogger("sunspot.watershed")
 
 
+class MinAreaFilterDetails(TypedDict):
+    """minArea フィルターで除外された watershed 領域の情報。"""
+
+    unfiltered_labels: np.ndarray
+    excluded_labels: list[int]
+    min_area: int
+
+
+@overload
 def watershedCount(
     binary_image: np.ndarray,
     min_area: int = 5,
     min_distance: int = 5,
-) -> tuple[int, np.ndarray, np.ndarray]:
+    return_details: Literal[False] = False,
+) -> tuple[int, np.ndarray, np.ndarray]: ...
+
+
+@overload
+def watershedCount(
+    binary_image: np.ndarray,
+    min_area: int = 5,
+    min_distance: int = 5,
+    return_details: Literal[True] = True,
+) -> tuple[int, np.ndarray, np.ndarray, MinAreaFilterDetails]: ...
+
+
+def watershedCount(
+    binary_image: np.ndarray,
+    min_area: int = 5,
+    min_distance: int = 5,
+    return_details: bool = False,
+) -> (
+    tuple[int, np.ndarray, np.ndarray]
+    | tuple[int, np.ndarray, np.ndarray, MinAreaFilterDetails]
+):
     """Watershedで黒点候補を分割し、個数を数える。
 
     Parameters
@@ -44,6 +75,12 @@ def watershedCount(
             dtype=np.uint8,
         )
         empty_labels = np.zeros(binary_image.shape, dtype=np.intp)
+        if return_details:
+            return 0, empty_image, empty_labels, {
+                "unfiltered_labels": empty_labels,
+                "excluded_labels": [],
+                "min_area": int(min_area),
+            }
         return 0, empty_image, empty_labels
 
     # 距離変換：各画素から背景までの距離を求める
@@ -81,6 +118,11 @@ def watershedCount(
     # 各領域の画素数を数える
     labels = np.asarray(labels, dtype=np.intp)
     component_sizes = np.bincount(labels.ravel())
+    excluded_labels = [
+        int(label)
+        for label in np.flatnonzero(component_sizes < min_area)
+        if label > 0
+    ]
 
     # 最小面積以上の領域だけ残す
     keep_mask = component_sizes >= min_area
@@ -106,5 +148,17 @@ def watershedCount(
     count = int(np.count_nonzero(keep_mask))
     LOGGER.info("Watershedのマーカー数: %d", marker_count)
     LOGGER.info("Watershed後の領域数: %d", len(np.unique(labels)) - 1)
+    LOGGER.info(
+        "Watershed minArea フィルター: 最小面積=%d px、除外=%d、残存=%d",
+        min_area,
+        len(excluded_labels),
+        count,
+    )
 
+    if return_details:
+        return count, result_image, filtered_labels, {
+            "unfiltered_labels": labels,
+            "excluded_labels": excluded_labels,
+            "min_area": int(min_area),
+        }
     return count, result_image, filtered_labels

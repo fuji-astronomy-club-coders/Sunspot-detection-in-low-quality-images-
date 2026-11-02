@@ -12,6 +12,27 @@ tutorial
 - `tutorial\vscode-setup.md` : VScodeの拡張機能の設定
 - `tutorial\env-setup.md` : pythonの仮想環境などの環境構築マニュアル
 
+## Windowsでの起動
+
+Windowsでは、プロジェクトルートの \`run.bat\` から起動できます。
+
+\`\`\`bat
+run.bat
+\`\`\`
+
+通常起動ではPATH上のPythonを使用し、仮想環境は新規作成しません。Python 3.13以上が必要で、\`pyproject.toml\` の依存パッケージは起動時にインストールされます。
+
+仮想環境を使用する場合は、次のいずれかを指定します。
+
+\`\`\`bat
+run.bat --venv
+run.bat -v
+\`\`\`
+
+この場合のみ、プロジェクトルートの \`.venv\` を作成または再利用します。詳細は [総合利用説明書](docs/user_guide.md#21-windows向け起動バッチ-runbat) を参照してください。
+
+依存パッケージを事前に用意したPython環境から直接起動する場合は、従来どおり \`python run.py\` も使用できます。
+
 ## 実行結果・ログの保存先
 
 アプリケーションを `python run.py` で実行すると、設定ファイルの内容と実行環境を含むログが自動的に保存されます。

@@ -50,23 +50,15 @@ def selectMaskRegions(
     image: np.ndarray,
     display_options: dict | None = None,
 ) -> list[tuple[int, int, int, int]]:
-    """画像上で複数の矩形マスク領域を対話的に選択する。
+    """PyQtダイアログで複数の矩形マスク領域を選択する。
 
-    マウスドラッグで矩形を作成する。Enterで確定、Backspaceで直前の矩形を
-    取り消し、Escで選択を終了する。
-
-    Parameters
-    ----------
-    image : np.ndarray
-        選択時に表示する2次元画像。
-    display_options : dict | None
-        config.yaml の ``MaskDialog.display`` に対応する表示設定。
-
-    Returns
-    -------
-    list[tuple[int, int, int, int]]
-        選択した矩形領域。各要素は (x, y, width, height)。
+    ドラッグで矩形を追加し、Enterで確定、Backspaceで取り消し、
+    Escで確定せずに終了する。説明テキストはQPainterでベクター描画する。
     """
+    from PyQt6.QtCore import Qt, QRectF, QPointF
+    from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
+    from PyQt6.QtWidgets import QApplication, QDialog, QVBoxLayout, QWidget
+
     if image.ndim != 2:
         raise ValueError("入力画像はグレースケール画像にしてください。")
 
@@ -86,137 +78,172 @@ def selectMaskRegions(
 
     display_image = _to_display_image(image, str(options["colormap"]))
     image_height, image_width = image.shape
+    # OpenCVのBGR画像をQtが扱うRGB画像に変換
+    rgb_image = cv2.cvtColor(display_image, cv2.COLOR_BGR2RGB)
+    qimage = QImage(
+        rgb_image.data, image_width, image_height, int(rgb_image.strides[0]),
+        QImage.Format.Format_RGB888,
+    ).copy()
+    pixmap = QPixmap.fromImage(qimage)
     regions: list[tuple[int, int, int, int]] = []
-    window_name = "Select Mask Regions"
+    app = QApplication.instance()
+    owns_app = app is None
+    if app is None:
+        app = QApplication([])
 
-    drawing = False
-    start_point = (0, 0)
-    current_point = (0, 0)
-    mouse_point: tuple[int, int] | None = None
-    window_width = max(320, int(options["window_width"]))
-    window_height = max(240, int(options["window_height"]))
-    resizable = bool(options["resizable"])
+    class ImageCanvas(QWidget):
+        """画像とROI、ベクターテキストを描画するキャンバス。"""
 
-    def clamp_point(x: int, y: int) -> tuple[int, int]:
-        return (
-            min(max(int(x), 0), image_width - 1),
-            min(max(int(y), 0), image_height - 1),
-        )
+        def __init__(self) -> None:
+            super().__init__()
+            self.setMinimumSize(320, 240)
+            self.drawing = False
+            self.start = QPointF()
+            self.current = QPointF()
+            self.mouse = QPointF(-1, -1)
 
-    def mouse_callback(event: int, x: int, y: int, flags: int, param: object) -> None:
-        nonlocal drawing, start_point, current_point, mouse_point
-        del flags, param
-        point = clamp_point(x, y)
-        mouse_point = point
-        if event == cv2.EVENT_LBUTTONDOWN:
-            drawing = True
-            start_point = point
-            current_point = point
-        elif event == cv2.EVENT_MOUSEMOVE and drawing:
-            current_point = point
-        elif event == cv2.EVENT_LBUTTONUP and drawing:
-            current_point = point
-            drawing = False
-            x1, y1 = start_point
-            x2, y2 = current_point
-            left, top = min(x1, x2), min(y1, y2)
-            width, height = abs(x2 - x1), abs(y2 - y1)
-            if width > 0 and height > 0:
-                regions.append((left, top, width, height))
+        def image_rect(self) -> QRectF:
+            scale = min(self.width() / image_width, self.height() / image_height)
+            w, h = image_width * scale, image_height * scale
+            return QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h)
 
-    flags = cv2.WINDOW_NORMAL if resizable else cv2.WINDOW_AUTOSIZE
-    cv2.namedWindow(window_name, flags)
-    if resizable:
-        cv2.resizeWindow(window_name, window_width, window_height)
-    cv2.setMouseCallback(window_name, mouse_callback)
+        def to_image(self, point: QPointF) -> tuple[int, int]:
+            rect = self.image_rect()
+            x = round((point.x() - rect.x()) * image_width / rect.width())
+            y = round((point.y() - rect.y()) * image_height / rect.height())
+            return (min(max(x, 0), image_width - 1), min(max(y, 0), image_height - 1))
 
-    try:
-        while True:
-            canvas = display_image.copy()
-            color = tuple(int(v) for v in options["rectangle_color"])
-            for x, y, width, height in regions:
-                cv2.rectangle(
-                    canvas,
-                    (x, y),
-                    (x + width, y + height),
-                    color,
-                    int(options["rectangle_thickness"]),
-                )
+        def paintEvent(self, event) -> None:
+            del event
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.fillRect(self.rect(), QColor(28, 28, 28))
+            rect = self.image_rect()
+            painter.drawPixmap(rect, pixmap, QRectF(pixmap.rect()))
+            color_values = options["rectangle_color"]
+            color = QColor(int(color_values[2]), int(color_values[1]), int(color_values[0]))
+            pen = QPen(color, max(1, int(options["rectangle_thickness"])))
+            painter.setPen(pen)
 
-            if drawing:
-                cv2.rectangle(canvas, start_point, current_point, color, 1)
+            def draw_roi(x: int, y: int, w: int, h: int) -> None:
+                sx = rect.x() + x * rect.width() / image_width
+                sy = rect.y() + y * rect.height() / image_height
+                painter.drawRect(QRectF(sx, sy, w * rect.width() / image_width,
+                                         h * rect.height() / image_height))
 
-            lines: list[str] = []
+            for roi in regions:
+                draw_roi(*roi)
+            if self.drawing:
+                x1, y1 = self.to_image(self.start)
+                x2, y2 = self.to_image(self.current)
+                draw_roi(min(x1, x2), min(y1, y2), abs(x2-x1), abs(y2-y1))
+
+            lines = []
             if options["show_coordinates"]:
-                if mouse_point is None:
+                if self.mouse.x() < 0:
                     lines.append(f"Cursor: ---, ---  |  Image: {image_width} x {image_height}")
                 else:
-                    lines.append(
-                        f"Cursor: x={mouse_point[0]}, y={mouse_point[1]}  "
-                        f"|  Image: {image_width} x {image_height}"
-                    )
-                if drawing:
-                    x1, y1 = start_point
-                    x2, y2 = current_point
-                    lines.append(
-                        f"Selection: x={min(x1, x2)}, y={min(y1, y2)}, "
-                        f"width={abs(x2-x1)}, height={abs(y2-y1)}"
-                    )
+                    mx, my = self.to_image(self.mouse)
+                    lines.append(f"Cursor: x={mx}, y={my}  |  Image: {image_width} x {image_height}")
+                if self.drawing:
+                    x1, y1 = self.to_image(self.start)
+                    x2, y2 = self.to_image(self.current)
+                    lines.append(f"Selection: x={min(x1,x2)}, y={min(y1,y2)}, "
+                                 f"width={abs(x2-x1)}, height={abs(y2-y1)}")
                 elif regions:
-                    x, y, width, height = regions[-1]
-                    lines.append(
-                        f"Last ROI: x={x}, y={y}, width={width}, height={height}"
-                    )
-
+                    x, y, w, h = regions[-1]
+                    lines.append(f"Last ROI: x={x}, y={y}, width={w}, height={h}")
             if options["show_instructions"]:
-                lines.append("Drag: select ROI | Enter: finish | Backspace: undo | Esc: cancel/finish")
-
+                lines.append("Drag: select ROI | Enter: finish | Backspace: undo | Esc: cancel")
             if options["show_scale"]:
-                try:
-                    _, _, shown_width, shown_height = cv2.getWindowImageRect(window_name)
-                    scale_x = shown_width / image_width if shown_width > 0 else 1.0
-                    scale_y = shown_height / image_height if shown_height > 0 else 1.0
-                    lines.append(
-                        f"Display scale: {scale_x * 100:.1f}% x {scale_y * 100:.1f}%"
-                    )
-                except cv2.error:
-                    lines.append(f"Image size: {image_width} x {image_height}")
+                lines.append(f"Display scale: {rect.width()/image_width*100:.1f}%")
+            painter.setFont(self.font())
+            metrics = painter.fontMetrics()
+            y = 8 + metrics.ascent()
+            for line in lines:
+                # QPainterの文字描画はベクター描画で、拡大時も文字が劣化しにくい
+                painter.setPen(QPen(QColor(0, 0, 0), 3))
+                painter.drawText(13, y + 1, line)
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(12, y, line)
+                y += metrics.height() + 5
+            painter.end()
 
-            for index, line in enumerate(lines):
-                cv2.putText(
-                    canvas,
-                    line,
-                    (12, 26 + index * 25),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.62,
-                    (255, 255, 255),
-                    3,
-                    cv2.LINE_AA,
-                )
-                cv2.putText(
-                    canvas,
-                    line,
-                    (12, 26 + index * 25),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.62,
-                    (20, 20, 20),
-                    1,
-                    cv2.LINE_AA,
-                )
+        def mousePressEvent(self, event) -> None:
+            if event.button() == Qt.MouseButton.LeftButton and self.image_rect().contains(event.position()):
+                self.drawing = True
+                self.start = event.position()
+                self.current = event.position()
+                self.update()
 
-            cv2.imshow(window_name, canvas)
-            key = cv2.waitKey(20) & 0xFF
-            if key in (10, 13):  # Enter
-                break
-            if key in (8, 127):  # Backspace / Delete
+        def mouseMoveEvent(self, event) -> None:
+            self.mouse = event.position()
+            if self.drawing:
+                self.current = event.position()
+            self.update()
+
+        def mouseReleaseEvent(self, event) -> None:
+            if event.button() == Qt.MouseButton.LeftButton and self.drawing:
+                self.current = event.position()
+                x1, y1 = self.to_image(self.start)
+                x2, y2 = self.to_image(self.current)
+                left, top = min(x1, x2), min(y1, y2)
+                width, height = abs(x2-x1), abs(y2-y1)
+                if width > 0 and height > 0:
+                    regions.append((left, top, width, height))
+                self.drawing = False
+                self.update()
+
+    class MaskDialog(QDialog):
+        """縦横比を維持するマスク選択ダイアログ。"""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.setWindowTitle("Select Mask Regions")
+            self._aspect = max(320, int(options["window_width"])) / max(240, int(options["window_height"]))
+            self._resizing = False
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            self.canvas = ImageCanvas()
+            layout.addWidget(self.canvas)
+            self.resize(max(320, int(options["window_width"])),
+                        max(240, int(options["window_height"])))
+            if not options["resizable"]:
+                self.setFixedSize(self.size())
+
+        def resizeEvent(self, event) -> None:
+            super().resizeEvent(event)
+            if self._resizing or not options["resizable"]:
+                return
+            self._resizing = True
+            size = event.size()
+            # 変更された方向に合わせてもう一方を調整し、縦横比を維持する
+            old = event.oldSize()
+            if old.isValid() and abs(size.width() - old.width()) >= abs(size.height() - old.height()):
+                self.resize(size.width(), max(240, round(size.width() / self._aspect)))
+            else:
+                self.resize(max(320, round(size.height() * self._aspect)), size.height())
+            self._resizing = False
+
+        def keyPressEvent(self, event) -> None:
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self.accept()
+            elif event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
                 if regions:
                     regions.pop()
-            elif key == 27:  # Esc
-                break
-            if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
-                break
-    finally:
-        cv2.destroyWindow(window_name)
+                    self.canvas.update()
+            elif event.key() == Qt.Key.Key_Escape:
+                self.reject()
+            else:
+                super().keyPressEvent(event)
+
+    dialog = MaskDialog()
+    result = dialog.exec()
+    if result != QDialog.DialogCode.Accepted:
+        regions.clear()
+    dialog.deleteLater()
+    if owns_app:
+        app.quit()
 
     print(f"合計 {len(regions)} 個のマスク領域を選択しました。")
     for index, (x, y, width, height) in enumerate(regions, start=1):

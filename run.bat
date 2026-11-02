@@ -51,8 +51,9 @@ if errorlevel 1 (
 
 rem Install or update dependencies declared in pyproject.toml.
 echo [INFO] Installing project dependencies...
-%PYTHON_CMD% -m pip install -e .
-if errorlevel 1 goto :error
+echo [INFO] Using prebuilt scikit-image wheels to avoid local compilation.
+%PYTHON_CMD% -m pip install --only-binary=scikit-image -e .
+if errorlevel 1 goto :install_error
 
 rem Start the application.
 echo [INFO] Starting run.py...
@@ -96,6 +97,12 @@ echo [ERROR] Python 3.13 or later was not found.
 echo         Install Python 3.13+ and make sure python or py is available in PATH.
 exit /b 1
 
+
+:install_error
+echo [ERROR] Dependency installation failed.
+echo [HINT] Check your internet connection and confirm that Python 3.13+ is installed.
+echo [HINT] This launcher requires a compatible scikit-image wheel for your Python version and architecture.
+goto :error
 
 :error
 echo.

@@ -2,20 +2,55 @@
 """Count connected components in a thresholded solar image."""
 
 import logging
+from typing import Literal, TypedDict, overload
 
 import numpy as np
 from scipy import ndimage
 
 LOGGER = logging.getLogger("sunspot.connection_count")
 
+
+class MinAreaFilterDetails(TypedDict):
+    """minArea フィルターで除外された候補の情報。"""
+
+    unfiltered_labels: np.ndarray
+    excluded_labels: list[int]
+    min_area: int
+
+
 version = "1.00"
+
+
+@overload
+def countConnectedComponents(
+    image: np.ndarray,
+    c: float = 1,
+    space_threshold: float = 1000,
+    min_area: int = 5,
+    return_details: Literal[False] = False,
+) -> tuple[int, np.ndarray, np.ndarray]: ...
+
+
+@overload
+def countConnectedComponents(
+    image: np.ndarray,
+    c: float = 1,
+    space_threshold: float = 1000,
+    min_area: int = 5,
+    return_details: Literal[True] = True,
+) -> tuple[int, np.ndarray, np.ndarray, MinAreaFilterDetails]: ...
+
 
 def countConnectedComponents(
     image: np.ndarray,
     c: float = 1,
     space_threshold: float = 1000,
     min_area: int = 5,
-) -> tuple[int, np.ndarray, np.ndarray]:
+    return_details: bool = False,
+) -> (
+    tuple[int, np.ndarray, np.ndarray]
+    | tuple[int, np.ndarray, np.ndarray, MinAreaFilterDetails]
+):
     """太陽像を二値化し、小領域を除去して黒点候補の連結成分数を返す。
 
     Parameters
@@ -42,6 +77,12 @@ def countConnectedComponents(
     if solar_pixels.size == 0:
         empty_image = np.full(image.shape, 255, dtype=np.uint8)
         empty_labels = np.zeros(image.shape, dtype=np.intp)
+        if return_details:
+            return 0, empty_image, empty_labels, {
+                "unfiltered_labels": empty_labels,
+                "excluded_labels": [],
+                "min_area": int(min_area),
+            }
         return 0, empty_image, empty_labels
 
     mean = np.mean(solar_pixels)
@@ -59,6 +100,11 @@ def countConnectedComponents(
 
     # 各連結成分の面積を計算
     component_sizes = np.bincount(labeled_image.ravel())
+    excluded_labels = [
+        int(label)
+        for label in np.flatnonzero(component_sizes < min_area)
+        if label > 0
+    ]
 
     # 最小面積以上の連結成分だけ残す
     keep_mask = component_sizes >= min_area
@@ -79,5 +125,17 @@ def countConnectedComponents(
     LOGGER.info("閾値: %s", threshold)
     LOGGER.info("黒点候補の画素数: %d", np.count_nonzero(filtered_mask))
     LOGGER.info("黒点候補の連結成分数: %d", count)
+    LOGGER.info(
+        "minArea フィルター: 最小面積=%d px、除外=%d、残存=%d",
+        min_area,
+        len(excluded_labels),
+        count,
+    )
 
+    if return_details:
+        return count, binary_image, filtered_labels, {
+            "unfiltered_labels": labeled_image,
+            "excluded_labels": excluded_labels,
+            "min_area": int(min_area),
+        }
     return count, binary_image, filtered_labels

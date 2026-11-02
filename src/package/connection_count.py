@@ -63,11 +63,14 @@ def countConnectedComponents(
         太陽像と宇宙空間を区別する画素値のしきい値。
     min_area : int, optional
         黒点候補として残す連結成分の最小画素数。
+    return_details : bool, optional
+        True の場合、minArea 適用前のラベル画像と除外ラベルを追加で返す。
 
     Returns
     -------
-    tuple[int, numpy.ndarray, numpy.ndarray]
-        連結成分数、黒点候補を黒（0）・その他を白（255）とした画像、ラベル画像。
+    tuple
+        連結成分数、二値画像、フィルター後ラベル画像。return_details=True の場合は
+        minArea 適用前ラベル画像・除外ラベル・最小面積を含む情報も返す。
     """
     # 太陽像の領域を抽出
     solar_mask = image > space_threshold

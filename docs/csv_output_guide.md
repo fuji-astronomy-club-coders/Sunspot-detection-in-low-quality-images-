@@ -13,8 +13,8 @@ CSV は実行ごとに作成されるセッションフォルダー直下へ保�
    └─ sunspot_exclusion_list.csv
 ```
 
-- `sunspot_statistics.csv`: マスク適用後に残った黒点
-- `sunspot_exclusion_list.csv`: マスク領域と重なり、除外された黒点
+- `sunspot_statistics.csv`: minArea とマスクの適用後に残った黒点
+- `sunspot_exclusion_list.csv`: マスクまたは minArea によって除外された黒点
 
 どちらのファイルも UTF-8 BOM 付き（`utf-8-sig`）、カンマ区切りです。Excel などの表計算ソフトで開く場合は、文字コードを UTF-8 として読み込んでください。検出対象がない場合も、ヘッダー行のみの CSV が出力されます。
 
@@ -65,9 +65,9 @@ sunspot_id,label,centroid_x_px,centroid_y_px,bbox_x_px,bbox_y_px,bbox_width_px,b
 
 この例の1行目は、ラベル `3` の黒点について、重心が `(245.625, 180.125)`、外接矩形が左上 `(230, 165)`・幅32・高さ31、黒点を構成する画素が512個であることを表します。
 
-## 4. `sunspot_exclusion_list.csv` — マスクで除外された黒点
+## 4. `sunspot_exclusion_list.csv` — 除外された黒点
 
-マスク領域と重なって除外された黒点を1行につき1件記録します。黒点の形状・位置に関する列は、残った黒点の CSV と同じ意味です。
+マスク領域との重なり、または `minArea` フィルターによって除外された黒点を1行につき1件記録します。黒点の形状・位置に関する列は、残った黒点の CSV と同じ意味です。`minArea` で除外された候補もフィルター前のラベル画像から統計値を取得するため、マスク除外と同じ CSV で確認できます。
 
 | 列名                         | 内容                                                 |
 | -------------------------- | -------------------------------------------------- |
@@ -80,8 +80,11 @@ sunspot_id,label,centroid_x_px,centroid_y_px,bbox_x_px,bbox_y_px,bbox_width_px,b
 | `bbox_width_px`            | 外接矩形の幅（ピクセル）。                                      |
 | `bbox_height_px`           | 外接矩形の高さ（ピクセル）。                                     |
 | `area_px`                  | 黒点を構成する画素数。                                        |
+| `excluded_by_factor`       | 除外要因。マスクによる除外は `mask`、面積フィルターによる除外は `minArea` です。 |
+| `exclusion_stage`           | 除外段階。`mask`、`connected_components`、`watershed` のいずれかです。 |
+| `min_area_threshold_px`     | minArea の最小面積（画素数）。mask による除外では空欄です。                 |
 | `excluded_by_mask_ids`     | 除外に関係したマスク番号。複数ある場合はセミコロン（`;`）区切りです。               |
-| `excluded_by_mask_regions` | 除外に関係したマスク領域の詳細を格納した JSON 配列です。                    |
+| `excluded_by_mask_regions` | 除外に関係したマスク領域の詳細を格納した JSON 配列です。mask 以外では空欄です。 |
 
 ### マスク番号と領域情報
 
@@ -109,13 +112,22 @@ excluded_by_mask_regions:
 
 上記の座標・大きさは説明用の架空の値です。JSON 配列の値も画像左上原点・0始まりのピクセル座標です。
 
+### 除外要因の見方
+
+- `excluded_by_factor=mask`: 選択した矩形マスクと重なったため除外されています。マスク番号と範囲は `excluded_by_mask_ids` / `excluded_by_mask_regions` で確認できます。
+- `excluded_by_factor=minArea`: `area_px` が `min_area_threshold_px` 未満だったため除外されています。
+- `exclusion_stage=connected_components`: 連結成分抽出直後の面積判定で除外されています。
+- `exclusion_stage=watershed`: Watershed による分割後の面積判定で除外されています。
+
+`label` は処理段階ごとに付け直されるため、異なる `exclusion_stage` の行同士をラベル番号だけで照合しないでください。
+
 ## 5. CSV を読むときのポイント
 
 1. **最終的に残った黒点の個数を確認する**  
    `sunspot_statistics.csv` のデータ行数が、CSVに出力された残存黒点数です。ヘッダー行は数えません。
 
 2. **除外された黒点と理由を確認する**  
-   `sunspot_exclusion_list.csv` で対象の行を探し、`excluded_by_mask_ids` から該当マスクを確認します。座標や矩形の大きさは `excluded_by_mask_regions` で確認できます。
+   `sunspot_exclusion_list.csv` の `excluded_by_factor` を確認します。`mask` の場合は `excluded_by_mask_ids` と `excluded_by_mask_regions`、`minArea` の場合は `area_px` と `min_area_threshold_px` を比較してください。
 
 3. **黒点の位置と大きさを画像上で確認する**  
    `centroid_x_px`・`centroid_y_px` が重心位置、`bbox_x_px`・`bbox_y_px`・`bbox_width_px`・`bbox_height_px` が外接矩形です。座標は0始まりなので、画像ビューアーによって表示座標の数え方が異なる場合は注意してください。

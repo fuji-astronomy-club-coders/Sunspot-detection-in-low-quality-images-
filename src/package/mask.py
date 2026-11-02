@@ -242,6 +242,19 @@ class _MaskCanvas(QWidget):
 
         target = self._image_rect()
         painter.drawImage(target, self._qimage)
+
+        # 画像の外周を二重線で囲み、暗い画像・明るい画像のどちらでも
+        # 表示領域の端が分かるようにする。画像データ自体には描き込まない。
+        image_border = target.adjusted(-0.5, -0.5, 0.5, 0.5)
+        outer_border = QPen(QColor(16, 16, 16, 255), 5)
+        outer_border.setCosmetic(True)
+        painter.setPen(outer_border)
+        painter.drawRect(image_border)
+        inner_border = QPen(QColor(255, 220, 0, 255), 2)
+        inner_border.setCosmetic(True)
+        painter.setPen(inner_border)
+        painter.drawRect(image_border)
+
         scale_x = target.width() / self.image_width
         scale_y = target.height() / self.image_height
 

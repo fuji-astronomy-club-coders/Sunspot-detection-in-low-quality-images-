@@ -116,8 +116,9 @@ class _MaskCanvas(QWidget):
         super().__init__(parent)
         self.image_height, self.image_width = image.shape
         rgb_image = cv2.cvtColor(display_image, cv2.COLOR_BGR2RGB)
+        rgb_bytes = rgb_image.tobytes()
         self._qimage = QImage(
-            rgb_image.data,
+            rgb_bytes,
             self.image_width,
             self.image_height,
             int(rgb_image.strides[0]),
@@ -225,12 +226,12 @@ class _MaskCanvas(QWidget):
             lines.append(f"Display scale: {scale * 100:.1f}%")
         return lines
 
-    def paintEvent(self, event: QPaintEvent) -> None:
+    def paintEvent(self, event: QPaintEvent | None) -> None:
         """画像、矩形、座標情報を Qt のベクター描画で再描画する。
 
         Parameters
         ----------
-        event : QPaintEvent
+        event : QPaintEvent | None
             Qt の描画イベント。
         """
         del event
@@ -310,15 +311,15 @@ class _MaskCanvas(QWidget):
                 )
         painter.end()
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
         """左クリック位置から矩形選択を開始する。
 
         Parameters
         ----------
-        event : QMouseEvent
+        event : QMouseEvent | None
             マウス押下イベント。
         """
-        if event.button() != Qt.MouseButton.LeftButton:
+        if event is None or event.button() != Qt.MouseButton.LeftButton:
             return
         point = self._map_to_image(event.position())
         if point is None:
@@ -330,29 +331,31 @@ class _MaskCanvas(QWidget):
         self._mouse_point = point
         self.update()
 
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+    def mouseMoveEvent(self, event: QMouseEvent | None) -> None:
         """カーソル座標とドラッグ中の矩形終点を更新する。
 
         Parameters
         ----------
-        event : QMouseEvent
+        event : QMouseEvent | None
             マウス移動イベント。
         """
+        if event is None:
+            return
         point = self._map_to_image(event.position(), clamp=self._drawing)
         self._mouse_point = point
         if self._drawing and point is not None:
             self._current_point = point
         self.update()
 
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+    def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
         """ドラッグを終了し、有効な矩形を選択領域へ追加する。
 
         Parameters
         ----------
-        event : QMouseEvent
+        event : QMouseEvent | None
             マウス解放イベント。
         """
-        if event.button() != Qt.MouseButton.LeftButton or not self._drawing:
+        if event is None or event.button() != Qt.MouseButton.LeftButton or not self._drawing:
             return
         point = self._map_to_image(event.position(), clamp=True)
         if point is not None:
@@ -452,14 +455,16 @@ class _MaskDialog(QDialog):
         else:
             self.setFixedSize(initial_width, initial_height)
 
-    def resizeEvent(self, event: QResizeEvent) -> None:
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
         """ユーザーによるリサイズ時にウィンドウの縦横比を維持する。
 
         Parameters
         ----------
-        event : QResizeEvent
+        event : QResizeEvent | None
             Qt のリサイズイベント。
         """
+        if event is None:
+            return
         super().resizeEvent(event)
         if not self._resizable or self._adjusting_size:
             return
@@ -488,12 +493,12 @@ class _MaskDialog(QDialog):
             self.resize(target_width, target_height)
             self._adjusting_size = False
 
-    def closeEvent(self, event: QCloseEvent) -> None:
+    def closeEvent(self, event: QCloseEvent | None) -> None:
         """ウィンドウを閉じた場合も現在の矩形選択を確定する。
 
         Parameters
         ----------
-        event : QCloseEvent
+        event : QCloseEvent | None
             Qt のウィンドウ終了イベント。
 
         Returns
@@ -501,16 +506,19 @@ class _MaskDialog(QDialog):
         None
         """
         self.done(QDialog.DialogCode.Accepted)
-        event.accept()
+        if event is not None:
+            event.accept()
 
-    def keyPressEvent(self, event: QKeyEvent) -> None:
+    def keyPressEvent(self, event: QKeyEvent | None) -> None:
         """Enter、Backspace、Esc キーの操作を処理する。
 
         Parameters
         ----------
-        event : QKeyEvent
+        event : QKeyEvent | None
             キー押下イベント。
         """
+        if event is None:
+            return
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.accept()
         elif event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):

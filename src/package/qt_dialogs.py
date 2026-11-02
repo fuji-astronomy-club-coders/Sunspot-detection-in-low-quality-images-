@@ -18,14 +18,18 @@ def ensure_qapplication() -> QApplication:
     global _QT_APPLICATION
 
     application = QApplication.instance()
-    if application is None:
-        _QT_APPLICATION = QApplication(sys.argv[:1])
-        _QT_APPLICATION.setQuitOnLastWindowClosed(False)
-        application = _QT_APPLICATION
+    if isinstance(application, QApplication):
+        app = application
+    elif application is None:
+        app = QApplication(sys.argv[:1])
+        app.setQuitOnLastWindowClosed(False)
     else:
-        _QT_APPLICATION = application
+        raise RuntimeError(
+            "QCoreApplication already exists; a QApplication is required for GUI dialogs."
+        )
 
-    return application
+    _QT_APPLICATION = app
+    return app
 
 
 def select_file(

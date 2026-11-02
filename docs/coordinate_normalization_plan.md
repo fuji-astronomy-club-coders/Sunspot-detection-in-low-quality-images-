@@ -302,7 +302,7 @@ flip_x が true の場合は、変換後の X 成分だけを反転する。
 
 ## 8. 比較処理と出力
 
-### 8.1 4画像の処理フロー
+### 8.1 複数画像の処理フロー
 
 新しい比較処理は、日付フォルダーを1単位として実行する。
 
@@ -319,6 +319,8 @@ flip_x が true の場合は、変換後の X 成分だけを反転する。
 
 ### 8.2 出力フォルダー案
 
+比較モードでは既存の `RunLogger` を1回だけ生成し、その `session_dir` を比較実行全体の出力ルートとする。既存の単一画像モードの出力先・ファイル構成は変更しない。比較モードのみ、複数画像のファイル名衝突を避けるため観測所 ID ごとのサブフォルダーを作成する。
+
     results/
     └─ session_YYYYMMDD_HHMMSS_xxxxxx/
        ├─ run_YYYYMMDD_HHMMSS_xxxxxx.log
@@ -334,6 +336,27 @@ flip_x が true の場合は、変換後の X 成分だけを反転する。
        └─ source_04/
 
 未提供の `source_03` は出力フォルダーを作成しない。入力はあったが処理に失敗したサンプルは、summary に失敗理由を記録する。ログは既存 RunLogger のセッション直下にまとめる。
+
+出力の責務は次のように分ける。
+
+| 出力 | 内容・用途 |
+|---|---|
+| `run_*.log` | 既存と同様の人間向け実行ログ。比較開始、各観測所の処理開始・終了・警告・失敗を記録 |
+| `run_*.json` | 既存と同様の実行環境・設定・イベントの機械可読ログ。比較イベントには必ず `source_id` を付ける |
+| `comparison_summary.json` | 比較セット全体の情報。比較日付、登録4観測所、入力済み・未提供・処理成功・スキップ・失敗の一覧、各観測所の検出数、適用マスク、geometry、分解能、方向設定、出力先、全体ステータスを記録 |
+| `comparison_sunspot_statistics.csv` | 処理成功した観測所の残存黒点を1ファイルに統合。各行に `source_id`、`source_name`、画像ファイル名、pixel 座標、共通座標を記録 |
+| `comparison_sunspot_exclusion_list.csv` | 処理成功した観測所のマスク除外黒点を統合。各行に `source_id` と該当マスク情報を記録 |
+| `source_id/` | その観測所の個別 CSV、処理段階画像、サマリー画像を保存 |
+
+個別 CSV には日付を追加しない。比較日付はフォルダー名と `comparison_summary.json` に一度だけ保持する。統合 CSV も単一の日付セット内の出力なので、日付列は付けず、どの比較セットの結果かは格納先セッションの `comparison_summary.json` で識別する。
+
+全体ステータスは次の3種類とする。
+
+- `success`：登録された4観測所すべてのサンプルが入力され、すべて処理に成功した。
+- `partial_success`：1件以上のサンプルは処理できたが、観測所の未提供、入力不備によるスキップ、処理失敗のいずれかがある。
+- `failed`：有効なサンプルが0件、または全サンプルの処理に失敗した。
+
+サンプル単位の状態は `success`、`not_provided`、`skipped_invalid_input`、`failed_processing` とする。1観測所の処理が失敗しても残りの観測所は継続する。最終的に成功が1件以上あれば、全体を `partial_success` または `success` として完了記録する。
 
 個別結果は既存の CSV 仕様を基本的に維持する。統合 CSV には `source_id`、`source_name`、`image`、`centroid_x_normalized`、`centroid_y_normalized`、元画像の pixel 座標を含める。日付は比較セットの情報として `comparison_summary.json` と出力フォルダー名に保持し、画像単位メタデータや個別 CSV に重複保存しない。
 

@@ -39,6 +39,65 @@ from src.package.qt_preview import show_final_preview
 LOGGER = logging.getLogger("sunspot.main")
 
 
+def _format_analysis_parameters(config: dict[str, Any]) -> str:
+    """選択された処理方式で実際に使用する解析パラメータを整形する。
+
+    Parameters
+    ----------
+    config : dict[str, Any]
+        アプリケーション設定。
+
+    Returns
+    -------
+    str
+        処理段階ごとに空行で区切った解析パラメータ。
+    """
+    sections: list[str] = []
+
+    limb_config = config["LimbDarkingResolution"]
+    limb_method = limb_config["chosen_method"]
+    sections.append(
+        "\\n".join(
+            [
+                "[周縁減光補正]",
+                f"method: {limb_method}",
+                pformat(limb_config.get(limb_method, {}), sort_dicts=False),
+            ]
+        )
+    )
+
+    emphasis_config = config["Emphasis"]
+    emphasis_method = emphasis_config["chosen_method"]
+    sections.append(
+        "\\n".join(
+            [
+                "[強調処理]",
+                f"method: {emphasis_method}",
+                pformat(emphasis_config.get(emphasis_method, {}), sort_dicts=False),
+            ]
+        )
+    )
+
+    extraction_config = config["Extraction"]
+    extraction_method = extraction_config["chosen_method"]
+    extraction_lines = [
+        "[黒点候補抽出]",
+        f"method: {extraction_method}",
+        "countComponents:",
+        pformat(extraction_config.get("countComponents", {}), sort_dicts=False),
+    ]
+    if extraction_method == "watershed":
+        extraction_lines.extend(
+            [
+                "watershed:",
+                pformat(extraction_config.get("watershed", {}), sort_dicts=False),
+            ]
+        )
+    sections.append("\\n".join(extraction_lines))
+
+    return "\\n\\n".join(sections)
+
+
 def main(config: dict, run_logger: RunLogger | None = None) -> int:
     """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。
 
@@ -53,8 +112,11 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         マスク適用後に残った黒点候補数。
     """
     LOGGER.info("Starting main process...")
-    # 以前の標準出力デバッグと同様、実際に使用する設定をターミナルにも表示する。
-    LOGGER.info("=== Config ===\n%s\n============", pformat(config, sort_dicts=False))
+    # 実際に使用する解析パラメータを処理段階ごとに空行で区切って表示する。
+    LOGGER.info(
+        "=== Analysis Parameters ===\\n%s\\n===========================",
+        _format_analysis_parameters(config),
+    )
 
     image_path = configMOD.resolve_path(config["Paths"]["input_image"])
     output_root = (

@@ -546,6 +546,8 @@ def save_sunspot_exclusion_csv(
             [mask["mask_id"] for mask in masks],
         )
     return len(rows)
+
+
 def closingCircle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
     """
     楕円形またはカスタムカーネルを使用して、画像に対するモルフォロジー閉じ処理(Closing)を実行します。

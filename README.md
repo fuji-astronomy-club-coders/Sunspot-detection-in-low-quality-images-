@@ -35,7 +35,7 @@ run.bat -v
 
 ## 実行結果・ログの保存先
 
-アプリケーションを `python run.py` で実行すると、設定ファイルの内容と実行環境を含むログが自動的に保存されます。
+アプリケーションを `run.bat`（Windows）または `python run.py` で実行すると、設定ファイルの内容と実行環境を含むログが自動的に保存されます。
 
 - 保存先: `Paths.output_folder/session_YYYYMMDD_HHMMSS_xxxxxx/`
 - セッションフォルダー直下に、周縁減光補正・強調・抽出の各画像を保存

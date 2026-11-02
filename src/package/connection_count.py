@@ -37,7 +37,7 @@ def countConnectedComponents(
     c: float = 1,
     space_threshold: float = 1000,
     min_area: int = 5,
-    return_details: Literal[True] = True,
+    return_details: Literal[True],
 ) -> tuple[int, np.ndarray, np.ndarray, MinAreaFilterDetails]: ...
 
 

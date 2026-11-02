@@ -57,7 +57,7 @@ def _format_analysis_parameters(config: dict[str, Any]) -> str:
     limb_config = config["LimbDarkingResolution"]
     limb_method = limb_config["chosen_method"]
     sections.append(
-        "\\n".join(
+        "\n".join(
             [
                 "[周縁減光補正]",
                 f"method: {limb_method}",
@@ -69,7 +69,7 @@ def _format_analysis_parameters(config: dict[str, Any]) -> str:
     emphasis_config = config["Emphasis"]
     emphasis_method = emphasis_config["chosen_method"]
     sections.append(
-        "\\n".join(
+        "\n".join(
             [
                 "[強調処理]",
                 f"method: {emphasis_method}",
@@ -93,9 +93,9 @@ def _format_analysis_parameters(config: dict[str, Any]) -> str:
                 pformat(extraction_config.get("watershed", {}), sort_dicts=False),
             ]
         )
-    sections.append("\\n".join(extraction_lines))
+    sections.append("\n".join(extraction_lines))
 
-    return "\\n\\n".join(sections)
+    return "\n\n".join(sections)
 
 
 def main(config: dict, run_logger: RunLogger | None = None) -> int:
@@ -114,7 +114,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     LOGGER.info("Starting main process...")
     # 実際に使用する解析パラメータを処理段階ごとに空行で区切って表示する。
     LOGGER.info(
-        "=== Analysis Parameters ===\\n%s\\n===========================",
+        "=== Analysis Parameters ===\n%s\n===========================",
         _format_analysis_parameters(config),
     )
 

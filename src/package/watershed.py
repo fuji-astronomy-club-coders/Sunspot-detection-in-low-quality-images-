@@ -58,11 +58,14 @@ def watershedCount(
         残す領域の最小画素数。
     min_distance : int, optional
         Watershed のマーカー間に確保する最小距離。
+    return_details : bool, optional
+        True の場合、minArea 適用前のラベル画像と除外ラベルを追加で返す。
 
     Returns
     -------
-    tuple[int, numpy.ndarray, numpy.ndarray]
-        領域数、領域ごとに色分けした RGB 画像、領域ラベル画像。
+    tuple
+        領域数、色分け画像、フィルター後ラベル画像。return_details=True の場合は
+        minArea 適用前ラベル画像・除外ラベル・最小面積を含む情報も返す。
     """
     # 黒点候補をTrue、背景をFalseにする
     sunspot_mask = binary_image == 0

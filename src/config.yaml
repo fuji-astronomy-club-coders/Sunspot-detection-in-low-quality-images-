@@ -46,3 +46,19 @@ Extraction:
   watershed:
     min_distance: 5
 
+
+# マスク選択ダイアログ
+MaskDialog:
+  display:
+    # 表示用カラーマップ: GRAY, HOT, JET, VIRIDIS, INFERNO, PLASMA, TURBO など
+    colormap: HOT
+    show_coordinates: true
+    show_instructions: true
+    # true: リサイズ可能（ウィンドウの縦横比は固定） / false: 固定サイズ
+    resizable: true
+    # true: 画像に対する表示倍率を表示
+    show_scale: true
+    window_width: 1100
+    window_height: 800
+    rectangle_color: [0, 255, 0]
+    rectangle_thickness: 2

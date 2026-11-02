@@ -15,6 +15,7 @@ dependencies = [
     "tifffile>=2026.2.20",
     "astropy>=7.2.3",
     "opencv-python==5.0.0.93",
+    "PyQt6>=6.7.0",
     "scipy==1.18.1",
     "scikit-image>=0.24.0,<0.26.0",
 ]

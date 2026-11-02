@@ -10,7 +10,18 @@ CONFIG_PATH = PROJECT_ROOT / "src" / "config.yaml"
 
 
 def load_config() -> dict:
-    """Load and return the project configuration from config.yaml."""
+    """config.yaml を読み込み、設定を辞書として返す。
+
+    Returns
+    -------
+    dict
+        YAML から読み込んだプロジェクト設定。
+
+    Raises
+    ------
+    ValueError
+        設定ファイルのトップレベルが辞書ではない場合。
+    """
     with CONFIG_PATH.open("r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
 
@@ -21,7 +32,18 @@ def load_config() -> dict:
 
 
 def resolve_path(relative_path: str) -> Path:
-    """プロジェクトルートを基準にパスを解決する。"""
+    """プロジェクトルートを基準に相対パスを絶対パスへ解決する。
+
+    Parameters
+    ----------
+    relative_path : str
+        プロジェクトルートからの相対パス。
+
+    Returns
+    -------
+    pathlib.Path
+        解決済みの絶対パス。
+    """
     return (PROJECT_ROOT / relative_path).resolve()
 
 

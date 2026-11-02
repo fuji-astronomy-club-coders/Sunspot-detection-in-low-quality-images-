@@ -12,24 +12,35 @@ def watershedCount(
     binary_image: np.ndarray,
     min_area: int = 5,
     min_distance: int = 5,
-) -> tuple[int, np.ndarray]:
+) -> tuple[int, np.ndarray, np.ndarray]:
     """Watershedで黒点候補を分割し、個数を数える。
 
-    Args:
-        binary_image: 黒点候補が0、背景が255の二値画像。
-        min_area: 残す領域の最小画素数。デフォルトは5。
-        min_distance: watershedで分割される黒点どうしの最小の距離。
+    Parameters
+    ----------
+    binary_image : numpy.ndarray
+        黒点候補が0、背景が255の2次元二値画像。
+    min_area : int, optional
+        残す領域の最小画素数。
+    min_distance : int, optional
+        Watershed のマーカー間に確保する最小距離。
 
-    Return
+    Returns
     -------
-        黒点ごとに色分けされた画像。各画素が RGB の3値を持つため、(高さ, 幅, 3) の形状を持ちます。
+    tuple[int, numpy.ndarray, numpy.ndarray]
+        領域数、領域ごとに色分けした RGB 画像、領域ラベル画像。
     """
     # 黒点候補をTrue、背景をFalseにする
     sunspot_mask = binary_image == 0
 
     # 黒点候補が存在しない場合
     if not np.any(sunspot_mask):
-        return 0, np.full(binary_image.shape, 255, dtype=np.uint8)
+        empty_image = np.full(
+            (*binary_image.shape, 3),
+            255,
+            dtype=np.uint8,
+        )
+        empty_labels = np.zeros(binary_image.shape, dtype=np.intp)
+        return 0, empty_image, empty_labels
 
     # 距離変換：各画素から背景までの距離を求める
     distance_result = ndimage.distance_transform_edt(sunspot_mask)
@@ -74,22 +85,22 @@ def watershedCount(
     filtered_mask = keep_mask[labels]
 
     # 小さな領域を除外したラベル画像を作成
-    colored_labels = np.where(filtered_mask, labels, 0)
+    filtered_labels = np.where(filtered_mask, labels, 0)
 
-    # ラベル画像をカラフルなRGB画像に変換
-    normalized_labels = colored_labels.astype(np.float64)
+     # ラベル画像をカラフルなRGB画像に変換
+    normalized_labels = filtered_labels.astype(np.float64)
     max_label = int(normalized_labels.max())
 
     if max_label > 0:
         normalized_labels /= max_label
 
-    result_image = (plt.get_cmap("nipy_spectral")(normalized_labels)[..., :3] * 255).astype(np.uint8)
+    result_image = (
+        plt.get_cmap("nipy_spectral")(normalized_labels)[..., :3] * 255
+    ).astype(np.uint8)
 
-    count = int(np.count_nonzero(keep_mask))
-
-    # ラベル0は除外済みなので、そのまま数える
+    # ラベル0は除外済みなので、そのまま数える。
     count = int(np.count_nonzero(keep_mask))
     print("Watershedのマーカー数:", marker_count)
     print("Watershed後の領域数:", len(np.unique(labels)) - 1)
 
-    return count, result_image
+    return count, result_image, filtered_labels

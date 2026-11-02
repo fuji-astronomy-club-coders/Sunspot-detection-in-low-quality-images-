@@ -16,6 +16,8 @@ import numpy as np
 from matplotlib import gridspec
 from matplotlib.patches import Circle
 
+from src.package.qt_dialogs import select_directory, select_file
+
 version = "MIN2 v2.4.0"  # 黒点リトライ座標・iter_cycles=0・グローバル依存・描画まわりの修正
 
 # spot の 4 番目の要素(走査方向)
@@ -39,7 +41,23 @@ _NO_IMAGE_MSG = (
 # 内部ヘルパー
 # ---------------------------------------------------------------------------
 def _to_gray(image: np.ndarray) -> np.ndarray:
-    """2次元のグレースケール画像に揃える(カラー/BGRA画像が来ても動くように)。"""
+    """入力画像を2次元のグレースケール画像へ変換する。
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        2次元グレースケール、3チャンネル BGR、または4チャンネル BGRA 画像。
+
+    Returns
+    -------
+    numpy.ndarray
+        2次元のグレースケール画像。
+
+    Raises
+    ------
+    ValueError
+        対応していない画像形状の場合。
+    """
     image = np.asarray(image)
     if image.ndim == 2:
         return image
@@ -57,7 +75,25 @@ def _to_gray(image: np.ndarray) -> np.ndarray:
 def _resolve_image(
     img_inst: str | np.ndarray, img_path: pathlib.Path | str | None = None
 ) -> np.ndarray:
-    """img_inst("GLOBAL" / "PATH" / 画像配列)から2次元グレースケール画像を得る。"""
+    """画像の指定方法に応じて2次元グレースケール画像を取得する。
+
+    Parameters
+    ----------
+    img_inst : str | numpy.ndarray
+        ``GLOBAL``、``PATH``、または画像配列。
+    img_path : pathlib.Path | str | None, optional
+        ``img_inst="PATH"`` の場合に読み込む画像ファイル。
+
+    Returns
+    -------
+    numpy.ndarray
+        2次元のグレースケール画像。
+
+    Raises
+    ------
+    ValueError
+        画像が指定されていない場合、読み込みに失敗した場合、または不明な指定の場合。
+    """
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
             image = globals().get("img")
@@ -79,6 +115,23 @@ def _resolve_image(
 
 
 def _resolve_divnum(n: int | None) -> int:
+    """画像の分割数を引数または互換用グローバル変数から取得する。
+
+    Parameters
+    ----------
+    n : int | None
+        指定する分割数。``None`` の場合はグローバル変数 ``divnum`` を参照する。
+
+    Returns
+    -------
+    int
+        使用する分割数。
+
+    Raises
+    ------
+    ValueError
+        分割数が指定されていない場合。
+    """
     if n is None:
         n = globals().get("divnum")
     if n is None:
@@ -91,6 +144,21 @@ def _draw_circle(
     cir_stat: tuple[float, ...] | list[float] | np.ndarray | bool | None,
     color: str,
 ) -> None:
+    """Matplotlib の Axes に近似円を追加する。
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        円を追加する Axes。
+    cir_stat : tuple | list | numpy.ndarray | bool | None
+        円の中心座標と半径 ``(cx, cy, radius)``。``None`` または ``False`` の場合は描画しない。
+    color : str
+        円の線色。
+
+    Returns
+    -------
+    None
+    """
     if cir_stat is None or isinstance(cir_stat, bool):
         return
     cx, cy, R = cir_stat[:3]
@@ -104,7 +172,25 @@ def _draw_division_lines(
     n: int,
     alpha: float,  # pyright: ignore[reportPrivateImportUsage]
 ) -> None:
-    """cut_and_sampling が実際に走査する位置(i=1..n-1)にだけ分割線を引く。"""
+    """画像走査に使用する位置へ縦横の分割線を描画する。
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        分割線を描画する Axes。
+    width : int
+        画像幅。
+    height : int
+        画像高さ。
+    n : int
+        縦横それぞれの分割数。
+    alpha : float
+        分割線の透明度。
+
+    Returns
+    -------
+    None
+    """
     for i in range(1, n):
         ax.axvline(width * i // n, color="white", linestyle="--", alpha=alpha)
         ax.axhline(height * i // n, color="white", linestyle="--", alpha=alpha)
@@ -116,17 +202,22 @@ def _draw_division_lines(
 def cut_and_sampling(
     img_inst: str | np.ndarray, sun_threshold: float, n: int | None = None
 ) -> list[list[float]]:
-    """画像を分割線で走査し、輝度の変化（微分値）から太陽の縁（エッジ）に相当する点の座標をサンプリングする。
+    """画像を走査し、輝度変化から太陽の縁に相当する点をサンプリングする。
 
-    Args:
-        img_inst (Union[str, np.ndarray]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得する。もしくは読み込んだ画像。
-        sun_threshold (Union[int, float]): 太陽像とみなす明るさのしきい値。これ以下の直線は処理をスキップする。
-        n (int | None): 分割数。Noneならglobal変数divnumを使う。
+    Parameters
+    ----------
+    img_inst : str | numpy.ndarray
+        ``GLOBAL``、``PATH``、または読み込み済み画像。
+    sun_threshold : float
+        太陽像とみなす明るさのしきい値。この値以下の走査線はスキップする。
+    n : int | None, optional
+        縦横それぞれの分割数。``None`` の場合はグローバル変数 ``divnum`` を使用する。
 
     Returns
     -------
-        list[list[float]]: サンプリングされた縁の点 [x, y, grad_val, direc] のリスト。
-            direc は DIR_X_LINE(0:横線走査) / DIR_Y_LINE(1:縦線走査)。
+    list[list[float]]
+        サンプリングした点 ``[x, y, grad_val, direction]`` のリスト。
+        direction は ``DIR_X_LINE``（横線走査）または ``DIR_Y_LINE``（縦線走査）。
     """
     image = _resolve_image(img_inst)
     n = _resolve_divnum(n)
@@ -161,21 +252,28 @@ def fit_circle(
     img_inst: str | np.ndarray = "GLOBAL",
     n: int | None = None,
 ) -> list[float]:
-    """与えられた縁の点の座標群から、最小二乗法を用いて近似円の中心座標と半径を計算する。
+    """縁の点群へ最小二乗法を適用し、近似円の中心と半径を求める。
 
-    Args:
-        spots: 縁の点の座標 [x, y, ...] を格納した二次元配列、またはNumPy配列。
-        show (bool): 例外発生時にshow_circleによる描画を行うか
-        img_inst: 例外時の描画に使う画像(既定は"GLOBAL")。
-        n (int | None): 例外時の描画に使う分割数。
-
-    Raises
-    ------
-        ValueError: 3点未満、または円を確定できない場合。
+    Parameters
+    ----------
+    spots : list[list[float]] | numpy.ndarray
+        縁の点の座標 ``[x, y, ...]`` を格納した配列。
+    show : bool, optional
+        円を確定できない場合に診断画像を表示するかどうか。
+    img_inst : str | numpy.ndarray, optional
+        診断画像に使用する画像。既定値は ``GLOBAL``。
+    n : int | None, optional
+        診断画像に使用する分割数。
 
     Returns
     -------
-        list[float]: [cx, cy, R]
+    list[float]
+        近似円の ``[cx, cy, radius]``。
+
+    Raises
+    ------
+    ValueError
+        点が3点未満の場合、または円を確定できない場合。
     """
     if len(spots) < 3:
         print("[ERROR]:点が3点未満のため、円を作成できません。too little spots")
@@ -202,10 +300,30 @@ def retry_edge_on_spot(
     img_inst: np.ndarray | str = "GLOBAL",
     sun_threshold: int = 50,
 ) -> None | list:
-    """黒点を誤検知したときに、近似円の外側で縁を探し直す関数。
+    """黒点を誤検知した場合に、近似円の外側で縁を再探索する。
 
-    spot と同じ走査線上で、近似円の縁より外側の範囲だけを再走査する。
-    見つからなければ None。
+    ``spot`` と同じ走査線上で、近似円の縁より外側の範囲だけを再走査する。
+
+    Parameters
+    ----------
+    spot : list[float]
+        再探索する点 ``[x, y, gradient, direction]``。
+    cir_stat : tuple[tuple[float, float], float]
+        近似円の中心座標と半径。
+    img_inst : numpy.ndarray | str, optional
+        再探索に使用する画像。
+    sun_threshold : int, optional
+        太陽像とみなす明るさのしきい値。
+
+    Returns
+    -------
+    list[float] | None
+        再探索で見つかった点。見つからない場合は ``None``。
+
+    Raises
+    ------
+    ValueError
+        走査方向が不正な場合。
     """
     image = _resolve_image(img_inst)
     spot_x, spot_y, grad_val, direc = spot
@@ -274,18 +392,32 @@ def show_circle(
     simple: bool = False,
     n: int | None = None,
 ) -> None:
-    """画像上に分割線、サンプリングされた縁の点、近似円を描画し、各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示する。
+    """画像に近似円や走査結果を描画し、各エッジ点周辺の輝度グラフを表示する。
 
-    Args:
-        img_inst: "GLOBAL" / "PATH"(img_pathから読み込み) / 読み込んだ画像。
-        spots: 描画する縁の点 [x, y, grad, direc] のリスト。
-        cir_stat: 近似円 [cx, cy, R]。描画しない場合は False。
-        img_path: 画像のファイルパス。
-        fig_info: 画像内にテキスト表示するメタデータ。
-        iteration_count: 現在の反復回数。
-        is_last: Trueなら反復回数の代わりに "Last" と表示。
-        simple: Trueならシンプルな表示(ポスター図用)のみを行う。
-        n: 分割数。Noneならglobal変数divnumを使う。
+    Parameters
+    ----------
+    img_inst : str | numpy.ndarray
+        ``GLOBAL``、``PATH``（``img_path`` から読み込み）、または画像配列。
+    spots : list[list[float]] | numpy.ndarray | None, optional
+        描画する点 ``[x, y, gradient, direction]`` のリスト。
+    cir_stat : tuple | list | bool, optional
+        近似円 ``[cx, cy, radius]``。``False`` の場合は円を描画しない。
+    img_path : pathlib.Path | str | None, optional
+        画像ファイルのパス。
+    fig_info : dict[str, str] | None, optional
+        画像内に表示するメタデータ。
+    iteration_count : int | str, optional
+        現在の反復回数。
+    is_last : bool, optional
+        True の場合、反復回数の代わりに ``Last`` と表示する。
+    simple : bool, optional
+        True の場合、簡易表示のみを行う。
+    n : int | None, optional
+        画像の分割数。``None`` の場合はグローバル変数 ``divnum`` を使用する。
+
+    Returns
+    -------
+    None
     """
     if simple:
         show_circle_simple(
@@ -430,17 +562,30 @@ def show_circle_simple(
     markersize: int = 400,
     n: int | None = None,
 ) -> None:
-    """画像上に分割線、サンプリングされた縁の点、近似円をシンプルに描画して表示する。
+    """画像上に走査線、縁の点、近似円を簡易表示する。
 
-    Args:
-        img_inst: "GLOBAL" / "PATH"(img_pathから読み込み) / 読み込んだ画像。
-        spots: 描画する縁の点の座標リスト。
-        cir_stat: 近似円のステータス [cx, cy, R]。描画しない場合は False。
-        img_path: 画像のファイルパス。
-        iteration_count: 現在の反復回数。
-        is_last: Trueなら "Last" と表示。
-        markersize: 縁の点のマーカーサイズ。
-        n: 分割数。Noneならglobal変数divnumを使う。
+    Parameters
+    ----------
+    img_inst : str | numpy.ndarray
+        ``GLOBAL``、``PATH``（``img_path`` から読み込み）、または画像配列。
+    spots : list[list[float]] | numpy.ndarray | None, optional
+        描画する縁の点のリスト。
+    cir_stat : tuple | list | bool, optional
+        近似円 ``[cx, cy, radius]``。``False`` の場合は円を描画しない。
+    img_path : pathlib.Path | str | None, optional
+        画像ファイルのパス。
+    iteration_count : int | str, optional
+        現在の反復回数。
+    is_last : bool, optional
+        True の場合、``Last`` と表示する。
+    markersize : int, optional
+        縁の点のマーカーサイズ。
+    n : int | None, optional
+        画像の分割数。``None`` の場合はグローバル変数 ``divnum`` を使用する。
+
+    Returns
+    -------
+    None
     """
     image = _resolve_image(img_inst, img_path)
     n = _resolve_divnum(n)
@@ -490,26 +635,41 @@ def MIN2_ignore_sunspots(
     img_path: pathlib.Path | str | None = "",
     show_simple: bool = False,
 ) -> tuple[tuple[float, float], float]:
-    """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
+    """黒点の影響を除外し、最小二乗法で太陽の近似円を検出する。
 
-    一度検出した近似円の外側にある点から再度円を近似し、その円の縁から limb_wigth*(2/3) より
-    内側に離れている内側の点を黒点とみなして除外します。
+    初期近似円の外側にある点から円を再推定し、推定した円の縁から
+    ``limb_wigth * (2 / 3)`` より内側に離れた点を黒点として除外する。
 
-    Args:
-        img_inst: 入力画像（グレースケール/カラー）または読み込み指示("PATH"ならimg_pathを読み込む)。
-        n (int): 画像格子の分割数(2以上)。デフォルトは 10 です。
-        light_threshold (int): 太陽の明るさの基準しきい値。16bit画像では自動で256倍されます。
-        limb_wigth (int): 太陽の縁の幅の基準値。デフォルトは 24 です。
-        iter_cycles (int): 黒点排除の最大反復回数。複数の黒点に対応できます。0なら排除なし。デフォルトは2。
-            黒点が見つからなくなった時点で早期終了します。
-        show (bool): 最終的な検出結果の画像を表示するかどうか。
-        debug (bool): 各ステップの描画(showもTrueのとき)やログを出力するかどうか。
-        img_path: 処理する画像のファイルパス("PATH"指定時は必須。配列を渡した場合は表示用の名前として使うだけ)。
-        show_simple (bool): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。
+    Parameters
+    ----------
+    img_inst : numpy.ndarray | str, optional
+        入力画像、または ``PATH`` を指定する文字列。
+    n : int, optional
+        画像格子の分割数。2以上を指定する。
+    light_threshold : int, optional
+        太陽の明るさの基準しきい値。16 bit 画像では256倍する。
+    limb_wigth : int, optional
+        太陽の縁の幅の基準値。
+    iter_cycles : int, optional
+        黒点排除の最大反復回数。0 の場合は排除しない。
+    show : bool, optional
+        最終的な検出結果を表示するかどうか。
+    debug : bool, optional
+        各ステップの描画やログを出力するかどうか。
+    img_path : pathlib.Path | str | None, optional
+        ``img_inst="PATH"`` の場合に読み込む画像ファイルのパス。
+    show_simple : bool, optional
+        詳細グラフを省略した簡易表示を使用するかどうか。
 
     Returns
     -------
-        tuple[tuple[float, float], float]: ((cx, cy), r)
+    tuple[tuple[float, float], float]
+        近似円の中心座標と半径 ``((cx, cy), radius)``。
+
+    Raises
+    ------
+    ValueError
+        分割数が2未満の場合、画像が指定されていない場合、または円を推定できない場合。
     """
     global divnum, img, height, width  # 外部コード互換のため値を残す(内部では使わない)
 
@@ -654,12 +814,29 @@ def MIN2_ignore_sunspots(
 
 
 def _collect_images(dirpath: str) -> list[pathlib.Path]:
+    """指定ディレクトリ内の対応画像を名前順に取得する。
+
+    Parameters
+    ----------
+    dirpath : str
+        画像を検索するディレクトリ。
+
+    Returns
+    -------
+    list[pathlib.Path]
+        拡張子が対応形式に一致する画像ファイル。
+    """
     exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
     return sorted(p for p in pathlib.Path(dirpath).iterdir() if p.suffix.lower() in exts)
 
 
 def main() -> None:
-    """Run the main command-line process."""
+    """コマンドライン引数または PyQt ダイアログで指定された画像を処理する。
+
+    Returns
+    -------
+    None
+    """
     import argparse
     from time import perf_counter
 
@@ -674,20 +851,16 @@ def main() -> None:
 
     path = args.path
     if path is None:
-        import tkinter as tk
-        from tkinter.filedialog import askdirectory, askopenfilename
-
-        root = tk.Tk()
-        root.withdraw()  # 空のTkウィンドウが出ないようにする
         if args.dir:
-            path = askdirectory(title="フォルダを選択してください")
+            path = select_directory(title="フォルダーを選択してください")
         else:
-            path = askopenfilename(
+            path = select_file(
                 title="画像を選択してください",
-                # セミコロン区切りの1文字列はWindows以外で効かないのでタプルで渡す
-                filetypes=[("Image files", ("*.jpg", "*.jpeg", "*.png", "*.tif", "*.tiff"))],
+                name_filter=(
+                    "Image files (*.jpg *.jpeg *.png *.tif *.tiff);;"
+                    "All files (*)"
+                ),
             )
-        root.destroy()
         if not path:
             print("[INFO]:選択がキャンセルされました。")
             return

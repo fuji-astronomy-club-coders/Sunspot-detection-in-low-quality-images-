@@ -26,6 +26,7 @@ from src.package import (
     black_top_hat,
     connection_count,
     gaussian_filter,
+    mask,
     sobel_filter,
     utils,
     watershed,
@@ -35,7 +36,18 @@ from src.package import limb_darking_resolution as ldr
 
 
 def main(config: dict) -> int:
-    """Run the main process."""
+    """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。
+
+    Parameters
+    ----------
+    config : dict
+        入力画像、出力先、各画像処理モジュールの設定。
+
+    Returns
+    -------
+    int
+        マスク適用後に残った黒点候補数。
+    """
     print("Starting main process...")
     print("\n\n===Config===")
     pprint(config)
@@ -130,23 +142,40 @@ def main(config: dict) -> int:
 
             imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}.png"
 
-            count, image = connection_count.countConnectedComponents(
+            count, image, binary_image = connection_count.countConnectedComponents(
                 image,  # pyright: ignore[reportArgumentType]
                 **extractionConfig["countComponents"]
+            )
+            regions = mask.selectMaskRegions(
+                binary_image, config.get("MaskDialog", {}).get("display")
+            )
+            count, image = mask.applyMask(
+                binary_image, # pyright: ignore[reportArgumentType]
+                regions,
+                count
             )
         elif extractionMethod == "watershed":
             imgName = f"watershed_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}_minDistance{extractionConfig['watershed']['min_distance']}.png"
 
-            count, image = connection_count.countConnectedComponents(
+            count, image, binary_image = connection_count.countConnectedComponents(
                 image,  # pyright: ignore[reportArgumentType]
                 **extractionConfig["countComponents"]
             )
 
-            count, image = watershed.watershedCount(
+            count, image, binary_image = watershed.watershedCount(
                 image,
                 extractionConfig["countComponents"]["min_area"],
                 extractionConfig["watershed"]["min_distance"]
-			)
+            )
+
+            regions = mask.selectMaskRegions(
+                binary_image, config.get("MaskDialog", {}).get("display")
+            )
+            count, image = mask.applyMask(
+                binary_image, # pyright: ignore[reportArgumentType]
+                regions,
+                count
+            )
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
     except Exception as e:

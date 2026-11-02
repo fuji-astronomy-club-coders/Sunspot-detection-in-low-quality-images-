@@ -569,10 +569,11 @@ def selectMaskRegions(
 
     ensure_qapplication()
     dialog = _MaskDialog(image, options)
-    if dialog.exec() == QDialog.DialogCode.Accepted:
-        regions = dialog.canvas.regions.copy()
-    else:
-        regions = []
+    regions = (
+        dialog.canvas.regions.copy()
+        if dialog.exec() == QDialog.DialogCode.Accepted
+        else []
+    )
 
     print(f"合計 {len(regions)} 個のマスク領域を選択しました。")
     for index, (x, y, width, height) in enumerate(regions, start=1):

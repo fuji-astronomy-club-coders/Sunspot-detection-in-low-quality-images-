@@ -15,6 +15,7 @@
 """
 
 import logging
+from pprint import pformat
 from typing import Any
 
 import numpy as np
@@ -38,6 +39,65 @@ from src.package.qt_preview import show_final_preview
 LOGGER = logging.getLogger("sunspot.main")
 
 
+def _format_analysis_parameters(config: dict[str, Any]) -> str:
+    """選択された処理方式で実際に使用する解析パラメータを整形する。
+
+    Parameters
+    ----------
+    config : dict[str, Any]
+        アプリケーション設定。
+
+    Returns
+    -------
+    str
+        処理段階ごとに空行で区切った解析パラメータ。
+    """
+    sections: list[str] = []
+
+    limb_config = config["LimbDarkingResolution"]
+    limb_method = limb_config["chosen_method"]
+    sections.append(
+        "\n".join(
+            [
+                "[周縁減光補正]",
+                f"method: {limb_method}",
+                pformat(limb_config.get(limb_method, {}), sort_dicts=False),
+            ]
+        )
+    )
+
+    emphasis_config = config["Emphasis"]
+    emphasis_method = emphasis_config["chosen_method"]
+    sections.append(
+        "\n".join(
+            [
+                "[強調処理]",
+                f"method: {emphasis_method}",
+                pformat(emphasis_config.get(emphasis_method, {}), sort_dicts=False),
+            ]
+        )
+    )
+
+    extraction_config = config["Extraction"]
+    extraction_method = extraction_config["chosen_method"]
+    extraction_lines = [
+        "[黒点候補抽出]",
+        f"method: {extraction_method}",
+        "countComponents:",
+        pformat(extraction_config.get("countComponents", {}), sort_dicts=False),
+    ]
+    if extraction_method == "watershed":
+        extraction_lines.extend(
+            [
+                "watershed:",
+                pformat(extraction_config.get("watershed", {}), sort_dicts=False),
+            ]
+        )
+    sections.append("\n".join(extraction_lines))
+
+    return "\n\n".join(sections)
+
+
 def main(config: dict, run_logger: RunLogger | None = None) -> int:
     """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。
 
@@ -52,6 +112,11 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         マスク適用後に残った黒点候補数。
     """
     LOGGER.info("Starting main process...")
+    # 実際に使用する解析パラメータを処理段階ごとに空行で区切って表示する。
+    LOGGER.info(
+        "=== Analysis Parameters ===\n%s\n===========================",
+        _format_analysis_parameters(config),
+    )
 
     image_path = configMOD.resolve_path(config["Paths"]["input_image"])
     output_root = (
@@ -81,6 +146,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
 
     moduleVersions = {}
     raw_image = image
+    min_area_exclusions: list[tuple[np.ndarray, list[int], str, int]] = []
 
     try:
         darkingConfig = config["LimbDarkingResolution"]
@@ -165,27 +231,59 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         svFolder = output_root
 
         if extractionMethod == "countComponents":
-
             imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}.png"
 
-            count, image, binary_image = connection_count.countConnectedComponents(
-                image,  # pyright: ignore[reportArgumentType]
-                **extractionConfig["countComponents"]
+            count, image, binary_image, connected_component_details = (
+                connection_count.countConnectedComponents(
+                    image,  # pyright: ignore[reportArgumentType]
+                    **extractionConfig["countComponents"],
+                    return_details=True,
+                )
             )
+            if connected_component_details["excluded_labels"]:
+                min_area_exclusions.append(
+                    (
+                        connected_component_details["unfiltered_labels"],
+                        connected_component_details["excluded_labels"],
+                        "connected_components",
+                        connected_component_details["min_area"],
+                    )
+                )
         elif extractionMethod == "watershed":
             imgName = f"watershed_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}_minDistance{extractionConfig['watershed']['min_distance']}.png"
 
-            count, image, binary_image = connection_count.countConnectedComponents(
-                image,  # pyright: ignore[reportArgumentType]
-                **extractionConfig["countComponents"]
+            count, image, binary_image, connected_component_details = (
+                connection_count.countConnectedComponents(
+                    image,  # pyright: ignore[reportArgumentType]
+                    **extractionConfig["countComponents"],
+                    return_details=True,
+                )
             )
+            if connected_component_details["excluded_labels"]:
+                min_area_exclusions.append(
+                    (
+                        connected_component_details["unfiltered_labels"],
+                        connected_component_details["excluded_labels"],
+                        "connected_components",
+                        connected_component_details["min_area"],
+                    )
+                )
 
-            count, image, binary_image = watershed.watershedCount(
+            count, image, binary_image, watershed_details = watershed.watershedCount(
                 image,
                 extractionConfig["countComponents"]["min_area"],
-                extractionConfig["watershed"]["min_distance"]
+                extractionConfig["watershed"]["min_distance"],
+                return_details=True,
             )
-
+            if watershed_details["excluded_labels"]:
+                min_area_exclusions.append(
+                    (
+                        watershed_details["unfiltered_labels"],
+                        watershed_details["excluded_labels"],
+                        "watershed",
+                        watershed_details["min_area"],
+                    )
+                )
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
 
@@ -280,6 +378,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
             sunspot_labels,
             mask_details["regions"],
             exclusion_list_path,
+            min_area_exclusions=min_area_exclusions,
         )
         LOGGER.info(
             "Saved sunspot exclusion list: %s (%d excluded spots)",
@@ -307,6 +406,14 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
                         }
                         for label in mask_details["excluded_candidate_labels"]
                     ],
+                    "excluded_by_factor": {
+                        "mask": len(mask_details["excluded_candidate_labels"]),
+                        "minArea": sum(
+                            len(excluded_labels)
+                            for _labels, excluded_labels, _stage, _threshold
+                            in min_area_exclusions
+                        ),
+                    },
                 },
             )
     except Exception as e:

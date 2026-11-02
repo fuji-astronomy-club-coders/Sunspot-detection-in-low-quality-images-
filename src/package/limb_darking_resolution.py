@@ -11,7 +11,27 @@ from src.module.MIN2ver2 import MIN2_ignore_sunspots as min2
 
 version = "0.0.1"
 def polynomialFit(image:np.ndarray, alpha: float = 0.85, brightness_boost: float = 1.1) -> np.ndarray:
-    """周縁減光を距離マップと先輩の関数で補正する関数"""
+    """太陽像の半径方向の輝度プロファイルを用いて周縁減光を補正する。
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        2次元の入力太陽画像。
+    alpha : float, optional
+        補正前画像と平坦化画像を混合する割合。
+    brightness_boost : float, optional
+        補正後画像に適用する明るさ倍率。
+
+    Returns
+    -------
+    numpy.ndarray
+        周縁減光を補正した uint16 画像。
+
+    Raises
+    ------
+    ValueError
+        太陽円の推定に失敗した場合。
+    """
     # 画像の読み込み
 
     h, w = image.shape

@@ -27,16 +27,20 @@ from PIL import PngImagePlugin
 def loadImage(image_path: str | Path) -> npt.NDArray[Any]:
     """TIFFまたはFITS画像を読み込み、画素値をNumPy配列で返す。
 
-    Args:
-        image_path: 読み込む画像ファイルのパス。
+    Parameters
+    ----------
+    image_path : str | pathlib.Path
+        読み込む画像ファイルのパス。
 
     Returns
     -------
-        各画素の値を格納したNumPy配列。
+    numpy.ndarray
+        各画素の値を格納した配列。
 
     Raises
     ------
-        ValueError: 対応していない画像形式の場合。
+    ValueError
+        対応していない画像形式または存在しないファイルが指定された場合。
     """
     path = Path(image_path)
     if not path.exists():
@@ -144,7 +148,25 @@ def save_processing_summary(
     count: int,
     output_path: Path,
 ) -> None:
-    """output_imageから呼び出される、画像のレイアウトを決める関数"""
+    """処理段階ごとの画像と実行情報をまとめたレポートを保存する。
+
+    Parameters
+    ----------
+    images : list[tuple[str, numpy.ndarray]]
+        表示する画像と各画像のタイトル。
+    config : dict
+        レポートに記載する実行設定。
+    image_path : pathlib.Path
+        入力画像のパス。
+    count : int
+        検出した黒点候補数。
+    output_path : pathlib.Path
+        レポート画像の保存先。
+
+    Returns
+    -------
+    None
+    """
     # 日本語フォントを追加
     for font_name in ("Yu Gothic", "Meiryo", "MS Gothic"):
         if font_name in available_fonts:
@@ -223,7 +245,29 @@ def output_image(
     image_path: Path | str,
     count: int,
 ) -> None:
-    """処理段階ごとの画像と実行情報を1枚の画像に保存する。"""
+    """処理段階ごとの画像と実行情報を1枚の画像に保存する。
+
+    Parameters
+    ----------
+    raw_image : numpy.ndarray
+        入力画像。
+    limb_corrected_image : numpy.ndarray
+        周縁減光補正後の画像。
+    emphasized_image : numpy.ndarray
+        特徴強調後の画像。
+    binary_image : numpy.ndarray
+        二値化後の画像。
+    config : dict[str, Any]
+        処理に使用した設定。
+    image_path : pathlib.Path | str
+        入力画像のパス。
+    count : int
+        検出した黒点候補数。
+
+    Returns
+    -------
+    None
+    """
     images = [
         ("1. Raw Image", raw_image),
         ("2. Limb Darkening Corrected", limb_corrected_image),

@@ -15,4 +15,6 @@ src/pyproject_template.egg-info/PKG-INFO
 src/pyproject_template.egg-info/SOURCES.txt
 src/pyproject_template.egg-info/dependency_links.txt
 src/pyproject_template.egg-info/requires.txt
-src/pyproject_template.egg-info/top_level.txt
+src/pyproject_template.egg-info/top_level.txtsrc/package/mask.py
+src/package/qt_dialogs.py
+src/package/watershed.py

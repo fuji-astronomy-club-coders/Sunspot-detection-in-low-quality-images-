@@ -15,14 +15,19 @@ def watershedCount(
 ) -> tuple[int, np.ndarray, np.ndarray]:
     """Watershedで黒点候補を分割し、個数を数える。
 
-    Args:
-        binary_image: 黒点候補が0、背景が255の二値画像。
-        min_area: 残す領域の最小画素数。デフォルトは5。
-        min_distance: watershedで分割される黒点どうしの最小の距離。
+    Parameters
+    ----------
+    binary_image : numpy.ndarray
+        黒点候補が0、背景が255の2次元二値画像。
+    min_area : int, optional
+        残す領域の最小画素数。
+    min_distance : int, optional
+        Watershed のマーカー間に確保する最小距離。
 
-    Return
+    Returns
     -------
-        黒点ごとに色分けされた画像。各画素が RGB の3値を持つため、(高さ, 幅, 3) の形状を持ちます。
+    tuple[int, numpy.ndarray, numpy.ndarray]
+        領域数、領域ごとに色分けした RGB 画像、領域ラベル画像。
     """
     # 黒点候補をTrue、背景をFalseにする
     sunspot_mask = binary_image == 0
@@ -93,11 +98,7 @@ def watershedCount(
         plt.get_cmap("nipy_spectral")(normalized_labels)[..., :3] * 255
     ).astype(np.uint8)
 
-    result_image = (plt.get_cmap("nipy_spectral")(normalized_labels)[..., :3] * 255).astype(np.uint8)
-
-    count = int(np.count_nonzero(keep_mask))
-
-    # ラベル0は除外済みなので、そのまま数える
+    # ラベル0は除外済みなので、そのまま数える。
     count = int(np.count_nonzero(keep_mask))
     print("Watershedのマーカー数:", marker_count)
     print("Watershed後の領域数:", len(np.unique(labels)) - 1)

@@ -54,7 +54,7 @@ MaskDialog:
     colormap: HOT
     show_coordinates: true
     show_instructions: true
-    # true: ウインドウサイズ変更可能 / false: 自動サイズ
+    # true: リサイズ可能（ウィンドウの縦横比は固定） / false: 固定サイズ
     resizable: true
     # true: 画像に対する表示倍率を表示
     show_scale: true

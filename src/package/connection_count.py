@@ -14,15 +14,21 @@ def countConnectedComponents(
 ) -> tuple[int, np.ndarray, np.ndarray]:
     """太陽像を二値化し、小領域を除去して黒点候補の連結成分数を返す。
 
-    Args:
-        image: 二値化前の2次元太陽画像を表すNumPy配列。
-        c: 閾値を決める係数。μ+cσ以下の画素を黒点候補とする。
-        space_threshold: この値以下の画素を宇宙空間とする。
-        min_area: 黒点候補として残す連結成分の最小画素数。
+    Parameters
+    ----------
+    image : numpy.ndarray
+        二値化前の2次元太陽画像。
+    c : float, optional
+        閾値を決める係数。平均値と標準偏差から候補を抽出する。
+    space_threshold : float, optional
+        太陽像と宇宙空間を区別する画素値のしきい値。
+    min_area : int, optional
+        黒点候補として残す連結成分の最小画素数。
+
+    Returns
     -------
-    Return
-        count: 小領域除去後の黒点候補の連結成分数。
-        binary_image: 黒点候補を黒（0）、その他を白（255）とした画像。
+    tuple[int, numpy.ndarray, numpy.ndarray]
+        連結成分数、黒点候補を黒（0）・その他を白（255）とした画像、ラベル画像。
     """
     # 太陽像の領域を抽出
     solar_mask = image > space_threshold

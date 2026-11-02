@@ -36,7 +36,18 @@ from src.package import limb_darking_resolution as ldr
 
 
 def main(config: dict) -> int:
-    """Run the main process."""
+    """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。
+
+    Parameters
+    ----------
+    config : dict
+        入力画像、出力先、各画像処理モジュールの設定。
+
+    Returns
+    -------
+    int
+        マスク適用後に残った黒点候補数。
+    """
     print("Starting main process...")
     print("\n\n===Config===")
     pprint(config)

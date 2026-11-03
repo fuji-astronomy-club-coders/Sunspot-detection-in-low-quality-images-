@@ -8,6 +8,7 @@ if errorlevel 1 goto :error
 set "VENV_DIR=%~dp0.venv"
 set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
 set "PYTHON_CMD="
+set "APP_ARGS="
 
 rem Parse supported options.
 if /i "%~1"=="--help" (
@@ -23,8 +24,19 @@ if /i "%~1"=="--setup" (
     goto :setup_venv
 )
 if /i "%~1"=="--venv" (
+    if /i "%~2"=="--compare" (
+        if not "%~4"=="" goto :invalid_option
+        set "APP_ARGS=--compare"
+        if not "%~3"=="" set "APP_ARGS=--compare %3"
+        goto :run_venv
+    )
     if not "%~2"=="" goto :invalid_option
     goto :run_venv
+)
+if /i "%~1"=="--compare" (
+    set "APP_ARGS=%*"
+    if exist "%VENV_DIR%\." goto :run_venv
+    goto :run_system
 )
 if not "%~1"=="" goto :invalid_option
 
@@ -135,7 +147,7 @@ exit /b 0
 
 :run_application
 echo [INFO] Starting run.py...
-%PYTHON_CMD% "%~dp0run.py"
+%PYTHON_CMD% "%~dp0run.py" %APP_ARGS%
 set "EXIT_CODE=%ERRORLEVEL%"
 
 if not "%EXIT_CODE%"=="0" (
@@ -203,7 +215,7 @@ goto :error
 
 :invalid_option
 echo [ERROR] Invalid option or argument: %~1 %~2 %~3
-echo Usage: run.bat [--venv^|--setup [--global]^|--help]
+echo Usage: run.bat [--compare [DATE_FOLDER]^|--venv [--compare [DATE_FOLDER]]^|--setup [--global]^|--help]
 goto :error
 
 
@@ -211,6 +223,9 @@ goto :error
 echo Usage:
 echo   run.bat                  Run with .venv when it exists; otherwise use system Python.
 echo   run.bat --venv           Force the existing .venv environment.
+echo   run.bat --compare        Start comparison mode using a folder-selection dialog.
+echo   run.bat --compare PATH   Start comparison mode for the specified date folder.
+echo   run.bat --venv --compare [PATH]  Run comparison mode with the existing .venv.
 echo   run.bat --setup          Create or update .venv with project dependencies.
 echo   run.bat --setup --global Install project dependencies into system Python without creating .venv.
 echo   run.bat --help           Show this help.

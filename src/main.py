@@ -509,6 +509,9 @@ def process_image(
                 boundary_policy=boundary_policy,
             )
             mask_details["selection_method"] = selection_method
+        if mask_polygons is not None:
+            for region in mask_details["regions"]:
+                region["selection_method"] = selection_method
         normal_mask_exclusions = list(mask_details["excluded_candidate_labels"])
 
         radial_details: dict[str, Any] = {

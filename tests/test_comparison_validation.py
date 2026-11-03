@@ -121,7 +121,12 @@ class ComparisonValidationTests(unittest.TestCase):
             }
         )
 
-        plan = comparison.prepare_comparison(self.date_folder)
+        with patch.object(
+            comparison.utils,
+            "loadImage",
+            side_effect=self._load_valid_image,
+        ):
+            plan = comparison.prepare_comparison(self.date_folder)
 
         self.assertIn("north_vector", plan.samples[0].error)
         self.assertIsNone(plan.samples[0].orientation)

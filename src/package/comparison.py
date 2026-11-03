@@ -206,19 +206,15 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
 
     if not selected_folder.is_dir():
         raise ComparisonInputError(f"日付フォルダーがありません: {selected_folder}")
-    # The data root is the parent of the selected YYYYMMDD folder. It may
+    # The data root is the parent of the selected YYYY-MM-DD folder. It may
     # live outside the repository (for example, on a separate data drive).
     source_root = selected_folder.parent.resolve()
-    if re.fullmatch(r"\d{8}", selected_folder.name) is None:
-        raise ComparisonInputError("日付フォルダー名は YYYYMMDD 形式にしてください。")
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", selected_folder.name) is None:
+        raise ComparisonInputError("日付フォルダー名は YYYY-MM-DD 形式にしてください。")
     try:
-        comparison_date = date(
-            int(selected_folder.name[:4]),
-            int(selected_folder.name[4:6]),
-            int(selected_folder.name[6:8]),
-        ).isoformat()
+        comparison_date = date.fromisoformat(selected_folder.name).isoformat()
     except ValueError as date_error:
-        raise ComparisonInputError("日付フォルダー名は実在する YYYYMMDD にしてください。") from date_error
+        raise ComparisonInputError("日付フォルダー名は実在する YYYY-MM-DD にしてください。") from date_error
 
     sources_path = source_root / "sources.yaml"
     if not sources_path.is_file():

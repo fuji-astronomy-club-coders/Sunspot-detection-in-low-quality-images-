@@ -84,6 +84,17 @@ class PolygonMaskTests(unittest.TestCase):
         self.assertTrue(coverage[5, 5])
         self.assertFalse(coverage[1, 1])
 
+    def test_half_pixel_edges_preserve_selected_roi_dimensions(self) -> None:
+        polygon = np.asarray(
+            [[4.5, 4.5], [7.5, 4.5], [7.5, 7.5], [4.5, 7.5]],
+            dtype=np.float64,
+        )
+        coverage = polygon_coverage_mask((12, 12), [polygon])
+        self.assertEqual(int(np.count_nonzero(coverage)), 9)
+        self.assertTrue(np.all(coverage[5:8, 5:8]))
+        self.assertFalse(coverage[4, 5])
+        self.assertFalse(coverage[8, 5])
+
 
 if __name__ == "__main__":
     unittest.main()

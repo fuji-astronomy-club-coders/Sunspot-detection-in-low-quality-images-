@@ -977,8 +977,6 @@ def applyPolygonMask(
             raise ValueError("多角形マスクは3点以上の (x, y) 座標で指定してください。")
         if not np.all(np.isfinite(vertices)):
             raise ValueError("多角形マスクの頂点には有限値を指定してください。")
-        shift = 4
-        scale = 1 << shift
         polygon_masks.append(_single_polygon_coverage((height, width), vertices))
 
     mask_coverage = (

@@ -64,7 +64,7 @@ class ComparisonPlan:
     normalized_polygons: tuple[list[list[float]], ...] | None
 
 
-def _load_yaml(path: Path) -> Any:
+def _load_yaml(path: Path) -> object:
     """Load YAML while converting parser errors into contextual input errors."""
     try:
         with path.open("r", encoding="utf-8") as file:
@@ -73,7 +73,7 @@ def _load_yaml(path: Path) -> Any:
         raise ComparisonInputError(f"{path.name} を読み込めません: {error}") from error
 
 
-def _parse_north_vector(value: Any) -> tuple[float, float]:
+def _parse_north_vector(value: object) -> tuple[float, float]:
     """Validate and normalize a YAML north-vector mapping."""
     if not isinstance(value, dict) or set(value) != {"x", "y"}:
         raise ValueError("north_vector は x と y を持つ辞書で指定してください。")

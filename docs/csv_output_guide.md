@@ -212,7 +212,7 @@ session_.../
 | 列名 | 内容 |
 |---|---|
 | `centroid_x_common` / `centroid_y_common` | 黒点重心の共通座標 |
-| `bbox_x_common` / `bbox_y_common` | 共通座標上の外接矩形左上 |
+| `bbox_x_common` / `bbox_y_common` | 共通座標上の外接矩形のX最小値・Y最小値（+Yが北なのでY最小値は南側の端） |
 | `bbox_width_common` / `bbox_height_common` | 共通座標上の外接矩形幅・高さ |
 
 共通座標の外接矩形は、元画像の外接矩形の4隅を変換して求めた軸平行の矩形です。回転した候補の輪郭そのものを表すものではありません。`area_px` は元画像の画素数であり、共通座標の面積ではありません。

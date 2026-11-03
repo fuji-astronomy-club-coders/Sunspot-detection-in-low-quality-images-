@@ -88,6 +88,7 @@ def component_selection_details(
         details.append(
             {
                 "index": index,
+                "selection_method": "connected_component",
                 "label": label_value,
                 "x": int(xs.min()),
                 "y": int(ys.min()),
@@ -1072,6 +1073,24 @@ def selectMaskComponents(
         "components": components,
         "polygons": selected_polygons,
     }
+
+
+@overload
+def applyComponentMask(
+    labels: np.ndarray,
+    selected_labels: list[int] | set[int],
+    original_count: int,
+    return_details: Literal[False] = False,
+) -> tuple[int, np.ndarray]: ...
+
+
+@overload
+def applyComponentMask(
+    labels: np.ndarray,
+    selected_labels: list[int] | set[int],
+    original_count: int,
+    return_details: Literal[True],
+) -> tuple[int, np.ndarray, dict]: ...
 
 
 def applyComponentMask(

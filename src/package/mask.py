@@ -822,11 +822,67 @@ def applyMask(
     return count, masked_image, details
 
 
+def _single_polygon_coverage(
+    shape: tuple[int, int],
+    vertices: np.ndarray,
+) -> np.ndarray:
+    """Test image pixel centers against one polygon using an even-odd rule."""
+    height, width = int(shape[0]), int(shape[1])
+    vertices = np.asarray(vertices, dtype=np.float64)
+    if vertices.ndim != 2 or vertices.shape[0] < 3 or vertices.shape[1] != 2:
+        raise ValueError("多角形マスクは3点以上の (x, y) 座標で指定してください。")
+    if not np.all(np.isfinite(vertices)):
+        raise ValueError("多角形マスクの頂点には有限値を指定してください。")
+
+    vertices = np.clip(
+        vertices,
+        [-width * 4, -height * 4],
+        [width * 5, height * 5],
+    )
+    x_min = max(0, int(np.floor(vertices[:, 0].min())))
+    x_max = min(width, int(np.ceil(vertices[:, 0].max())) + 1)
+    y_min = max(0, int(np.floor(vertices[:, 1].min())))
+    y_max = min(height, int(np.ceil(vertices[:, 1].max())) + 1)
+    coverage = np.zeros((height, width), dtype=bool)
+    if x_min >= x_max or y_min >= y_max:
+        return coverage
+
+    grid_x, grid_y = np.meshgrid(
+        np.arange(x_min, x_max, dtype=np.float64),
+        np.arange(y_min, y_max, dtype=np.float64),
+    )
+    inside = np.zeros(grid_x.shape, dtype=bool)
+    on_boundary = np.zeros(grid_x.shape, dtype=bool)
+    for index in range(len(vertices)):
+        first = vertices[index]
+        second = vertices[(index + 1) % len(vertices)]
+        x1, y1 = float(first[0]), float(first[1])
+        x2, y2 = float(second[0]), float(second[1])
+        delta_x, delta_y = x2 - x1, y2 - y1
+        relative_x, relative_y = grid_x - x1, grid_y - y1
+        cross = relative_x * delta_y - relative_y * delta_x
+        dot = relative_x * delta_x + relative_y * delta_y
+        length_squared = delta_x * delta_x + delta_y * delta_y
+        on_boundary |= (
+            (np.abs(cross) <= 1e-9)
+            & (dot >= -1e-9)
+            & (dot <= length_squared + 1e-9)
+        )
+
+        if delta_y != 0.0:
+            crosses_ray = (y1 > grid_y) != (y2 > grid_y)
+            intersection_x = x1 + (grid_y - y1) * delta_x / delta_y
+            inside ^= crosses_ray & (grid_x < intersection_x)
+
+    coverage[y_min:y_max, x_min:x_max] = inside | on_boundary
+    return coverage
+
+
 def polygon_coverage_mask(
     shape: tuple[int, int],
     polygons: list[np.ndarray],
 ) -> np.ndarray:
-    """Rasterize image-space polygons into a boolean coverage mask.
+    """Rasterize polygons by testing pixel centers in the image coordinate plane.
 
     Parameters
     ----------
@@ -838,32 +894,16 @@ def polygon_coverage_mask(
     Returns
     -------
     numpy.ndarray
-        Boolean array identifying pixels covered by any polygon.
+        Boolean array identifying pixel centers covered by any polygon.
     """
     height, width = int(shape[0]), int(shape[1])
     if height <= 0 or width <= 0:
         raise ValueError("マスク対象の画像サイズは正の値にしてください。")
 
-    coverage = np.zeros((height, width), dtype=np.uint8)
+    coverage = np.zeros((height, width), dtype=bool)
     for polygon in polygons:
-        vertices = np.asarray(polygon, dtype=np.float64)
-        if vertices.ndim != 2 or vertices.shape[0] < 3 or vertices.shape[1] != 2:
-            raise ValueError("多角形マスクは3点以上の (x, y) 座標で指定してください。")
-        if not np.all(np.isfinite(vertices)):
-            raise ValueError("多角形マスクの頂点には有限値を指定してください。")
-        shift = 4
-        scale = 1 << shift
-        bounded = np.rint(
-            np.clip(
-                vertices,
-                [-width * 4, -height * 4],
-                [width * 5, height * 5],
-            )
-            * scale
-        ).astype(np.int32)
-        cv2.fillPoly(coverage, [bounded], 1, shift=shift)
-
-    return coverage.astype(bool)
+        coverage |= _single_polygon_coverage((height, width), polygon)
+    return coverage
 
 
 @overload
@@ -939,17 +979,7 @@ def applyPolygonMask(
             raise ValueError("多角形マスクの頂点には有限値を指定してください。")
         shift = 4
         scale = 1 << shift
-        bounded = np.rint(
-            np.clip(
-                vertices,
-                [-width * 4, -height * 4],
-                [width * 5, height * 5],
-            )
-            * scale
-        ).astype(np.int32)
-        region_mask = np.zeros((height, width), dtype=np.uint8)
-        cv2.fillPoly(region_mask, [bounded], 1, shift=shift)
-        polygon_masks.append(region_mask.astype(bool))
+        polygon_masks.append(_single_polygon_coverage((height, width), vertices))
 
     mask_coverage = (
         np.logical_or.reduce(polygon_masks)

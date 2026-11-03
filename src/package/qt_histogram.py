@@ -216,8 +216,9 @@ class BrightnessHistogramWidget(QWidget):
         upper = float(self._edges[index + 1])
         center = (lower + upper) / 2.0
         count = int(self._counts[index])
+        upper_bracket = "]" if index == self._counts.size - 1 else ")"
         return (
-            f"輝度: {center:.6g}  [{lower:.6g}, {upper:.6g})"
+            f"輝度: {center:.6g}  [{lower:.6g}, {upper:.6g}{upper_bracket}"
             f"  |  画素数: {count:,}  |  合計: {self._pixel_count:,}"
         )
 

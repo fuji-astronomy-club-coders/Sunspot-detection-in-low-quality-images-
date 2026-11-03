@@ -275,13 +275,87 @@ class ComparisonValidationTests(unittest.TestCase):
         with self.assertRaises(comparison.ComparisonInputError):
             comparison.prepare_comparison(self.date_folder)
 
+    def test_comparison_accepts_one_entry_per_available_image(self) -> None:
+        self._write_comparison(
+            {
+                "samples": [
+                    {
+                        "source_id": "source_01",
+                        "image": "source_01.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.6,
+                    },
+                    {
+                        "source_id": "source_04",
+                        "image": "source_04.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.8,
+                        "north_angle_deg": 90.0,
+                        "flip_x": False,
+                    },
+                ]
+            }
+        )
+
+        with patch.object(
+            comparison.utils,
+            "loadImage",
+            side_effect=self._load_valid_image,
+        ):
+            plan = comparison.prepare_comparison(self.date_folder)
+
+        self.assertEqual(len(plan.samples), 2)
+        self.assertTrue(all(sample.error is None for sample in plan.samples))
+
+    def test_sample_count_must_match_supported_image_count(self) -> None:
+        self._write_comparison(
+            {
+                "samples": [
+                    {
+                        "source_id": "source_01",
+                        "image": "source_01.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.6,
+                    }
+                ]
+            }
+        )
+        (self.date_folder / "extra_image.tif").write_bytes(b"placeholder")
+
+        with self.assertRaisesRegex(comparison.ComparisonInputError, "画像数"):
+            comparison.prepare_comparison(self.date_folder)
+
+    def test_unregistered_source_id_is_a_comparison_error(self) -> None:
+        self._write_comparison(
+            {
+                "samples": [
+                    {
+                        "source_id": "source_99",
+                        "image": "source_99.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.6,
+                    }
+                ]
+            }
+        )
+
+        with self.assertRaisesRegex(comparison.ComparisonInputError, "未登録の source_id"):
+            comparison.prepare_comparison(self.date_folder)
+
+    def test_old_hyphenated_date_folder_name_is_rejected(self) -> None:
+        old_style_folder = self.source_root / "2026-11-02"
+        old_style_folder.mkdir()
+
+        with self.assertRaisesRegex(comparison.ComparisonInputError, "YYYYMMDD"):
+            comparison.prepare_comparison(old_style_folder)
+
     def test_duplicate_source_rows_are_all_skipped(self) -> None:
-        sample = {
+        first = {
             "source_id": "source_01",
             "image": "source_01.tif",
             "pixel_scale_arcsec_per_pixel": 0.6,
         }
-        self._write_comparison({"samples": [sample, sample]})
+        second = {
+            **first,
+            "image": "source_01_copy.tif",
+        }
+        self._write_comparison({"samples": [first, second]})
 
         plan = comparison.prepare_comparison(self.date_folder)
 

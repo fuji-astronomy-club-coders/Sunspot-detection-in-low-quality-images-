@@ -159,7 +159,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         )
         LOGGER.debug("画像メタデータ取得時の詳細:", exc_info=True)
 
-    moduleVersions = {"Application": get_application_version()}
+    moduleVersions: dict[str, Any] = {"Application": get_application_version()}
     raw_image = image
     solar_geometry: tuple[tuple[float, float], float] | None = None
     min_area_exclusions: list[tuple[np.ndarray, list[int], str, int]] = []

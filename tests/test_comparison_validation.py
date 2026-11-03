@@ -66,6 +66,13 @@ class ComparisonValidationTests(unittest.TestCase):
     def _load_valid_image(self, _path: Path) -> np.ndarray:
         return np.zeros((10, 10), dtype=np.uint16)
 
+    def _sample_error(self, plan: comparison.ComparisonPlan, index: int = 0) -> str:
+        """Return one prepared sample's validation error for assertions."""
+        error = plan.samples[index].error
+        self.assertIsNotNone(error)
+        assert error is not None
+        return error
+
     def test_valid_profile_produces_one_prepared_sample(self) -> None:
         self._write_comparison(
             {
@@ -87,9 +94,11 @@ class ComparisonValidationTests(unittest.TestCase):
 
         self.assertEqual(plan.comparison_date, "2026-11-02")
         self.assertEqual(len(plan.sources), 4)
-        self.assertEqual(plan.samples[0].source_id, "source_01")
-        self.assertIsNone(plan.samples[0].error)
-        self.assertEqual(plan.samples[0].orientation.north_vector, (0.0, -1.0))
+        sample = plan.samples[0]
+        self.assertEqual(sample.source_id, "source_01")
+        self.assertIsNone(sample.error)
+        assert sample.orientation is not None
+        self.assertEqual(sample.orientation.north_vector, (0.0, -1.0))
 
     def test_unreadable_image_is_skipped_before_processing(self) -> None:
         self._write_comparison(
@@ -106,7 +115,7 @@ class ComparisonValidationTests(unittest.TestCase):
         with patch.object(comparison.utils, "loadImage", side_effect=ValueError("broken image")):
             plan = comparison.prepare_comparison(self.date_folder)
 
-        self.assertIn("読み込めません", plan.samples[0].error)
+        self.assertIn("読み込めません", self._sample_error(plan))
 
     def test_per_sample_source_requires_orientation_fields(self) -> None:
         self._write_comparison(
@@ -128,7 +137,7 @@ class ComparisonValidationTests(unittest.TestCase):
         ):
             plan = comparison.prepare_comparison(self.date_folder)
 
-        self.assertIn("north_vector", plan.samples[0].error)
+        self.assertIn("north_vector", self._sample_error(plan))
         self.assertIsNone(plan.samples[0].orientation)
 
     def test_unknown_top_level_key_is_a_set_error(self) -> None:
@@ -158,8 +167,8 @@ class ComparisonValidationTests(unittest.TestCase):
 
         plan = comparison.prepare_comparison(self.date_folder)
 
-        self.assertTrue(all(row.error for row in plan.samples))
-        self.assertTrue(all("重複" in row.error for row in plan.samples))
+        error_texts = [self._sample_error(plan, index) for index in range(len(plan.samples))]
+        self.assertTrue(all("重複" in error for error in error_texts))
 
     def test_image_cannot_escape_date_folder(self) -> None:
         self._write_comparison(
@@ -176,7 +185,7 @@ class ComparisonValidationTests(unittest.TestCase):
 
         plan = comparison.prepare_comparison(self.date_folder)
 
-        self.assertIn("外", plan.samples[0].error)
+        self.assertIn("外", self._sample_error(plan))
 
 
 if __name__ == "__main__":

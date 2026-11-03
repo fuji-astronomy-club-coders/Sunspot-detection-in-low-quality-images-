@@ -1,4 +1,4 @@
-"""Tests for logarithmic brightness histograms."""
+"""Tests for logarithmic brightness histograms and cursor interaction."""
 
 import unittest
 
@@ -6,12 +6,13 @@ import numpy as np
 
 from src.package.qt_histogram import (
     calculate_brightness_histogram,
+    histogram_bin_index,
     log_scaled_counts,
 )
 
 
 class BrightnessHistogramTests(unittest.TestCase):
-    """Verify histogram counts and logarithmic scaling."""
+    """Verify histogram counts, logarithmic scaling, and cursor lookup."""
 
     def test_histogram_counts_only_finite_brightness_values(self) -> None:
         image = np.array(
@@ -48,6 +49,19 @@ class BrightnessHistogramTests(unittest.TestCase):
         self.assertGreater(float(heights[1]), 0.0)
         self.assertGreater(float(heights[2]), float(heights[1]))
         self.assertEqual(float(heights[3]), 1.0)
+
+    def test_cursor_position_selects_the_corresponding_bin(self) -> None:
+        self.assertEqual(histogram_bin_index(25.0, 0.0, 100.0, 4), 1)
+        self.assertEqual(histogram_bin_index(99.9, 0.0, 100.0, 4), 3)
+        self.assertEqual(histogram_bin_index(100.0, 0.0, 100.0, 4), 3)
+
+    def test_cursor_outside_plot_does_not_select_a_bin(self) -> None:
+        self.assertIsNone(histogram_bin_index(-0.1, 0.0, 100.0, 4))
+        self.assertIsNone(histogram_bin_index(100.1, 0.0, 100.0, 4))
+
+    def test_invalid_plot_geometry_does_not_select_a_bin(self) -> None:
+        self.assertIsNone(histogram_bin_index(5.0, 0.0, 0.0, 4))
+        self.assertIsNone(histogram_bin_index(5.0, 0.0, 10.0, 0))
 
 
 if __name__ == "__main__":

@@ -112,7 +112,7 @@ exit /b %EXIT_CODE%
 rem Use the Python command available on PATH. Do not activate or select .venv here.
 where python >nul 2>nul
 if not errorlevel 1 (
-    python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)" >nul 2>nul
+    python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 13) and sys.prefix == sys.base_prefix else 1)" >nul 2>nul
     if not errorlevel 1 (
         set "PYTHON_CMD=python"
         exit /b 0
@@ -122,7 +122,7 @@ if not errorlevel 1 (
 rem Fall back to the Python Launcher.
 where py >nul 2>nul
 if not errorlevel 1 (
-    py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)" >nul 2>nul
+    py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 13) and sys.prefix == sys.base_prefix else 1)" >nul 2>nul
     if not errorlevel 1 (
         set "PYTHON_CMD=py -3"
         exit /b 0

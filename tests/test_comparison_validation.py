@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import yaml
 
 from src.package import comparison
@@ -62,8 +63,12 @@ class ComparisonValidationTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def _load_valid_image(self, _path: Path) -> np.ndarray:
+        return np.zeros((10, 10), dtype=np.uint16)
+
     def test_valid_profile_produces_one_prepared_sample(self) -> None:
-        self._write_comparison(
+        with patch.object(comparison.utils, "loadImage", side_effect=self._load_valid_image):
+            self._write_comparison(
             {
                 "samples": [
                     {
@@ -75,13 +80,30 @@ class ComparisonValidationTests(unittest.TestCase):
             }
         )
 
-        plan = comparison.prepare_comparison(self.date_folder)
+            plan = comparison.prepare_comparison(self.date_folder)
 
-        self.assertEqual(plan.comparison_date, "2026-11-02")
-        self.assertEqual(len(plan.sources), 4)
-        self.assertEqual(plan.samples[0].source_id, "source_01")
-        self.assertIsNone(plan.samples[0].error)
-        self.assertEqual(plan.samples[0].orientation.north_vector, (0.0, -1.0))
+            self.assertEqual(plan.comparison_date, "2026-11-02")
+            self.assertEqual(len(plan.sources), 4)
+            self.assertEqual(plan.samples[0].source_id, "source_01")
+            self.assertIsNone(plan.samples[0].error)
+            self.assertEqual(plan.samples[0].orientation.north_vector, (0.0, -1.0))
+
+    def test_unreadable_image_is_skipped_before_processing(self) -> None:
+        self._write_comparison(
+            {
+                "samples": [
+                    {
+                        "source_id": "source_01",
+                        "image": "source_01.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.6,
+                    }
+                ]
+            }
+        )
+        with patch.object(comparison.utils, "loadImage", side_effect=ValueError("broken image")):
+            plan = comparison.prepare_comparison(self.date_folder)
+
+        self.assertIn("読み込めません", plan.samples[0].error)
 
     def test_per_sample_source_requires_orientation_fields(self) -> None:
         self._write_comparison(

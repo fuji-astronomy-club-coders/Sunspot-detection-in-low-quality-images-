@@ -86,15 +86,15 @@ CSV の列名・値の意味・座標系・複数マスクに重なった場合�
 
 同じ日付に入手できた最大4観測所の太陽画像を、太陽中心・北方向・太陽半径で定義した共通座標上で比較できます。画像自体は回転・反転せず、黒点座標と共通マスクを変換します。
 
-初回は `docs/templates/sources.example.yaml` を入力データルートの `sources.yaml` にコピーして4観測所の実際の向きを登録します。日付フォルダー名は `YYYYMMDD` とし、画像の枚数と `comparison.yaml` の `samples` 件数を一致させてください。各サンプルの `source_id` は `sources.yaml` に登録済みである必要があります。
+初回は `docs/templates/sources.example.yaml` を入力データルートの `sources.yaml` にコピーして4観測所の実際の向きを登録します。日付フォルダー名は `YYYY-MM-DD` とし、画像の枚数と `comparison.yaml` の `samples` 件数を一致させてください。各サンプルの `source_id` は `sources.yaml` に登録済みである必要があります。
 
 入力データルート（既定の `source_input/`）はリポジトリの外に置いても構いません。任意の場所に `sources.yaml` と日付フォルダーをまとめ、`--compare` に日付フォルダーのパスを指定してください。
 
 ```powershell
 python run.py --compare
-python run.py --compare source_input/20261102
+python run.py --compare source_input/2026-11-02
 # リポジトリ外に置いた場合の例
-python run.py --compare "E:/SolarData/20261102"
+python run.py --compare "E:/SolarData/2026-11-02"
 ```
 
 Windows の `run.bat` からも起動できます。

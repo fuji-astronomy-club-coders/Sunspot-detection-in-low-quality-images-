@@ -41,6 +41,27 @@ class SolarTransformTests(unittest.TestCase):
         restored = transform.normalized_to_pixel(*normalized)
         np.testing.assert_allclose(restored, point, atol=1e-10)
 
+    def test_cartesian_north_angles_follow_counter_clockwise_convention(self) -> None:
+        expected = (
+            (0.0, (1.0, 0.0)),
+            (90.0, (0.0, 1.0)),
+            (180.0, (-1.0, 0.0)),
+            (270.0, (0.0, -1.0)),
+            (360.0, (1.0, 0.0)),
+        )
+        for angle, vector in expected:
+            with self.subTest(angle=angle):
+                radians = np.deg2rad(angle % 360.0)
+                orientation = Orientation(
+                    (
+                        float(np.cos(radians)) if not np.isclose(np.cos(radians), 0.0) else 0.0,
+                        float(np.sin(radians)) if not np.isclose(np.sin(radians), 0.0) else 0.0,
+                    )
+                )
+                np.testing.assert_allclose(orientation.north_vector, vector, atol=1e-12)
+                expected_angle = 0.0 if angle == 360.0 else angle
+                self.assertAlmostEqual(orientation.north_angle_deg, expected_angle)
+
     def test_zero_north_vector_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             Orientation((0.0, 0.0))

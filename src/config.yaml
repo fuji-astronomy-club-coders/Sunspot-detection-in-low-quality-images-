@@ -71,6 +71,7 @@ MaskDialog:
     rectangle_thickness: 2
 # 実行後の結果画像プレビュー
 Display:
+  colormap: HOT # 最終確認画面の輝度表示カラーマップ
   show_final_image: true # trueにするとPyQtで最終解析画像を表示
   show_mask_fill: true # 最終確認画面で選択したマスク範囲を塗りつぶす
   show_invalid_sunspots: true # 最終確認画面でマスクにより除外された黒点を表示する

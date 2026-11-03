@@ -100,6 +100,113 @@ class ComparisonValidationTests(unittest.TestCase):
         assert sample.orientation is not None
         self.assertEqual(sample.orientation.north_vector, (0.0, 1.0))
 
+    def test_per_sample_angle_360_is_equivalent_to_zero_degrees(self) -> None:
+        self._write_comparison(
+            {
+                "samples": [
+                    {
+                        "source_id": "source_04",
+                        "image": "source_04.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.8,
+                        "north_angle_deg": 360.0,
+                        "flip_x": False,
+                    }
+                ]
+            }
+        )
+        with patch.object(
+            comparison.utils,
+            "loadImage",
+            side_effect=self._load_valid_image,
+        ):
+            plan = comparison.prepare_comparison(self.date_folder)
+
+        sample = plan.samples[0]
+        self.assertIsNone(sample.error)
+        assert sample.orientation is not None
+        np.testing.assert_allclose(sample.orientation.north_vector, (1.0, 0.0), atol=1e-12)
+        self.assertAlmostEqual(sample.orientation.north_angle_deg, 0.0)
+
+    def test_fixed_source_accepts_north_angle_deg(self) -> None:
+        self.sources[0].pop("north_vector")
+        self.sources[0]["north_angle_deg"] = 90.0
+        (self.source_root / "sources.yaml").write_text(
+            yaml.safe_dump({"sources": self.sources}, allow_unicode=True),
+            encoding="utf-8",
+        )
+        self._write_comparison(
+            {
+                "samples": [
+                    {
+                        "source_id": "source_01",
+                        "image": "source_01.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.6,
+                    }
+                ]
+            }
+        )
+        with patch.object(
+            comparison.utils,
+            "loadImage",
+            side_effect=self._load_valid_image,
+        ):
+            plan = comparison.prepare_comparison(self.date_folder)
+
+        sample = plan.samples[0]
+        self.assertIsNone(sample.error)
+        assert sample.orientation is not None
+        np.testing.assert_allclose(sample.orientation.north_vector, (0.0, 1.0), atol=1e-12)
+        self.assertAlmostEqual(sample.orientation.north_angle_deg, 90.0)
+
+    def test_per_sample_angle_outside_zero_to_360_is_rejected(self) -> None:
+        self._write_comparison(
+            {
+                "samples": [
+                    {
+                        "source_id": "source_04",
+                        "image": "source_04.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.8,
+                        "north_angle_deg": 361.0,
+                        "flip_x": False,
+                    }
+                ]
+            }
+        )
+        with patch.object(
+            comparison.utils,
+            "loadImage",
+            side_effect=self._load_valid_image,
+        ):
+            plan = comparison.prepare_comparison(self.date_folder)
+
+        self.assertIn("0～360", self._sample_error(plan))
+        self.assertIsNone(plan.samples[0].orientation)
+
+    def test_orientation_rejects_both_vector_and_angle(self) -> None:
+        self._write_comparison(
+            {
+                "samples": [
+                    {
+                        "source_id": "source_04",
+                        "image": "source_04.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.8,
+                        "north_vector": {"x": 0.0, "y": 1.0},
+                        "north_angle_deg": 90.0,
+                        "flip_x": False,
+                    }
+                ]
+            }
+        )
+        with patch.object(
+            comparison.utils,
+            "loadImage",
+            side_effect=self._load_valid_image,
+        ):
+            plan = comparison.prepare_comparison(self.date_folder)
+
+        self.assertIn("どちらか一方", self._sample_error(plan))
+        self.assertIsNone(plan.samples[0].orientation)
+
     def test_unreadable_image_is_skipped_before_processing(self) -> None:
         self._write_comparison(
             {

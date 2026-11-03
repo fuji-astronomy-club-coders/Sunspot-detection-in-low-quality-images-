@@ -78,14 +78,13 @@ class _MaskCanvas(QWidget):
             QImage.Format.Format_RGB888,
         ).copy()
 
-        finite_values = np.nan_to_num(
-            image.astype(np.float64),
-            nan=0.0,
-            posinf=0.0,
-            neginf=0.0,
-        )
-        self._minimum = float(finite_values.min())
-        self._maximum = float(finite_values.max())
+        finite_values = image[np.isfinite(image)]
+        if finite_values.size:
+            self._minimum = float(finite_values.min())
+            self._maximum = float(finite_values.max())
+        else:
+            self._minimum = 0.0
+            self._maximum = 0.0
 
         # 画像と同じ OpenCV カラーマップで、上端が最大値・下端が最小値の
         # 縦向きカラーバーを作成する。

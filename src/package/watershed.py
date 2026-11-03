@@ -72,11 +72,7 @@ def watershedCount(
 
     # 黒点候補が存在しない場合
     if not np.any(sunspot_mask):
-        empty_image = np.full(
-            (*binary_image.shape, 3),
-            255,
-            dtype=np.uint8,
-        )
+        empty_image = np.full(binary_image.shape, 255, dtype=np.uint8)
         empty_labels = np.zeros(binary_image.shape, dtype=np.intp)
         if return_details:
             return 0, empty_image, empty_labels, {

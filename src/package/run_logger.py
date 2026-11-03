@@ -18,6 +18,7 @@ from pprint import pformat
 from typing import Any
 
 from src.package.config import CONFIG_PATH, resolve_path
+from src.package.version import APP_NAME, APP_VERSION
 
 
 PACKAGE_DISTRIBUTIONS = {
@@ -184,6 +185,7 @@ class RunLogger:
 
         safe_config = _redact_config(config)
         self.data: dict[str, Any] = {
+            "application": {"name": APP_NAME, "version": APP_VERSION},
             "run_id": self.run_id,
             "status": "running",
             "started_at": self.started_at.isoformat(),
@@ -212,6 +214,7 @@ class RunLogger:
             "\n".join(
                 [
                     "=== PROCESSING RUN STARTED ===",
+                    f"Application: {APP_NAME} v{APP_VERSION}",
                     f"Run ID: {self.run_id}",
                     f"Started at: {self.started_at.isoformat()}",
                     f"Working directory: {Path.cwd()}",

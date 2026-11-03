@@ -301,6 +301,13 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
                     error = f"画像ファイルがありません: {raw_sample['image']}"
                 else:
                     image_path = resolved_image
+                    try:
+                        probe_image = utils.loadImage(resolved_image)
+                        if probe_image.ndim != 2:
+                            error = "比較モードでは2次元グレースケール画像のみ対応します。"
+                        del probe_image
+                    except Exception as image_error:
+                        error = f"画像を読み込めません: {image_error}"
 
         pixel_scale: float | None = None
         if error is None:

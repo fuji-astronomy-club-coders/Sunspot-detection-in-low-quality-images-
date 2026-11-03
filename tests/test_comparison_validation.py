@@ -43,9 +43,6 @@ class ComparisonValidationTests(unittest.TestCase):
         )
         (self.date_folder / "source_01.tif").write_bytes(b"placeholder")
         (self.date_folder / "source_04.tif").write_bytes(b"placeholder")
-        self._root_patch = patch.object(comparison, "PROJECT_ROOT", self.root)
-        self._root_patch.start()
-        self.addCleanup(self._root_patch.stop)
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()

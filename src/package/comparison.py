@@ -80,6 +80,7 @@ class ComparisonPlan:
     """Validated input files and source definitions for one comparison date."""
 
     date_folder: Path
+    source_input_root: Path
     comparison_date: str
     sources: tuple[dict[str, Any], ...]
     samples: tuple[PreparedSample, ...]
@@ -203,14 +204,12 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
     if not selected_folder.is_absolute():
         selected_folder = PROJECT_ROOT / selected_folder
     selected_folder = selected_folder.resolve()
-    source_root = SOURCE_INPUT_ROOT.resolve()
 
-    if not selected_folder.is_relative_to(source_root) or selected_folder == source_root:
-        raise ComparisonInputError(
-            f"比較フォルダーは {source_root} 配下の日付フォルダーを指定してください。"
-        )
     if not selected_folder.is_dir():
         raise ComparisonInputError(f"日付フォルダーがありません: {selected_folder}")
+    # The data root is the parent of the selected YYYY-MM-DD folder. It may
+    # live outside the repository (for example, on a separate data drive).
+    source_root = selected_folder.parent.resolve()
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", selected_folder.name) is None:
         raise ComparisonInputError("日付フォルダー名は YYYY-MM-DD 形式にしてください。")
     try:
@@ -309,7 +308,7 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
             raise ComparisonInputError("mask_template は日付フォルダーからの相対パスにしてください。")
         mask_template_path = (selected_folder / candidate_template).resolve()
         if not mask_template_path.is_relative_to(source_root):
-            raise ComparisonInputError("mask_template は source_input/ 配下を指定してください。")
+            raise ComparisonInputError("mask_template は入力データルート配下を指定してください。")
         if not mask_template_path.is_file():
             raise ComparisonInputError(f"mask_template がありません: {mask_template_path}")
         polygons, _template = _load_mask_template(mask_template_path)
@@ -411,6 +410,7 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
 
     return ComparisonPlan(
         selected_folder,
+        source_root,
         comparison_date,
         tuple(sources),
         tuple(prepared_samples),
@@ -428,7 +428,7 @@ def _write_mask_template(
     polygons: list[list[list[float]]],
 ) -> Path:
     """Persist the selected base-image mask in normalized solar coordinates."""
-    target_folder = SOURCE_INPUT_ROOT / "mask_templates"
+    target_folder = plan.source_input_root / "mask_templates"
     target_folder.mkdir(parents=True, exist_ok=True)
     target_path = target_folder / f"{plan.comparison_date}_{source_id}.json"
     document = {

@@ -35,6 +35,7 @@ from src.package import (
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 from src.package.run_logger import RunLogger
+from src.package.solar_coordinates import SolarTransform
 from src.package.version_info import get_application_version
 from src.package.qt_preview import (
     build_invalid_sunspot_mask,
@@ -121,6 +122,9 @@ def process_image(
     output_dir: str | Path | None = None,
     solar_geometry_override: tuple[tuple[float, float], float] | None = None,
     mask_polygons: list[np.ndarray] | None = None,
+    mask_preview_images: list[tuple[str, np.ndarray, SolarTransform]] | None = None,
+    mask_editor_transform: SolarTransform | None = None,
+    export_comparison_stages: bool = False,
 ) -> int:
     """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。
 
@@ -325,7 +329,10 @@ def process_image(
 
         regions = (
             mask.selectMaskRegions(
-                limb_corrected_image, config.get("MaskDialog", {}).get("display")
+                limb_corrected_image,
+                config.get("MaskDialog", {}).get("display"),
+                preview_images=mask_preview_images,
+                editor_transform=mask_editor_transform,
             )
             if mask_polygons is None
             else []
@@ -562,6 +569,23 @@ def process_image(
     utils.svImage_withInfo(image,{"result": {"count": count}, "config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
 
     binary_image = image
+
+    if export_comparison_stages:
+        stage_directory = output_root / ".comparison_stages"
+        stage_directory.mkdir(parents=True, exist_ok=True)
+        stage_images = {
+            "raw": raw_image,
+            "limb_corrected": limb_corrected_image,
+            "emphasized": emphasized_image,
+            "binary": binary_image,
+        }
+        for stage_name, stage_image in stage_images.items():
+            np.save(
+                stage_directory / f"{stage_name}.npy",
+                np.asarray(stage_image),
+                allow_pickle=False,
+            )
+        LOGGER.info("比較サマリー用の解析段階画像を保存しました: %s", stage_directory)
 
     # 検証用画像を出力
     utils.output_image(

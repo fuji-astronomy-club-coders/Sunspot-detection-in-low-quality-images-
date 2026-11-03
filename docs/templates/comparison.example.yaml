@@ -11,5 +11,5 @@ samples:
   - source_id: source_04
     image: "source_04.tif"
     pixel_scale_arcsec_per_pixel: 0.80
-    north_vector: {x: 0.0, y: -1.0}
+    north_vector: {x: 0.0, y: 1.0}
     flip_x: false

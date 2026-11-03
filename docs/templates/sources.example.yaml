@@ -1,23 +1,23 @@
 # 4観測所を固定で登録します。
-# north_vector と flip_x は必ず実際の画像で確認してから変更してください。
+# north_vector はデカルト座標（+X右、+Y上）で指定します。方向と flip_x は実画像で確認してください。
 # 以下の方向値・表示名は入力例であり、実観測所の設定値ではありません。
 sources:
   - source_id: source_01
     display_name: "観測所A（仮）"
     orientation_policy: fixed
-    north_vector: {x: 0.0, y: -1.0}
+    north_vector: {x: 0.0, y: 1.0}
     flip_x: false
 
   - source_id: source_02
     display_name: "観測所B（仮）"
     orientation_policy: fixed
-    north_vector: {x: 0.0, y: -1.0}
+    north_vector: {x: 0.0, y: 1.0}
     flip_x: false
 
   - source_id: source_03
     display_name: "観測所C（仮）"
     orientation_policy: fixed
-    north_vector: {x: 0.0, y: -1.0}
+    north_vector: {x: 0.0, y: 1.0}
     flip_x: false
 
   - source_id: source_04

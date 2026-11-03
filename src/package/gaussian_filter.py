@@ -32,7 +32,7 @@ def gaussian_high_pass_filter(image:np.ndarray,sigmaSize:int) -> np.ndarray:
     background = gaussian_filter(image_float, sigma=sigmaSize)
 
     # 背景を差し引く
-    result = image_float - background
+    result = background - image_float
 
     return result
 

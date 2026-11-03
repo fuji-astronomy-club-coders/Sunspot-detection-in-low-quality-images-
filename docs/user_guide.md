@@ -63,8 +63,8 @@ run.bat --setup --global
 
 ~~~bat
 run.bat --compare
-run.bat --compare source_input\20261102
-run.bat --venv --compare source_input\20261102
+run.bat --compare source_input\2026-11-02
+run.bat --venv --compare source_input\2026-11-02
 ~~~
 
 **--compare** と任意の日付フォルダー引数は **run.py** へそのまま渡されます。日付フォルダー名は **YYYY-MM-DD** です。日付フォルダーを省略するとフォルダー選択ダイアログが開きます。`--venv` を併用すると、既存の **.venv** で比較モードを実行します。

@@ -48,8 +48,15 @@ class SolarTransform:
 
     @property
     def _basis(self) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-        north = np.asarray(self.orientation.north_vector, dtype=np.float64)
-        north /= np.linalg.norm(north)
+        # north_vector is expressed in a Cartesian image-plane basis:
+        # +X points right and +Y points up. Pixel coordinates have +Y down,
+        # so convert the vector before constructing the image-space basis.
+        north_cartesian = np.asarray(self.orientation.north_vector, dtype=np.float64)
+        north_cartesian /= np.linalg.norm(north_cartesian)
+        north = np.array(
+            [north_cartesian[0], -north_cartesian[1]],
+            dtype=np.float64,
+        )
         positive_x = np.array([-north[1], north[0]], dtype=np.float64)
         if self.orientation.flip_x:
             positive_x *= -1.0
@@ -125,6 +132,14 @@ class SolarTransform:
             float(-(north[0] * center_x + north[1] * center_y) / radius),
         ]
         return {
+            "coordinate_system": "cartesian_xy",
+            "positive_x": "right",
+            "positive_y": "up",
+            "north_vector": {
+                "x": float(self.orientation.north_vector[0]),
+                "y": float(self.orientation.north_vector[1]),
+            },
+            "flip_x": bool(self.orientation.flip_x),
             "matrix": matrix,
             "offset": offset,
             "center_x_px": float(center_x),

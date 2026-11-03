@@ -84,7 +84,7 @@ sunspot_id,label,centroid_x_px,centroid_y_px,bbox_x_px,bbox_y_px,bbox_width_px,b
 | `exclusion_stage`           | 除外段階。`mask`、`connected_components`、`watershed` のいずれかです。 |
 | `min_area_threshold_px`     | minArea の最小面積（画素数）。mask による除外では空欄です。                 |
 | `excluded_by_mask_ids`     | 除外に関係したマスク番号。複数ある場合はセミコロン（`;`）区切りです。               |
-| `excluded_by_mask_regions` | 除外に関係した矩形マスク領域の詳細を格納した JSON 配列です。 |
+| `excluded_by_mask_regions` | 除外に関係した手動マスクの詳細を格納した JSON 配列です。rectangle方式では矩形、connected_component方式では連結成分の統計情報を記録します。 |
 | `radial_distance_px` | Rmask における太陽中心から黒点重心までの距離（ピクセル）です。 |
 | `radial_limit_px` | Rmask の除外境界までの距離（ピクセル）です。 |
 | `radial_ratio` | 太陽半径に対する Rmask 境界の比率です。 |
@@ -94,17 +94,19 @@ sunspot_id,label,centroid_x_px,centroid_y_px,bbox_x_px,bbox_y_px,bbox_width_px,b
 
 マスク番号は、マスク選択画面で選択した順番に対応する **1始まりの番号**です。`excluded_by_mask_ids` は一覧で該当マスクをすばやく確認するための列です。
 
-`excluded_by_mask_regions` は、マスクごとの位置と大きさを JSON 配列で記録します。各要素のキーは次のとおりです。
+`excluded_by_mask_regions` は、マスクごとの選択方式と位置・形状の統計情報を JSON 配列で記録します。各要素のキーは次のとおりです。
 
 | JSON キー   | 内容                 |
 | --------- | ------------------ |
-| `mask_id` | マスク番号（1始まり）。       |
-| `x`       | マスク矩形の左上X座標（ピクセル）。 |
-| `y`       | マスク矩形の左上Y座標（ピクセル）。 |
-| `width`   | マスク矩形の幅（ピクセル）。     |
-| `height`  | マスク矩形の高さ（ピクセル）。    |
+| `mask_id` | 手動選択の順番に対応するマスク番号（1始まり）。 |
+| `selection_method` | `rectangle` または `connected_component`。 |
+| `label` | connected_component方式で選択した連結成分ID。rectangle方式では空欄です。 |
+| `area_px` | 選択した連結成分の画素面積。rectangle方式では空欄です。 |
+| `centroid_x_px` / `centroid_y_px` | 選択した連結成分の重心座標。rectangle方式では空欄です。 |
+| `x` / `y` | rectangle方式では矩形の左上座標、connected_component方式では外接矩形の左上座標です。 |
+| `width` / `height` | rectangle方式では矩形の幅・高さ、connected_component方式では外接矩形の幅・高さです。 |
 
-1つの黒点が複数のマスク領域と重なっている場合、**該当するすべてのマスク番号と領域情報**を記録します。たとえば、マスク1とマスク3に重なった黒点では、次のようになります。
+1つの黒点が複数のマスク領域と重なっている場合、**該当するすべてのマスク番号と領域情報**を記録します。connected_component方式では、選択した連結成分のラベルID・面積・重心も `excluded_by_mask_regions` 内で確認できます。たとえば、マスク1とマスク3に重なった黒点では、次のようになります。
 
 ```text
 excluded_by_mask_ids:
@@ -122,7 +124,7 @@ Rmask は MIN2 が推定した太陽中心・半径を基準に、中心から�
 
 ### 除外要因の見方
 
-- `excluded_by_factor` に `mask` が含まれる場合: 選択した矩形マスクによる除外です。マスク番号と範囲は `excluded_by_mask_ids` / `excluded_by_mask_regions` で確認できます。
+- `excluded_by_factor` に `mask` が含まれる場合: 選択した手動マスクによる除外です。マスク番号と範囲は `excluded_by_mask_ids` / `excluded_by_mask_regions` で確認できます。
 - `excluded_by_factor` に `Rmask` が含まれる場合: MIN2 の太陽中心からの距離が半径比の境界以上となったため除外されています。距離と境界は `radial_distance_px` / `radial_limit_px` で確認できます。
 - `excluded_by_factor=minArea`: `area_px` が `min_area_threshold_px` 未満だったため除外されています。
 - `exclusion_stage=connected_components`: 連結成分抽出直後の面積判定で除外されています。

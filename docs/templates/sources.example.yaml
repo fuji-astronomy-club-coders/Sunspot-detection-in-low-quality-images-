@@ -23,4 +23,4 @@ sources:
   - source_id: source_04
     display_name: "観測所D（仮）"
     orientation_policy: per_sample
-    # per_sample の場合は comparison.yaml に north_vector と flip_x を入力します。
+    # per_sample の場合は comparison.yaml に north_vector または north_angle_deg と flip_x を入力します。

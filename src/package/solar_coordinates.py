@@ -38,6 +38,12 @@ class Orientation:
         if np.hypot(north_x, north_y) == 0:
             raise ValueError("north_vector にゼロベクトルは指定できません。")
 
+    @property
+    def north_angle_deg(self) -> float:
+        """Return the Cartesian polar angle from +X, normalized to [0, 360)."""
+        angle = float(np.degrees(np.arctan2(self.north_vector[1], self.north_vector[0])) % 360.0)
+        return 0.0 if np.isclose(angle, 360.0) or np.isclose(angle, 0.0) else angle
+
 
 @dataclass(frozen=True, slots=True)
 class SolarTransform:
@@ -134,6 +140,7 @@ class SolarTransform:
         return {
             "coordinate_system": "solar_disk_normalized",
             "direction_coordinate_system": "cartesian_xy",
+            "north_angle_deg": self.orientation.north_angle_deg,
             "positive_x": "right",
             "positive_y": "up",
             "matrix": matrix,

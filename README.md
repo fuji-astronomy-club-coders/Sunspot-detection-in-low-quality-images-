@@ -101,9 +101,9 @@ Windows の `run.bat` からも起動できます。
 
 ```bat
 run.bat --compare
-run.bat --compare source_input\20261102
-run.bat --venv --compare source_input\20261102
-run.bat --compare "E:\SolarData\20261102"
+run.bat --compare source_input\2026-11-02
+run.bat --venv --compare source_input\2026-11-02
+run.bat --compare "E:\SolarData\2026-11-02"
 ```
 
 比較モードでは4画像同期マスク編集、方向軸表示、north_vector または 0～360°の north_angle_deg による方向指定、解析段階別比較サマリー、画像座標・共通座標で分割したCSV、黒点の自動対応付けを利用できます。詳しい準備と出力仕様は [比較モード利用マニュアル](docs/comparison_mode_manual.md) を参照してください。従来の `python run.py` / `run.bat` による単一画像モードは変更ありません。

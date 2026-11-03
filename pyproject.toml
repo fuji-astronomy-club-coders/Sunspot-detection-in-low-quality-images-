@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyproject-template"
-version = "0.2.0"
-description = "This is a template for Python project repositories, intended for use by team members."
+name = "sunspot-detection-in-low-quality-images"
+version = "0.3.0"
+description = "Sunspot detection and multi-observatory comparison for low-quality solar images."
 requires-python = ">=3.13"
 dependencies = [
     "numpy>=2.0",

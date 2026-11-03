@@ -24,12 +24,15 @@ from src.main import process_image
 from src.package import limb_darking_resolution as ldr
 from src.package import utils
 from src.package.config import PROJECT_ROOT
+from src.package.qt_preview import show_comparison_final_previews
 from src.package.run_logger import RunLogger
 from src.package.solar_coordinates import Orientation, SolarGeometry, SolarTransform
 
 LOGGER = logging.getLogger("sunspot.comparison")
 IMAGE_SUFFIXES = {".tif", ".tiff", ".fits", ".fit", ".fts"}
 MATCH_TOLERANCE_NORMALIZED = 0.025
+ANGULAR_RADIUS_WARNING_MIN_ARCSEC = 900.0
+ANGULAR_RADIUS_WARNING_MAX_ARCSEC = 1000.0
 COMPARISON_CSV_NAMES = (
     "sunspot_statistics.csv",
     "sunspot_exclusion_list.csv",
@@ -85,6 +88,50 @@ class ComparisonPlan:
     samples: tuple[PreparedSample, ...]
     mask_template_path: Path | None
     normalized_polygons: tuple[list[list[float]], ...] | None
+
+
+def _load_comparison_settings(config: dict[str, Any]) -> dict[str, float]:
+    """設定ファイルから比較モードの距離・角半径しきい値を読み込む。"""
+    section = config.get("Comparison", {}) or {}
+    if not isinstance(section, dict):
+        raise ValueError("Comparison は YAML mapping にしてください。")
+    matching = section.get("matching", {}) or {}
+    angular = section.get("angular_radius_warning_arcsec", {}) or {}
+    if not isinstance(matching, dict) or not isinstance(angular, dict):
+        raise ValueError("Comparison.matching と angular_radius_warning_arcsec は mapping にしてください。")
+
+    raw_values = {
+        "matching_tolerance_normalized": matching.get(
+            "tolerance_normalized", MATCH_TOLERANCE_NORMALIZED
+        ),
+        "angular_radius_warning_min_arcsec": angular.get(
+            "min", ANGULAR_RADIUS_WARNING_MIN_ARCSEC
+        ),
+        "angular_radius_warning_max_arcsec": angular.get(
+            "max", ANGULAR_RADIUS_WARNING_MAX_ARCSEC
+        ),
+    }
+    values: dict[str, float] = {}
+    for name, raw_value in raw_values.items():
+        if isinstance(raw_value, bool):
+            raise ValueError(f"Comparison.{name} は数値にしてください。")
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Comparison.{name} は数値にしてください。") from error
+        if not math.isfinite(value):
+            raise ValueError(f"Comparison.{name} は有限値にしてください。")
+        values[name] = value
+
+    if values["matching_tolerance_normalized"] <= 0:
+        raise ValueError("Comparison.matching.tolerance_normalized は正の値にしてください。")
+    if (
+        values["angular_radius_warning_min_arcsec"] < 0
+        or values["angular_radius_warning_max_arcsec"]
+        < values["angular_radius_warning_min_arcsec"]
+    ):
+        raise ValueError("角半径警告範囲の min / max を確認してください。")
+    return values
 
 
 def _load_yaml(path: Path) -> object:
@@ -852,11 +899,26 @@ def _display_stage_image(
     )
 
 
+def _registered_source_slots(
+    sources: list[dict[str, Any]],
+    registered_sources: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> list[dict[str, Any] | None]:
+    """登録順に成功済み観測所を並べ、未処理スロットを None にする。"""
+    available = {str(source["source_id"]): source for source in sources}
+    return [available.get(str(item["source_id"])) for item in registered_sources]
+
+
 def _save_comparison_stage_summaries(
     session_dir: Path,
     sources: list[dict[str, Any]],
+    registered_sources: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
 ) -> list[str]:
-    """Create one north-up four-observatory summary image for each processing stage."""
+    """Create four fixed registration-order tiles for every comparison stage."""
+    source_slots = (
+        _registered_source_slots(sources, registered_sources)
+        if registered_sources is not None
+        else list(sources[:4]) + [None] * max(0, 4 - len(sources))
+    )
     image_size = 640
     tile_size = 360
     sheet_width = tile_size * 4
@@ -875,10 +937,13 @@ def _save_comparison_stage_summaries(
 
         for index in range(4):
             left = index * tile_size
-            if index >= len(sources):
+            source = source_slots[index] if index < len(source_slots) else None
+            if source is None:
+                if registered_sources is not None and index < len(registered_sources):
+                    missing_id = str(registered_sources[index]["source_id"])
+                    draw.text((left + 12, 72), missing_id, fill=(245, 245, 245))
                 draw.text((left + 16, 100), "Not processed", fill=(150, 150, 150))
                 continue
-            source = sources[index]
             source_id = str(source["source_id"])
             stage_path = (
                 Path(source["output_dir"])
@@ -919,8 +984,14 @@ def run_comparison(
     run_logger: RunLogger,
 ) -> dict[str, Any]:
     """Process available source images and create the combined comparison outputs."""
+    comparison_settings = _load_comparison_settings(base_config)
+    matching_tolerance = comparison_settings["matching_tolerance_normalized"]
+    angular_min = comparison_settings["angular_radius_warning_min_arcsec"]
+    angular_max = comparison_settings["angular_radius_warning_max_arcsec"]
+
     result_rows: list[dict[str, Any]] = []
     successful_sources: list[dict[str, Any]] = []
+    final_previews: list[dict[str, Any]] = []
     supplied_ids = {
         sample.source_id for sample in plan.samples if sample.source_id is not None
     }
@@ -947,7 +1018,7 @@ def run_comparison(
         str,
         tuple[np.ndarray, tuple[tuple[float, float], float], SolarGeometry, SolarTransform],
     ] = {}
-    preview_images: list[tuple[str, str, np.ndarray, SolarTransform]] = []
+    preview_slots_by_source: dict[str, tuple[str, np.ndarray | None, SolarTransform | None]] = {}
     for candidate in plan.samples:
         if (
             candidate.error is not None
@@ -976,13 +1047,10 @@ def run_comparison(
                 preview_geometry,
                 preview_transform,
             )
-            preview_images.append(
-                (
-                    candidate.source_id,
-                    candidate.source_name,
-                    preview_image,
-                    preview_transform,
-                )
+            preview_slots_by_source[candidate.source_id] = (
+                f"{candidate.source_id} / {candidate.source_name}",
+                preview_image,
+                preview_transform,
             )
         except Exception:
             LOGGER.debug(
@@ -1028,8 +1096,13 @@ def run_comparison(
                 transform = SolarTransform(geometry, sample.orientation)
             else:
                 image, geometry_tuple, geometry, transform = cached_preview
+            preview_slots_by_source[sample.source_id] = (
+                f"{sample.source_id} / {sample.source_name}",
+                image,
+                transform,
+            )
             angular_radius = geometry.radius * sample.pixel_scale
-            angular_warning = not 900.0 <= angular_radius <= 1000.0
+            angular_warning = not angular_min <= angular_radius <= angular_max
             if angular_warning:
                 LOGGER.warning(
                     "%s の太陽角半径が暫定範囲外です: %.2f arcsec",
@@ -1065,27 +1138,24 @@ def run_comparison(
             )
 
             dialog_previews = None
+            editor_index = 0
             if normalized_polygons is None:
                 dialog_previews = [
-                    (
-                        f"{sample.source_id} / {sample.source_name}",
-                        image,
-                        transform,
+                    preview_slots_by_source.get(
+                        str(registered_source["source_id"]),
+                        (
+                            f"{registered_source['source_id']} / "
+                            f"{registered_source['display_name']}",
+                            None,
+                            None,
+                        ),
                     )
+                    for registered_source in plan.sources
                 ]
-                dialog_previews.extend(
-                    (
-                        f"{preview_source_id} / {preview_source_name}",
-                        preview_image,
-                        preview_transform,
-                    )
-                    for (
-                        preview_source_id,
-                        preview_source_name,
-                        preview_image,
-                        preview_transform,
-                    ) in preview_images
-                    if preview_source_id != sample.source_id
+                editor_index = next(
+                    index
+                    for index, registered_source in enumerate(plan.sources)
+                    if registered_source["source_id"] == sample.source_id
                 )
 
             spot_count = process_image(
@@ -1096,7 +1166,10 @@ def run_comparison(
                 mask_polygons=pixel_polygons,
                 mask_preview_images=dialog_previews,
                 mask_editor_transform=transform if normalized_polygons is None else None,
+                mask_editor_index=editor_index,
                 export_comparison_stages=True,
+                final_preview_collector=final_previews,
+                final_preview_label=f"{sample.source_id} / {sample.source_name}",
             )
 
             if normalized_polygons is None:
@@ -1205,7 +1278,7 @@ def run_comparison(
     summary_images: list[str] = []
     matching_summary: dict[str, Any] = {
         "algorithm": "pairwise_hungarian_with_unique_source_clustering",
-        "tolerance_normalized": MATCH_TOLERANCE_NORMALIZED,
+        "tolerance_normalized": matching_tolerance,
         "matched_group_count": 0,
         "matched_detection_count": 0,
         "unmatched_detection_count": 0,
@@ -1214,11 +1287,13 @@ def run_comparison(
         summary_images = _save_comparison_stage_summaries(
             run_logger.session_dir,
             successful_sources,
+            plan.sources,
         )
         _write_coordinate_outputs(run_logger.session_dir, successful_sources)
         matching_summary = _auto_match_common_spots(
             run_logger.session_dir,
             successful_sources,
+            tolerance=matching_tolerance,
         )
         run_logger.record_event("comparison_sunspots_matched", matching_summary)
         for coordinate_folder in ("image_coordinates", "common_coordinates"):
@@ -1252,6 +1327,17 @@ def run_comparison(
         if plan.mask_template_path or generated_mask_path
         else None,
         "matching": matching_summary,
+        "comparison_settings": {
+            "matching": {
+                "tolerance_normalized": matching_tolerance,
+                "tolerance_unit": "solar_radius_fraction",
+            },
+            "angular_radius_warning_arcsec": {
+                "min": angular_min,
+                "max": angular_max,
+                "unit": "arcsec",
+            },
+        },
         "comparison_summary_images": summary_images,
         "coordinate_csv_directories": {
             "image_coordinates": str(run_logger.session_dir / "image_coordinates"),
@@ -1274,4 +1360,6 @@ def run_comparison(
             "summary_path": str(summary_path),
         },
     )
+    if final_previews:
+        show_comparison_final_previews(final_previews)
     return summary

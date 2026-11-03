@@ -7,6 +7,7 @@ from pathlib import Path
 
 from src.package.comparison import (
     _auto_match_common_spots,
+    _registered_source_slots,
     _read_csv,
     _write_common_coordinate_csv,
 )
@@ -143,6 +144,60 @@ class ComparisonMatchingTests(unittest.TestCase):
             self.assertEqual(second_rows[0]["common_sunspot_id"], "CS0001")
             self.assertEqual(second_rows[1]["match_status"], "unmatched")
 
+
+    def test_summary_slots_keep_source_registration_order(self) -> None:
+        """Missing observatories retain their registered tile positions."""
+        registered = [
+            {"source_id": "first"},
+            {"source_id": "second"},
+            {"source_id": "third"},
+            {"source_id": "fourth"},
+        ]
+        successful = [
+            {"source_id": "fourth", "value": 4},
+            {"source_id": "first", "value": 1},
+        ]
+
+        slots = _registered_source_slots(successful, registered)
+
+        self.assertEqual(
+            [None if slot is None else slot["source_id"] for slot in slots],
+            ["first", None, None, "fourth"],
+        )
+
+    def test_matching_group_respects_maximum_pairwise_distance(self) -> None:
+        """A chain of close neighbors cannot form a group wider than tolerance."""
+        source_points = {
+            "observatory_a": 0.00,
+            "observatory_b": 0.02,
+            "observatory_c": 0.04,
+        }
+        sources = []
+        for source_id, x in source_points.items():
+            sources.append(
+                {
+                    "source_id": source_id,
+                    "source_name": source_id,
+                    "image": f"{source_id}.tif",
+                    "output_dir": str(self.root / source_id),
+                }
+            )
+            for coordinate_folder in ("common_coordinates", "image_coordinates"):
+                self._write_statistics(
+                    self.root / coordinate_folder / source_id / "sunspot_statistics.csv",
+                    [{
+                        "sunspot_id": "1",
+                        "label": "1",
+                        "centroid_x_common": f"{x:.6f}",
+                        "centroid_y_common": "0.000000",
+                    }],
+                )
+
+        summary = _auto_match_common_spots(self.root, sources, tolerance=0.025)
+
+        self.assertEqual(summary["matched_group_count"], 1)
+        self.assertEqual(summary["matched_detection_count"], 2)
+        self.assertEqual(summary["unmatched_detection_count"], 1)
 
 if __name__ == "__main__":
     unittest.main()

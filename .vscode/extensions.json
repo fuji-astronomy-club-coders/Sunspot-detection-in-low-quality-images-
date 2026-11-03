@@ -3,11 +3,8 @@
     "ms-python.python",
     "charliermarsh.ruff",
     "detachhead.basedpyright",
-    "charliermarsh.ruff",
-    "detachhead.basedpyright",
     "redhat.vscode-yaml",
     "tamasfe.even-better-toml",
-    "ms-python.python",
     "GitHub.vscode-pull-request-github",
     "github.vscode-github-actions",
     "eamodio.gitlens"

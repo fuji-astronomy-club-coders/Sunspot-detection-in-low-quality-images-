@@ -4,7 +4,31 @@ import unittest
 
 import numpy as np
 
-from src.package.qt_preview import build_invalid_sunspot_mask
+from src.package.qt_preview import (
+    _format_cursor_readout,
+    build_invalid_sunspot_mask,
+)
+
+
+class FinalPreviewCursorReadoutTests(unittest.TestCase):
+    """Verify that the preview HUD reports source-image pixel values."""
+
+    def test_displays_original_unsigned_integer_brightness(self) -> None:
+        image = np.array([[0, 4095], [1024, 65535]], dtype=np.uint16)
+
+        readout = _format_cursor_readout(image, 1, 1)
+
+        self.assertEqual(readout, "Cursor: x=1, y=1, brightness=65535")
+
+    def test_displays_floating_point_brightness_without_colormap_conversion(self) -> None:
+        image = np.array([[0.0, 1.234567]], dtype=np.float32)
+
+        readout = _format_cursor_readout(image, 1, 0)
+
+        self.assertEqual(
+            readout,
+            f"Cursor: x=1, y=0, brightness={image[0, 1]}",
+        )
 
 
 class InvalidSunspotPreviewMaskTests(unittest.TestCase):

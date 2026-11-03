@@ -122,9 +122,14 @@ def process_image(
     output_dir: str | Path | None = None,
     solar_geometry_override: tuple[tuple[float, float], float] | None = None,
     mask_polygons: list[np.ndarray] | None = None,
-    mask_preview_images: list[tuple[str, np.ndarray, SolarTransform]] | None = None,
+    mask_preview_images: list[
+        tuple[str, np.ndarray | None, SolarTransform | None]
+    ] | None = None,
     mask_editor_transform: SolarTransform | None = None,
+    mask_editor_index: int = 0,
     export_comparison_stages: bool = False,
+    final_preview_collector: list[dict[str, Any]] | None = None,
+    final_preview_label: str | None = None,
 ) -> int:
     """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。
 
@@ -327,12 +332,18 @@ def process_image(
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
 
+        # 比較モードでは編集ペインと同期プレビューを同じ生画像段階にそろえる。
+        # 単一画像モードは従来どおり周縁減光補正後の画像を表示する。
+        mask_display_image = (
+            raw_image if mask_preview_images is not None else limb_corrected_image
+        )
         regions = (
             mask.selectMaskRegions(
-                limb_corrected_image,
+                mask_display_image,
                 config.get("MaskDialog", {}).get("display"),
                 preview_images=mask_preview_images,
                 editor_transform=mask_editor_transform,
+                preview_editor_index=mask_editor_index,
             )
             if mask_polygons is None
             else []
@@ -598,23 +609,33 @@ def process_image(
         count,
         output_dir=output_root,
     )
-    # 対話的な最終確認は設定で有効化した場合のみ PyQt ダイアログで表示する。
-    if config.get("Display", {}).get("show_final_image", False):
+    # 単一画像モードは従来どおり即時表示し、比較モードは全観測所分を収集する。
+    display_options = config.get("Display", {})
+    if display_options.get("show_final_image", False):
         invalid_sunspot_mask = build_invalid_sunspot_mask(
             sunspot_labels,
             normal_mask_exclusions,
             radial_exclusions,
         )
-        show_final_preview(
-            limb_corrected_image,
-            regions,
-            config.get("Display", {}),
-            invalid_sunspot_mask,
-            solar_geometry=solar_geometry,
-            rmask_radius_ratio=float(
+        preview_arguments = {
+            "image": limb_corrected_image,
+            "mask_regions": regions,
+            "display_options": display_options,
+            "invalid_sunspot_mask": invalid_sunspot_mask,
+            "solar_geometry": solar_geometry,
+            "rmask_radius_ratio": float(
                 config.get("Mask", {}).get("Rmask", {}).get("radius_ratio", 0.85)
             ),
-        )
+        }
+        if final_preview_collector is None:
+            show_final_preview(**preview_arguments)
+        else:
+            final_preview_collector.append(
+                {
+                    "label": final_preview_label or image_path.name,
+                    **preview_arguments,
+                }
+            )
     
 
     LOGGER.info("Processing completed: %d sunspots detected", count)

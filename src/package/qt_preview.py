@@ -6,7 +6,7 @@ import math
 
 import cv2
 import numpy as np
-from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import (
     QAction,
     QActionGroup,
@@ -23,10 +23,12 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
+    QStackedWidget,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -37,6 +39,27 @@ from src.package.qt_histogram import BrightnessHistogramWidget
 from src.package.qt_image import colorize_intensity
 
 LOGGER = logging.getLogger("sunspot.qt_preview")
+
+
+def _format_cursor_readout(image: np.ndarray, pixel_x: int, pixel_y: int) -> str:
+    """元画像の指定画素からカーソル位置と輝度値を整形する。
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        カラーマップ適用前の2次元元画像。
+    pixel_x : int
+        画素の X 座標。
+    pixel_y : int
+        画素の Y 座標。
+
+    Returns
+    -------
+    str
+        画素座標と元画像の輝度値を含むステータス文字列。
+    """
+    brightness = image[pixel_y, pixel_x]
+    return f"Cursor: x={pixel_x}, y={pixel_y}, brightness={brightness}"
 
 
 def build_invalid_sunspot_mask(
@@ -182,6 +205,7 @@ class _FinalPreviewCanvas(QWidget):
             ).copy()
 
         options = display_options or {}
+        self._intensity_image = image
         colormap = str(options.get("colormap", "GRAY"))
         display_bgr, self._minimum, self._maximum = colorize_intensity(
             image,
@@ -226,7 +250,7 @@ class _FinalPreviewCanvas(QWidget):
         self.setMinimumSize(480, 360)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.cursorChanged.emit("Cursor: x=—, y=—")
+        self.cursorChanged.emit("Cursor: x=—, y=—, brightness=—")
         self._emit_view_range()
 
     def set_mask_fill_visible(self, visible: bool) -> None:
@@ -722,11 +746,13 @@ class _FinalPreviewCanvas(QWidget):
         position = event.position()
         point = self._map_to_data(position)
         if point is None:
-            self.cursorChanged.emit("Cursor: x=—, y=—")
+            self.cursorChanged.emit("Cursor: x=—, y=—, brightness=—")
         else:
             pixel_x = min(max(int(point[0]), 0), self._image_width - 1)
             pixel_y = min(max(int(point[1]), 0), self._image_height - 1)
-            self.cursorChanged.emit(f"Cursor: x={pixel_x}, y={pixel_y}")
+            self.cursorChanged.emit(
+                _format_cursor_readout(self._intensity_image, pixel_x, pixel_y)
+            )
 
         if self._drag_mode == "pan":
             x_min, x_max, y_min, y_max = self._drag_start_view
@@ -744,6 +770,17 @@ class _FinalPreviewCanvas(QWidget):
             self.update()
         else:
             super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event: QEvent | None) -> None:
+        """キャンバスからカーソルが離れたときにステータス表示を初期化する。
+
+        Parameters
+        ----------
+        event : QEvent | None
+            Qt のマウス離脱イベント。
+        """
+        self.cursorChanged.emit("Cursor: x=—, y=—, brightness=—")
+        super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
         """ドラッグ終了時にパン状態を解除、または選択矩形へズームする。
@@ -935,9 +972,9 @@ class _FinalPreviewDialog(QDialog):
         help_label = QLabel(" | Ctrl + wheel: Zoom   |   Shift + right drag: Pan")
         toolbar.addWidget(help_label)
 
-        cursor_label = QLabel("Cursor: x=—, y=—")
+        cursor_label = QLabel("Cursor: x=—, y=—, brightness=—")
         range_label = QLabel()
-        cursor_label.setMinimumWidth(180)
+        cursor_label.setMinimumWidth(320)
         range_label.setMinimumWidth(300)
         self.canvas.cursorChanged.connect(cursor_label.setText)
         self.canvas.viewChanged.connect(range_label.setText)
@@ -1003,3 +1040,142 @@ def show_final_preview(
     )
     dialog.exec()
     LOGGER.info("Final result preview closed.")
+
+
+class _ComparisonFinalPreviewDialog(QDialog):
+    """全観測所の最終確認画像を1つの選択式ウィンドウで表示する。"""
+
+    def __init__(self, previews: list[dict], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Comparison Final Result Preview")
+        self.canvases: list[_FinalPreviewCanvas] = []
+        self.stack = QStackedWidget(self)
+
+        selector = QComboBox(self)
+        for preview in previews:
+            selector.addItem(str(preview.get("label") or "観測所"))
+            page = QWidget(self)
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(4, 4, 4, 4)
+            canvas = _FinalPreviewCanvas(
+                preview["image"],
+                preview.get("mask_regions"),
+                preview.get("display_options"),
+                preview.get("invalid_sunspot_mask"),
+                preview.get("solar_geometry"),
+                float(preview.get("rmask_radius_ratio", 0.85)),
+            )
+            histogram = BrightnessHistogramWidget(preview["image"], page)
+            page_layout.addWidget(canvas, 1)
+            page_layout.addWidget(histogram)
+            self.canvases.append(canvas)
+            self.stack.addWidget(page)
+
+        toolbar = QToolBar(self)
+        toolbar.setMovable(False)
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        home_action = QAction("Home", self)
+        home_action.triggered.connect(lambda: self._active_canvas().reset_view())
+        toolbar.addAction(home_action)
+        self.back_action = QAction("Back", self)
+        self.back_action.triggered.connect(lambda: self._active_canvas().go_back())
+        toolbar.addAction(self.back_action)
+        self.forward_action = QAction("Forward", self)
+        self.forward_action.triggered.connect(lambda: self._active_canvas().go_forward())
+        toolbar.addAction(self.forward_action)
+        toolbar.addSeparator()
+
+        navigation_group = QActionGroup(self)
+        navigation_group.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
+        pan_action = QAction("Pan", self)
+        pan_action.setCheckable(True)
+        zoom_action = QAction("Zoom", self)
+        zoom_action.setCheckable(True)
+        navigation_group.addAction(pan_action)
+        navigation_group.addAction(zoom_action)
+        toolbar.addAction(pan_action)
+        toolbar.addAction(zoom_action)
+
+        initial_options = previews[0].get("display_options") or {}
+        checkbox_specs = (
+            ("Mask Fill", "show_mask_fill", "set_mask_fill_visible", False),
+            ("Rmask Fill", "show_rmask_fill", "set_rmask_fill_visible", False),
+            ("太陽近似円", "show_solar_circle", "set_solar_circle_visible", False),
+            ("無効黒点", "show_invalid_sunspots", "set_invalid_sunspots_visible", True),
+        )
+        for label, option, method, default in checkbox_specs:
+            checkbox = QCheckBox(label, self)
+            checkbox.setChecked(bool(initial_options.get(option, default)))
+            checkbox.toggled.connect(
+                lambda checked, method_name=method: self._set_canvas_option(
+                    method_name, checked
+                )
+            )
+            toolbar.addWidget(checkbox)
+
+        pan_action.toggled.connect(
+            lambda checked: self._set_navigation_mode("pan" if checked else "none")
+        )
+        zoom_action.toggled.connect(
+            lambda checked: self._set_navigation_mode("zoom" if checked else "none")
+        )
+        selector.currentIndexChanged.connect(self._on_selection_changed)
+        for canvas in self.canvases:
+            canvas.historyChanged.connect(self._update_history_buttons)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        selector_row = QHBoxLayout()
+        selector_row.addWidget(QLabel("表示画像"))
+        selector_row.addWidget(selector, 1)
+        layout.addLayout(selector_row)
+        layout.addWidget(toolbar)
+        layout.addWidget(self.stack, 1)
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        button_box.rejected.connect(self.accept)
+        layout.addWidget(button_box)
+        self.selector = selector
+        self._on_selection_changed(0)
+        self.setMinimumSize(760, 620)
+        self.resize(1200, 900)
+
+    def _active_canvas(self) -> _FinalPreviewCanvas:
+        """現在選択されている観測所の画像キャンバスを返す。"""
+        return self.canvases[self.selector.currentIndex()]
+
+    def _set_canvas_option(self, method_name: str, value: bool) -> None:
+        """全観測所のキャンバスへ共通の表示設定を反映する。"""
+        for canvas in self.canvases:
+            getattr(canvas, method_name)(value)
+
+    def _set_navigation_mode(self, mode: str) -> None:
+        """全観測所のキャンバスへ共通のナビゲーション状態を設定する。"""
+        for canvas in self.canvases:
+            canvas.set_navigation_mode(mode)
+
+    def _on_selection_changed(self, index: int) -> None:
+        """選択された観測所の画像を大きく表示する。"""
+        if 0 <= index < len(self.canvases):
+            self.stack.setCurrentIndex(index)
+            self._update_history_buttons()
+
+    def _update_history_buttons(self, *_state: bool) -> None:
+        """現在表示中の画像に応じて戻る・進む操作を更新する。"""
+        if not self.canvases:
+            return
+        canvas = self._active_canvas()
+        self.back_action.setEnabled(canvas._history_index > 0)
+        self.forward_action.setEnabled(
+            canvas._history_index < len(canvas._view_history) - 1
+        )
+
+
+def show_comparison_final_previews(previews: list[dict]) -> None:
+    """比較モードの最終画像を、観測所選択式の単一ダイアログで表示する。"""
+    if not previews:
+        return
+    ensure_qapplication()
+    LOGGER.info("Displaying combined final previews for %d observatories", len(previews))
+    dialog = _ComparisonFinalPreviewDialog(previews)
+    dialog.exec()
+    LOGGER.info("Combined comparison final preview closed.")

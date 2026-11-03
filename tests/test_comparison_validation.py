@@ -67,8 +67,7 @@ class ComparisonValidationTests(unittest.TestCase):
         return np.zeros((10, 10), dtype=np.uint16)
 
     def test_valid_profile_produces_one_prepared_sample(self) -> None:
-        with patch.object(comparison.utils, "loadImage", side_effect=self._load_valid_image):
-            self._write_comparison(
+        self._write_comparison(
             {
                 "samples": [
                     {
@@ -79,14 +78,18 @@ class ComparisonValidationTests(unittest.TestCase):
                 ]
             }
         )
-
+        with patch.object(
+            comparison.utils,
+            "loadImage",
+            side_effect=self._load_valid_image,
+        ):
             plan = comparison.prepare_comparison(self.date_folder)
 
-            self.assertEqual(plan.comparison_date, "2026-11-02")
-            self.assertEqual(len(plan.sources), 4)
-            self.assertEqual(plan.samples[0].source_id, "source_01")
-            self.assertIsNone(plan.samples[0].error)
-            self.assertEqual(plan.samples[0].orientation.north_vector, (0.0, -1.0))
+        self.assertEqual(plan.comparison_date, "2026-11-02")
+        self.assertEqual(len(plan.sources), 4)
+        self.assertEqual(plan.samples[0].source_id, "source_01")
+        self.assertIsNone(plan.samples[0].error)
+        self.assertEqual(plan.samples[0].orientation.north_vector, (0.0, -1.0))
 
     def test_unreadable_image_is_skipped_before_processing(self) -> None:
         self._write_comparison(

@@ -851,12 +851,17 @@ def polygon_coverage_mask(
             raise ValueError("多角形マスクは3点以上の (x, y) 座標で指定してください。")
         if not np.all(np.isfinite(vertices)):
             raise ValueError("多角形マスクの頂点には有限値を指定してください。")
-        bounded = np.clip(
-            np.rint(vertices),
-            [-width * 4, -height * 4],
-            [width * 5, height * 5],
+        shift = 4
+        scale = 1 << shift
+        bounded = np.rint(
+            np.clip(
+                vertices,
+                [-width * 4, -height * 4],
+                [width * 5, height * 5],
+            )
+            * scale
         ).astype(np.int32)
-        cv2.fillPoly(coverage, [bounded], 1)
+        cv2.fillPoly(coverage, [bounded], 1, shift=shift)
 
     return coverage.astype(bool)
 
@@ -932,13 +937,18 @@ def applyPolygonMask(
             raise ValueError("多角形マスクは3点以上の (x, y) 座標で指定してください。")
         if not np.all(np.isfinite(vertices)):
             raise ValueError("多角形マスクの頂点には有限値を指定してください。")
-        bounded = np.clip(
-            np.rint(vertices),
-            [-width * 4, -height * 4],
-            [width * 5, height * 5],
+        shift = 4
+        scale = 1 << shift
+        bounded = np.rint(
+            np.clip(
+                vertices,
+                [-width * 4, -height * 4],
+                [width * 5, height * 5],
+            )
+            * scale
         ).astype(np.int32)
         region_mask = np.zeros((height, width), dtype=np.uint8)
-        cv2.fillPoly(region_mask, [bounded], 1)
+        cv2.fillPoly(region_mask, [bounded], 1, shift=shift)
         polygon_masks.append(region_mask.astype(bool))
 
     mask_coverage = (

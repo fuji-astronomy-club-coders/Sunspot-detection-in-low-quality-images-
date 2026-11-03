@@ -656,6 +656,7 @@ def applyMask(
     regions: list[tuple[int, int, int, int]],
     original_count: int,
     return_details: Literal[False] = False,
+    boundary_policy: Literal["overlap", "centroid"] = "overlap",
 ) -> tuple[int, np.ndarray]: ...
 
 
@@ -665,6 +666,7 @@ def applyMask(
     regions: list[tuple[int, int, int, int]],
     original_count: int,
     return_details: Literal[True],
+    boundary_policy: Literal["overlap", "centroid"] = "overlap",
 ) -> tuple[int, np.ndarray, dict]: ...
 
 
@@ -673,44 +675,39 @@ def applyMask(
     regions: list[tuple[int, int, int, int]],
     original_count: int,
     return_details: bool = False,
+    boundary_policy: Literal["overlap", "centroid"] = "overlap",
 ) -> tuple[int, np.ndarray] | tuple[int, np.ndarray, dict]:
-    """矩形領域と重なる黒点候補を除外する。
+    """矩形マスクと重なる黒点候補を、指定した境界判定で除外する。
 
-    Parameters
-    ----------
-    labels : numpy.ndarray
-        黒点ごとに異なる整数ラベルを持つ画像。
-    regions : list[tuple[int, int, int, int]]
-        除外する矩形領域のリスト。各要素は (x, y, width, height)。
-    original_count : int
-        マスク適用前の黒点候補数。
-    return_details : bool, optional
-        True の場合、ROI 座標や領域ごとの重複候補数を追加で返す。
-
-    Returns
-    -------
-    tuple[int, numpy.ndarray] | tuple[int, numpy.ndarray, dict]
-        マスク適用後の候補数と二値画像。return_details=True の場合は
-        画像サイズ、各 ROI の座標・面積・重複候補ラベル、除外数も返す。
-
-    Raises
-    ------
-    ValueError
-        ラベル画像が2次元ではない場合。
+    overlap は矩形内に1画素でも入った候補を除外する従来方式。
+    centroid は候補の重心が矩形内にある場合だけ除外する方式。
     """
     if labels.ndim != 2:
         raise ValueError("ラベル画像は2次元配列にしてください。")
+    if boundary_policy not in ("overlap", "centroid"):
+        raise ValueError(f"未対応のマスク境界判定方式です: {boundary_policy}")
 
-    masked_labels = labels.copy()
     height, width = labels.shape
+    candidate_labels = np.unique(labels)
+    candidate_labels = candidate_labels[candidate_labels > 0]
+    candidate_centroids: dict[int, tuple[float, float]] = {}
+    for label_value in candidate_labels:
+        y_coordinates, x_coordinates = np.nonzero(labels == label_value)
+        if x_coordinates.size:
+            candidate_centroids[int(label_value)] = (
+                float(x_coordinates.mean()),
+                float(y_coordinates.mean()),
+            )
+
     excluded_labels: set[int] = set()
+    physically_overlapping_labels: set[int] = set()
     region_details: list[dict] = []
 
     for index, (x, y, roi_width, roi_height) in enumerate(regions, start=1):
-        x1 = max(0, x)
-        y1 = max(0, y)
-        x2 = min(width, x + roi_width)
-        y2 = min(height, y + roi_height)
+        x1 = max(0, int(x))
+        y1 = max(0, int(y))
+        x2 = min(width, int(x + roi_width))
+        y2 = min(height, int(y + roi_height))
 
         if x1 >= x2 or y1 >= y2:
             region_details.append(
@@ -725,16 +722,28 @@ def applyMask(
                     "image_coverage_percent": 0.0,
                     "overlapping_candidate_count": 0,
                     "overlapping_candidate_labels": [],
+                    "excluded_candidate_count": 0,
+                    "excluded_candidate_labels": [],
                 }
             )
             continue
 
-        overlapping_labels = np.unique(labels[y1:y2, x1:x2])
-        overlapping_labels = sorted(
-            int(label) for label in overlapping_labels if label != 0
-        )
-        excluded_labels.update(overlapping_labels)
+        overlapping_values = np.unique(labels[y1:y2, x1:x2])
+        overlapping_labels = {
+            int(label_value) for label_value in overlapping_values if label_value > 0
+        }
+        physically_overlapping_labels.update(overlapping_labels)
 
+        if boundary_policy == "overlap":
+            selected_labels = overlapping_labels
+        else:
+            selected_labels = {
+                label_value
+                for label_value, (centroid_x, centroid_y) in candidate_centroids.items()
+                if x1 <= centroid_x < x2 and y1 <= centroid_y < y2
+            }
+
+        excluded_labels.update(selected_labels)
         area_pixels = (x2 - x1) * (y2 - y1)
         region_details.append(
             {
@@ -754,16 +763,23 @@ def applyMask(
                     area_pixels / (width * height) * 100, 4
                 ),
                 "overlapping_candidate_count": len(overlapping_labels),
-                "overlapping_candidate_labels": overlapping_labels,
+                "overlapping_candidate_labels": sorted(overlapping_labels),
+                "excluded_candidate_count": len(selected_labels),
+                "excluded_candidate_labels": sorted(selected_labels),
             }
         )
 
+    masked_labels = labels.copy()
     if excluded_labels:
-        masked_labels[np.isin(labels, list(excluded_labels))] = 0
+        masked_labels[np.isin(masked_labels, list(excluded_labels))] = 0
 
-    count = original_count - len(excluded_labels)
-    LOGGER.info("除外した黒点数: %d", len(excluded_labels))
-    LOGGER.info("マスク適用後の黒点数: %d", count)
+    count = max(0, int(original_count) - len(excluded_labels))
+    LOGGER.info(
+        "矩形マスクで除外した黒点数: %d (boundary_policy=%s)",
+        len(excluded_labels),
+        boundary_policy,
+    )
+    LOGGER.info("矩形マスク適用後の黒点数: %d", count)
 
     masked_image = np.where(masked_labels > 0, 0, 255).astype(np.uint8)
     if not return_details:
@@ -773,10 +789,130 @@ def applyMask(
         "image_width": int(width),
         "image_height": int(height),
         "selected_region_count": len(regions),
+        "boundary_policy": boundary_policy,
         "regions": region_details,
         "original_candidate_count": int(original_count),
+        "overlapping_candidate_labels": sorted(physically_overlapping_labels),
         "excluded_candidate_count": len(excluded_labels),
         "excluded_candidate_labels": sorted(excluded_labels),
         "remaining_candidate_count": int(count),
+    }
+    return count, masked_image, details
+
+
+@overload
+def applyRadialMask(
+    labels: np.ndarray,
+    original_count: int,
+    center: tuple[float, float],
+    solar_radius: float,
+    radius_ratio: float,
+    boundary_policy: Literal["overlap", "centroid"] = "overlap",
+    return_details: Literal[False] = False,
+) -> tuple[int, np.ndarray]: ...
+
+
+@overload
+def applyRadialMask(
+    labels: np.ndarray,
+    original_count: int,
+    center: tuple[float, float],
+    solar_radius: float,
+    radius_ratio: float,
+    boundary_policy: Literal["overlap", "centroid"] = "overlap",
+    return_details: Literal[True],
+) -> tuple[int, np.ndarray, dict]: ...
+
+
+def applyRadialMask(
+    labels: np.ndarray,
+    original_count: int,
+    center: tuple[float, float],
+    solar_radius: float,
+    radius_ratio: float,
+    boundary_policy: Literal["overlap", "centroid"] = "overlap",
+    return_details: bool = False,
+) -> tuple[int, np.ndarray] | tuple[int, np.ndarray, dict]:
+    """MIN2 の太陽中心・半径に基づき、半径比より外側の黒点候補を除外する。
+
+    overlap は候補の1画素でも円境界の外側にあれば除外する。
+    centroid は候補の重心が円境界の外側にある場合だけ除外する。
+    """
+    if labels.ndim != 2:
+        raise ValueError("ラベル画像は2次元配列にしてください。")
+    if boundary_policy not in ("overlap", "centroid"):
+        raise ValueError(f"未対応のマスク境界判定方式です: {boundary_policy}")
+    if not np.isfinite(radius_ratio) or not 0.0 < radius_ratio <= 1.0:
+        raise ValueError("Rmask.radius_ratio は 0 より大きく 1 以下にしてください。")
+    if not np.isfinite(solar_radius) or solar_radius <= 0:
+        raise ValueError("太陽半径は正の有限値である必要があります。")
+    center_x, center_y = float(center[0]), float(center[1])
+    if not np.isfinite(center_x) or not np.isfinite(center_y):
+        raise ValueError("太陽中心は有限値である必要があります。")
+
+    threshold_radius = float(solar_radius) * float(radius_ratio)
+    candidate_labels = np.unique(labels)
+    candidate_labels = candidate_labels[candidate_labels > 0]
+    excluded_labels: list[int] = []
+    excluded_candidates: list[dict[str, float | int]] = []
+
+    for label_value in candidate_labels:
+        y_coordinates, x_coordinates = np.nonzero(labels == label_value)
+        if x_coordinates.size == 0:
+            continue
+
+        pixel_distances = np.hypot(
+            x_coordinates.astype(np.float64) - center_x,
+            y_coordinates.astype(np.float64) - center_y,
+        )
+        centroid_x = float(x_coordinates.mean())
+        centroid_y = float(y_coordinates.mean())
+        centroid_distance = float(np.hypot(centroid_x - center_x, centroid_y - center_y))
+
+        if boundary_policy == "overlap":
+            should_exclude = bool(np.any(pixel_distances >= threshold_radius))
+        else:
+            should_exclude = centroid_distance >= threshold_radius
+
+        if should_exclude:
+            label = int(label_value)
+            excluded_labels.append(label)
+            excluded_candidates.append(
+                {
+                    "label": label,
+                    "centroid_distance_px": centroid_distance,
+                    "minimum_pixel_distance_px": float(pixel_distances.min()),
+                    "maximum_pixel_distance_px": float(pixel_distances.max()),
+                }
+            )
+
+    masked_labels = labels.copy()
+    if excluded_labels:
+        masked_labels[np.isin(masked_labels, excluded_labels)] = 0
+
+    count = max(0, int(original_count) - len(excluded_labels))
+    LOGGER.info(
+        "Rmask で除外した黒点数: %d (limit=%.3f px, boundary_policy=%s)",
+        len(excluded_labels),
+        threshold_radius,
+        boundary_policy,
+    )
+    LOGGER.info("Rmask 適用後の黒点数: %d", count)
+
+    masked_image = np.where(masked_labels > 0, 0, 255).astype(np.uint8)
+    if not return_details:
+        return count, masked_image
+
+    details = {
+        "enabled": True,
+        "center_x_px": center_x,
+        "center_y_px": center_y,
+        "solar_radius_px": float(solar_radius),
+        "radius_ratio": float(radius_ratio),
+        "threshold_radius_px": threshold_radius,
+        "boundary_policy": boundary_policy,
+        "excluded_candidate_count": len(excluded_labels),
+        "excluded_candidate_labels": sorted(excluded_labels),
+        "excluded_candidates": excluded_candidates,
     }
     return count, masked_image, details

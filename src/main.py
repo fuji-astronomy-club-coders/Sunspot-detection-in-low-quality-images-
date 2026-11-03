@@ -95,6 +95,17 @@ def _format_analysis_parameters(config: dict[str, Any]) -> str:
         )
     sections.append("\n".join(extraction_lines))
 
+    mask_config = config.get("Mask", {})
+    sections.append(
+        "\n".join(
+            [
+                "[マスク除外]",
+                f"boundary_policy: {mask_config.get('boundary_policy', 'overlap')}",
+                pformat(mask_config, sort_dicts=False),
+            ]
+        )
+    )
+
     return "\n\n".join(sections)
 
 
@@ -146,6 +157,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
 
     moduleVersions = {}
     raw_image = image
+    solar_geometry: tuple[tuple[float, float], float] | None = None
     min_area_exclusions: list[tuple[np.ndarray, list[int], str, int]] = []
 
     try:
@@ -157,8 +169,10 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
 
         if darkingMethod == "polynomialFit":
             moduleVersions["LimbDarkingResolution"] = ldr.version
+            solar_geometry = ldr.find_solar_geometry(image)
             image: ndarray[_AnyShape, dtype[Any]] = ldr.polynomialFit(
                 image=image,
+                solar_geometry=solar_geometry,
                 **darkingConfig["polynomialFit"]
             )
             
@@ -295,6 +309,28 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         # 0は Black Top-Hat / Sobel の応答を抑制し、Gaussian 高域通過画像でも
         # 中立値として扱える。元の強調画像は変更せず、別ファイルに出力する。
         masked_emphasized_image = emphasized_image.copy()
+        mask_settings = config.get("Mask", {})
+        radial_settings = mask_settings.get("Rmask", {})
+        radial_mask_output = None
+        if radial_settings.get("enabled", False):
+            if solar_geometry is None:
+                raise ValueError("Rmask を使用するには MIN2 の太陽中心・半径が必要です。")
+            (center_x, center_y), solar_radius = solar_geometry
+            radius_ratio = float(radial_settings.get("radius_ratio", 0.85))
+            if not 0.0 < radius_ratio <= 1.0:
+                raise ValueError("Mask.Rmask.radius_ratio は 0 より大きく 1 以下にしてください。")
+            radial_limit = solar_radius * radius_ratio
+            image_y, image_x = np.indices(masked_emphasized_image.shape[:2], dtype=np.float32)
+            radial_area = np.hypot(image_x - center_x, image_y - center_y) >= radial_limit
+            masked_emphasized_image[radial_area] = 0
+            radial_mask_output = {
+                "enabled": True,
+                "center_x_px": float(center_x),
+                "center_y_px": float(center_y),
+                "solar_radius_px": float(solar_radius),
+                "radius_ratio": radius_ratio,
+                "threshold_radius_px": float(radial_limit),
+            }
         mask_output_regions = []
         image_height, image_width = masked_emphasized_image.shape[:2]
         for x, y, width, height in regions:
@@ -327,6 +363,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
                     "fill_value": 0,
                     "coordinate_origin": "top-left",
                     "regions": mask_output_regions,
+                    "radial_mask": radial_mask_output,
                 },
             },
             masked_emphasis_path,
@@ -353,11 +390,58 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
             )
 
         sunspot_labels = binary_image.copy()
-        count, image, mask_details = mask.applyMask(
-            binary_image,  # pyright: ignore[reportArgumentType]
+        boundary_policy = mask_settings.get("boundary_policy", "overlap")
+        _, _, mask_details = mask.applyMask(
+            sunspot_labels,
             regions,
             count,
             return_details=True,
+            boundary_policy=boundary_policy,
+        )
+        normal_mask_exclusions = list(mask_details["excluded_candidate_labels"])
+
+        radial_details: dict[str, Any] = {
+            "enabled": False,
+            "excluded_candidate_count": 0,
+            "excluded_candidate_labels": [],
+            "excluded_candidates": [],
+        }
+        radial_exclusions: list[int] = []
+        if radial_settings.get("enabled", False):
+            if solar_geometry is None:
+                raise ValueError("Rmask を使用するには MIN2 の太陽中心・半径が必要です。")
+            _, _, radial_details = mask.applyRadialMask(
+                sunspot_labels,
+                count,
+                solar_geometry[0],
+                solar_geometry[1],
+                float(radial_settings.get("radius_ratio", 0.85)),
+                boundary_policy=boundary_policy,
+                return_details=True,
+            )
+            radial_exclusions = list(radial_details["excluded_candidate_labels"])
+
+        combined_exclusions = sorted(
+            set(normal_mask_exclusions) | set(radial_exclusions)
+        )
+        masked_labels = sunspot_labels.copy()
+        if combined_exclusions:
+            masked_labels[np.isin(masked_labels, combined_exclusions)] = 0
+        count = max(0, int(count) - len(combined_exclusions))
+        image = np.where(masked_labels > 0, 0, 255).astype(np.uint8)
+
+        mask_details.update(
+            {
+                "boundary_policy": boundary_policy,
+                "excluded_by_factor": {
+                    "mask": normal_mask_exclusions,
+                    "Rmask": radial_exclusions,
+                },
+                "radial_mask": radial_details,
+                "excluded_candidate_labels": combined_exclusions,
+                "excluded_candidate_count": len(combined_exclusions),
+                "remaining_candidate_count": count,
+            }
         )
         if run_logger is not None:
             run_logger.record_event("mask_applied", mask_details)
@@ -379,6 +463,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
             mask_details["regions"],
             exclusion_list_path,
             min_area_exclusions=min_area_exclusions,
+            radial_mask_details=radial_details,
         )
         LOGGER.info(
             "Saved sunspot exclusion list: %s (%d excluded spots)",
@@ -401,13 +486,15 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
                             "mask_ids": [
                                 int(region["index"])
                                 for region in mask_details["regions"]
-                                if int(label) in region["overlapping_candidate_labels"]
+                                if int(label) in region["excluded_candidate_labels"]
                             ],
                         }
-                        for label in mask_details["excluded_candidate_labels"]
+                        for label in normal_mask_exclusions
                     ],
+                    "excluded_by_rmask": radial_details.get("excluded_candidates", []),
                     "excluded_by_factor": {
-                        "mask": len(mask_details["excluded_candidate_labels"]),
+                        "mask": len(normal_mask_exclusions),
+                        "Rmask": len(radial_exclusions),
                         "minArea": sum(
                             len(excluded_labels)
                             for _labels, excluded_labels, _stage, _threshold

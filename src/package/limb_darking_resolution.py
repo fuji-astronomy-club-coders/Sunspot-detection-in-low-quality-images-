@@ -16,8 +16,24 @@ LOGGER = logging.getLogger("sunspot.limb_darkening")
 version = "0.0.1"
 
 
+def find_solar_geometry(image: np.ndarray) -> tuple[tuple[float, float], float]:
+    """MIN2 を使用して画像内の太陽中心と半径を取得する。"""
+    try:
+        (center_x, center_y), radius = min2(image)
+    except Exception as error:
+        raise ValueError(f"MIN2 による太陽円の推定に失敗しました: {error}") from error
+
+    if not np.isfinite(radius) or radius <= 0:
+        raise ValueError(f"MIN2 が不正な太陽半径を返しました: {radius}")
+
+    return (float(center_x), float(center_y)), float(radius)
+
+
 def polynomialFit(
-    image: np.ndarray, alpha: float = 0.85, brightness_boost: float = 1.1
+    image: np.ndarray,
+    alpha: float = 0.85,
+    brightness_boost: float = 1.1,
+    solar_geometry: tuple[tuple[float, float], float] | None = None,
 ) -> np.ndarray:
     """周縁減光を距離マップと先輩の関数で補正する関数"""
     # 画像の読み込み
@@ -25,10 +41,9 @@ def polynomialFit(
     h, w = image.shape
 
     # 1. 元の画像を使って太陽の中心と半径を取得する
-    try:
-        (cx, cy), max_radius = min2(image)
-    except Exception as e:
-        raise ValueError(f"関数の実行に失敗しました: {e}") from e
+    (cx, cy), max_radius = (
+        solar_geometry if solar_geometry is not None else find_solar_geometry(image)
+    )
 
     # 2. 輝度計算用にfloat32へ変換する
     img_float: ndarray[Any, dtype[floating]] = image.astype(np.float32)

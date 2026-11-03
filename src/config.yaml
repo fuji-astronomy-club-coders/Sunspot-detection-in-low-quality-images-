@@ -43,6 +43,16 @@ Extraction:
     min_distance: 5
 
 
+# 黒点のマスク除外設定
+Mask:
+  # overlap: マスク領域に1画素でも入る黒点を除外
+  # centroid: 黒点の重心がマスク領域内にある場合だけ除外
+  # Rmaskと通常の矩形maskの両方に適用
+  boundary_policy: overlap
+  Rmask:
+    enabled: false # trueにするとMIN2の太陽中心・半径から外周側の黒点を除外
+    radius_ratio: 0.85 # 太陽半径に対する除外境界の割合（0より大きく1以下）
+
 # マスク選択ダイアログ
 MaskDialog:
   display:

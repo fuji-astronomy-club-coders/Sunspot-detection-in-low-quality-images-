@@ -14,7 +14,7 @@ CSV は実行ごとに作成されるセッションフォルダー直下へ保�
 ```
 
 - `sunspot_statistics.csv`: minArea とマスクの適用後に残った黒点
-- `sunspot_exclusion_list.csv`: マスクまたは minArea によって除外された黒点
+- `sunspot_exclusion_list.csv`: 通常mask、Rmask、minArea によって除外された黒点
 
 どちらのファイルも UTF-8 BOM 付き（`utf-8-sig`）、カンマ区切りです。Excel などの表計算ソフトで開く場合は、文字コードを UTF-8 として読み込んでください。検出対象がない場合も、ヘッダー行のみの CSV が出力されます。
 
@@ -80,11 +80,15 @@ sunspot_id,label,centroid_x_px,centroid_y_px,bbox_x_px,bbox_y_px,bbox_width_px,b
 | `bbox_width_px`            | 外接矩形の幅（ピクセル）。                                      |
 | `bbox_height_px`           | 外接矩形の高さ（ピクセル）。                                     |
 | `area_px`                  | 黒点を構成する画素数。                                        |
-| `excluded_by_factor`       | 除外要因。マスクによる除外は `mask`、面積フィルターによる除外は `minArea` です。 |
+| `excluded_by_factor`       | 除外要因。通常maskは `mask`、半径マスクは `Rmask`、面積フィルターは `minArea` です。複数要因は `;` 区切りです。 |
 | `exclusion_stage`           | 除外段階。`mask`、`connected_components`、`watershed` のいずれかです。 |
 | `min_area_threshold_px`     | minArea の最小面積（画素数）。mask による除外では空欄です。                 |
 | `excluded_by_mask_ids`     | 除外に関係したマスク番号。複数ある場合はセミコロン（`;`）区切りです。               |
-| `excluded_by_mask_regions` | 除外に関係したマスク領域の詳細を格納した JSON 配列です。mask 以外では空欄です。 |
+| `excluded_by_mask_regions` | 除外に関係した矩形マスク領域の詳細を格納した JSON 配列です。 |
+| `radial_distance_px` | Rmask における太陽中心から黒点重心までの距離（ピクセル）です。 |
+| `radial_limit_px` | Rmask の除外境界までの距離（ピクセル）です。 |
+| `radial_ratio` | 太陽半径に対する Rmask 境界の比率です。 |
+| `radial_center_x_px / radial_center_y_px` | MIN2 が求めた太陽中心の座標です。Rmask 以外では空欄です。 |
 
 ### マスク番号と領域情報
 
@@ -112,9 +116,14 @@ excluded_by_mask_regions:
 
 上記の座標・大きさは説明用の架空の値です。JSON 配列の値も画像左上原点・0始まりのピクセル座標です。
 
+### Rmask の距離情報
+
+Rmask は MIN2 が推定した太陽中心・半径を基準に、中心からの距離が `solar_radius × radial_ratio` 以上となる黒点を除外します。`radial_distance_px` は候補重心の距離、`radial_limit_px` は除外境界です。Rmask と矩形maskの両方に該当した黒点は、`excluded_by_factor` に `mask;Rmask` のように両方の要因を記録します。
+
 ### 除外要因の見方
 
-- `excluded_by_factor=mask`: 選択した矩形マスクと重なったため除外されています。マスク番号と範囲は `excluded_by_mask_ids` / `excluded_by_mask_regions` で確認できます。
+- `excluded_by_factor` に `mask` が含まれる場合: 選択した矩形マスクによる除外です。マスク番号と範囲は `excluded_by_mask_ids` / `excluded_by_mask_regions` で確認できます。
+- `excluded_by_factor` に `Rmask` が含まれる場合: MIN2 の太陽中心からの距離が半径比の境界以上となったため除外されています。距離と境界は `radial_distance_px` / `radial_limit_px` で確認できます。
 - `excluded_by_factor=minArea`: `area_px` が `min_area_threshold_px` 未満だったため除外されています。
 - `exclusion_stage=connected_components`: 連結成分抽出直後の面積判定で除外されています。
 - `exclusion_stage=watershed`: Watershed による分割後の面積判定で除外されています。
@@ -127,7 +136,7 @@ excluded_by_mask_regions:
    `sunspot_statistics.csv` のデータ行数が、CSVに出力された残存黒点数です。ヘッダー行は数えません。
 
 2. **除外された黒点と理由を確認する**  
-   `sunspot_exclusion_list.csv` の `excluded_by_factor` を確認します。`mask` の場合は `excluded_by_mask_ids` と `excluded_by_mask_regions`、`minArea` の場合は `area_px` と `min_area_threshold_px` を比較してください。
+   `sunspot_exclusion_list.csv` の `excluded_by_factor` を確認します。`mask` の場合は `excluded_by_mask_ids` と `excluded_by_mask_regions`、`Rmask` の場合は `radial_distance_px` と `radial_limit_px`、`minArea` の場合は `area_px` と `min_area_threshold_px` を比較してください。
 
 3. **黒点の位置と大きさを画像上で確認する**  
    `centroid_x_px`・`centroid_y_px` が重心位置、`bbox_x_px`・`bbox_y_px`・`bbox_width_px`・`bbox_height_px` が外接矩形です。座標は0始まりなので、画像ビューアーによって表示座標の数え方が異なる場合は注意してください。

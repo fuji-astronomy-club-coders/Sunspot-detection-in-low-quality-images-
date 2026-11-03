@@ -16,11 +16,13 @@ from PyQt6.QtGui import (
     QPaintEvent,
     QPainter,
     QPen,
+    QPolygonF,
     QResizeEvent,
 )
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -52,6 +54,10 @@ class _MaskCanvas(QWidget):
         display_image: np.ndarray,
         options: dict,
         parent: QWidget | None = None,
+        *,
+        read_only: bool = False,
+        north_vector: tuple[float, float] | None = None,
+        flip_x: bool = False,
     ) -> None:
         """キャンバスと画像表示用の QImage を初期化する。
 
@@ -103,6 +109,10 @@ class _MaskCanvas(QWidget):
         ).copy()
 
         self._options = options
+        self._read_only = read_only
+        self._north_vector = north_vector
+        self._flip_x = bool(flip_x)
+        self._preview_polygons: list[np.ndarray] = []
         self.regions: list[tuple[int, int, int, int]] = []
         self._drawing = False
         self._start_point = (0, 0)
@@ -111,7 +121,54 @@ class _MaskCanvas(QWidget):
         self.setMinimumSize(320, 240)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setCursor(Qt.CursorShape.CrossCursor)
+        self.setCursor(
+            Qt.CursorShape.ArrowCursor if read_only else Qt.CursorShape.CrossCursor
+        )
+
+    def set_preview_polygons(self, polygons: list[np.ndarray]) -> None:
+        """Replace the synchronized polygon overlay shown by a read-only preview."""
+        self._preview_polygons = [
+            np.asarray(polygon, dtype=np.float64)
+            for polygon in polygons
+            if np.asarray(polygon).ndim == 2 and np.asarray(polygon).shape[1] == 2
+        ]
+        self.update()
+
+    def _draw_orientation_axes(self, painter: QPainter, target: QRectF) -> None:
+        """Draw Cartesian +X and solar-north +Y arrows over the image."""
+        if self._north_vector is None:
+            return
+        north_cartesian = np.asarray(self._north_vector, dtype=np.float64)
+        norm = float(np.linalg.norm(north_cartesian))
+        if not np.isfinite(norm) or norm == 0:
+            return
+        north_cartesian /= norm
+        north_image = np.asarray(
+            [north_cartesian[0], -north_cartesian[1]],
+            dtype=np.float64,
+        )
+        positive_x = np.asarray([-north_image[1], north_image[0]], dtype=np.float64)
+        if self._flip_x:
+            positive_x *= -1.0
+        origin = QPointF(target.left() + 58.0, target.top() + 62.0)
+        axis_length = 42.0
+        painter.save()
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for vector, color, label in (
+            (positive_x, QColor(80, 220, 255), "+X"),
+            (north_image, QColor(255, 220, 70), "+Y 北"),
+        ):
+            endpoint = QPointF(
+                origin.x() + float(vector[0]) * axis_length,
+                origin.y() + float(vector[1]) * axis_length,
+            )
+            pen = QPen(color, 3)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.drawLine(origin, endpoint)
+            painter.drawEllipse(endpoint, 2.5, 2.5)
+            painter.drawText(endpoint + QPointF(5.0, -5.0), label)
+        painter.restore()
 
     def _image_rect(self) -> QRectF:
         """キャンバス内で画像をアスペクト比を保って配置する領域を返す。
@@ -237,6 +294,7 @@ class _MaskCanvas(QWidget):
         inner_border.setCosmetic(True)
         painter.setPen(inner_border)
         painter.drawRect(image_border)
+        self._draw_orientation_axes(painter, target)
 
         colorbar = QRectF(target.right() + 14, target.top(), 16, target.height())
         painter.drawImage(colorbar, self._colorbar_qimage)
@@ -290,6 +348,25 @@ class _MaskCanvas(QWidget):
                 )
             )
 
+        if self._preview_polygons:
+            preview_pen = QPen(QColor(0, 255, 160, 230), 2)
+            preview_pen.setCosmetic(True)
+            painter.setPen(preview_pen)
+            painter.setBrush(QColor(0, 255, 160, 68))
+            for polygon_points in self._preview_polygons:
+                polygon = QPolygonF(
+                    [
+                        QPointF(
+                            target.left() + float(point[0]) * scale_x,
+                            target.top() + float(point[1]) * scale_y,
+                        )
+                        for point in polygon_points
+                    ]
+                )
+                if polygon.size() >= 3:
+                    painter.drawPolygon(polygon)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+
         overlay_lines = self._overlay_lines(min(scale_x, scale_y))
         if overlay_lines:
             font = QFont("Meiryo", 10)
@@ -320,7 +397,11 @@ class _MaskCanvas(QWidget):
         event : QMouseEvent | None
             マウス押下イベント。
         """
-        if event is None or event.button() != Qt.MouseButton.LeftButton:
+        if (
+            self._read_only
+            or event is None
+            or event.button() != Qt.MouseButton.LeftButton
+        ):
             return
         point = self._map_to_image(event.position())
         if point is None:
@@ -342,6 +423,10 @@ class _MaskCanvas(QWidget):
         """
         if event is None:
             return
+        if self._read_only:
+            self._mouse_point = self._map_to_image(event.position())
+            self.update()
+            return
         point = self._map_to_image(event.position(), clamp=self._drawing)
         self._mouse_point = point
         if self._drawing and point is not None:
@@ -356,7 +441,12 @@ class _MaskCanvas(QWidget):
         event : QMouseEvent | None
             マウス解放イベント。
         """
-        if event is None or event.button() != Qt.MouseButton.LeftButton or not self._drawing:
+        if (
+            self._read_only
+            or event is None
+            or event.button() != Qt.MouseButton.LeftButton
+            or not self._drawing
+        ):
             return
         point = self._map_to_image(event.position(), clamp=True)
         if point is not None:
@@ -392,6 +482,9 @@ class _MaskDialog(QDialog):
         image: np.ndarray,
         options: dict,
         parent: QWidget | None = None,
+        *,
+        preview_images: list[tuple[str, np.ndarray, Any]] | None = None,
+        editor_transform: Any | None = None,
     ) -> None:
         """画像キャンバスと操作ボタンを持つダイアログを構築する。
 
@@ -412,8 +505,21 @@ class _MaskDialog(QDialog):
         )
         self._adjusting_size = False
         self.setWindowTitle("Select Mask Regions")
+        self._editor_transform = editor_transform
+        self.preview_canvases: list[tuple[_MaskCanvas, Any]] = []
 
-        self.canvas = _MaskCanvas(image, _to_display_image(image, str(options["colormap"])), options)
+        editor_north = None
+        editor_flip_x = False
+        if editor_transform is not None:
+            editor_north = tuple(editor_transform.orientation.north_vector)
+            editor_flip_x = bool(editor_transform.orientation.flip_x)
+        self.canvas = _MaskCanvas(
+            image,
+            _to_display_image(image, str(options["colormap"])),
+            options,
+            north_vector=editor_north,
+            flip_x=editor_flip_x,
+        )
         self.region_count_label = QLabel("選択領域: 0")
         undo_button = QPushButton("1つ戻す")
         undo_button.clicked.connect(self.canvas.undo)
@@ -443,7 +549,54 @@ class _MaskDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
-        layout.addWidget(self.canvas, 1)
+        if preview_images:
+            preview_grid = QGridLayout()
+            preview_grid.setContentsMargins(0, 0, 0, 0)
+            preview_grid.setSpacing(8)
+            for index in range(4):
+                row, column = divmod(index, 2)
+                if index == 0:
+                    title = preview_images[0][0]
+                    canvas = self.canvas
+                elif index < len(preview_images):
+                    title, preview_image, preview_transform = preview_images[index]
+                    preview_north = tuple(preview_transform.orientation.north_vector)
+                    canvas = _MaskCanvas(
+                        preview_image,
+                        _to_display_image(
+                            preview_image,
+                            str(options["colormap"]),
+                        ),
+                        options,
+                        read_only=True,
+                        north_vector=preview_north,
+                        flip_x=bool(preview_transform.orientation.flip_x),
+                    )
+                    self.preview_canvases.append((canvas, preview_transform))
+                else:
+                    placeholder = QLabel("画像未提供")
+                    placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    placeholder.setMinimumSize(320, 240)
+                    placeholder.setStyleSheet(
+                        "background: #303030; color: #cccccc; border: 1px solid #666666;"
+                    )
+                    preview_grid.addWidget(placeholder, row, column)
+                    continue
+
+                pane = QWidget(self)
+                pane_layout = QVBoxLayout(pane)
+                pane_layout.setContentsMargins(2, 2, 2, 2)
+                title_label = QLabel(
+                    f"{title} — {'編集' if index == 0 else '同期プレビュー'}"
+                )
+                title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                pane_layout.addWidget(title_label)
+                pane_layout.addWidget(canvas, 1)
+                preview_grid.addWidget(pane, row, column)
+            self.canvas.regionsChanged.connect(self._sync_preview_masks)
+            layout.addLayout(preview_grid, 1)
+        else:
+            layout.addWidget(self.canvas, 1)
         layout.addWidget(self.histogram)
         layout.addLayout(footer)
 
@@ -458,6 +611,21 @@ class _MaskDialog(QDialog):
             self.resize(initial_width, initial_height)
         else:
             self.setFixedSize(initial_width, initial_height)
+
+    def _sync_preview_masks(self, _region_count: int) -> None:
+        """Convert current editor rectangles to each preview image in real time."""
+        if self._editor_transform is None:
+            return
+        normalized_polygons = [
+            self._editor_transform.rectangle_to_normalized_polygon(region)
+            for region in self.canvas.regions
+        ]
+        for preview_canvas, preview_transform in self.preview_canvases:
+            pixel_polygons = [
+                preview_transform.normalized_points_to_pixel(polygon)
+                for polygon in normalized_polygons
+            ]
+            preview_canvas.set_preview_polygons(pixel_polygons)
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:
         """ユーザーによるリサイズ時にウィンドウの縦横比を維持する。
@@ -537,6 +705,9 @@ class _MaskDialog(QDialog):
 def selectMaskRegions(
     image: np.ndarray,
     display_options: dict | None = None,
+    *,
+    preview_images: list[tuple[str, np.ndarray, Any]] | None = None,
+    editor_transform: Any | None = None,
 ) -> list[tuple[int, int, int, int]]:
     """PyQt ダイアログで複数の矩形マスク領域を選択する。
 
@@ -580,7 +751,12 @@ def selectMaskRegions(
         options.update(display_options)
 
     ensure_qapplication()
-    dialog = _MaskDialog(image, options)
+    dialog = _MaskDialog(
+        image,
+        options,
+        preview_images=preview_images,
+        editor_transform=editor_transform,
+    )
     regions = (
         dialog.canvas.regions.copy()
         if dialog.exec() == QDialog.DialogCode.Accepted

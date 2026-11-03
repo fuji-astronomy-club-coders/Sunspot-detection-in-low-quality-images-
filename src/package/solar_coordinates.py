@@ -26,7 +26,7 @@ class SolarGeometry:
 
 @dataclass(frozen=True, slots=True)
 class Orientation:
-    """Image-space direction of solar north and optional horizontal mirroring."""
+    """Solar north in Cartesian image-plane coordinates (+X right, +Y up)."""
 
     north_vector: tuple[float, float]
     flip_x: bool = False

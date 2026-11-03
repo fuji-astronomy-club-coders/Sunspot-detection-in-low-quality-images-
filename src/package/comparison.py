@@ -447,6 +447,7 @@ def _write_mask_template(
                 "x": orientation.north_vector[0],
                 "y": orientation.north_vector[1],
             },
+            "north_angle_deg": orientation.north_angle_deg,
             "flip_x": orientation.flip_x,
         },
         "regions": [

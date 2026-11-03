@@ -656,7 +656,7 @@ def applyMask(
     regions: list[tuple[int, int, int, int]],
     original_count: int,
     return_details: Literal[False] = False,
-    boundary_policy: Literal["overlap", "centroid"] = "overlap",
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
 ) -> tuple[int, np.ndarray]: ...
 
 
@@ -666,7 +666,7 @@ def applyMask(
     regions: list[tuple[int, int, int, int]],
     original_count: int,
     return_details: Literal[True],
-    boundary_policy: Literal["overlap", "centroid"] = "overlap",
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
 ) -> tuple[int, np.ndarray, dict]: ...
 
 
@@ -675,7 +675,7 @@ def applyMask(
     regions: list[tuple[int, int, int, int]],
     original_count: int,
     return_details: bool = False,
-    boundary_policy: Literal["overlap", "centroid"] = "overlap",
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
 ) -> tuple[int, np.ndarray] | tuple[int, np.ndarray, dict]:
     """矩形マスクと重なる黒点候補を、指定した境界判定で除外する。
 
@@ -823,7 +823,7 @@ def applyRadialMask(
     solar_radius: float,
     radius_ratio: float,
     return_details: Literal[False] = False,
-    boundary_policy: Literal["overlap", "centroid"] = "overlap",
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
 ) -> tuple[int, np.ndarray]: ...
 
 
@@ -835,7 +835,7 @@ def applyRadialMask(
     solar_radius: float,
     radius_ratio: float,
     return_details: Literal[True],
-    boundary_policy: Literal["overlap", "centroid"] = "overlap",
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
 ) -> tuple[int, np.ndarray, dict]: ...
 
 
@@ -846,7 +846,7 @@ def applyRadialMask(
     solar_radius: float,
     radius_ratio: float,
     return_details: bool = False,
-    boundary_policy: Literal["overlap", "centroid"] = "overlap",
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
 ) -> tuple[int, np.ndarray] | tuple[int, np.ndarray, dict]:
     """MIN2 の太陽中心・半径に基づき、半径比より外側の黒点候補を除外する。
 

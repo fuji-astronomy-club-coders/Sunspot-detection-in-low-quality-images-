@@ -521,7 +521,7 @@ class _MaskDialog(QDialog):
         self._adjusting_size = False
         self.setWindowTitle("Select Mask Regions")
         self._editor_transform = editor_transform
-        self.preview_canvases: list[tuple[_MaskCanvas, Any]] = []
+        self.preview_canvases: list[tuple[_MaskCanvas, SolarTransform]] = []
 
         editor_north = None
         editor_flip_x = False

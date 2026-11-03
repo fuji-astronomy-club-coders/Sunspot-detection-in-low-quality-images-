@@ -48,8 +48,9 @@ def _rgb_image(image: np.ndarray) -> np.ndarray:
 def _qimage(image: np.ndarray) -> QImage:
     """Create an owned Qt image from an RGB array."""
     values = np.ascontiguousarray(image, dtype=np.uint8)
+    image_bytes = values.tobytes()
     return QImage(
-        values.data,
+        image_bytes,
         values.shape[1],
         values.shape[0],
         int(values.strides[0]),
@@ -126,9 +127,13 @@ class _ImageCanvas(QWidget):
             painter.setPen(QColor(255, 245, 180))
             painter.drawText(marker + QPointF(9, -8), str(index))
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:  # noqa: N802
         """Convert a left click into an original-image pixel coordinate."""
-        if self.image is None or event.button() != Qt.MouseButton.LeftButton:
+        if (
+            self.image is None
+            or event is None
+            or event.button() != Qt.MouseButton.LeftButton
+        ):
             return
         rect = self._image_rect()
         position = event.position()

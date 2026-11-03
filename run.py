@@ -23,7 +23,10 @@ def main() -> int:
         const="",
         default=None,
         metavar="DATE_FOLDER",
-        help="同じ日付の最大4観測所を比較する。省略時はフォルダー選択ダイアログを表示する。",
+        help=(
+            "同じ日付の最大4観測所を比較する。日付フォルダーの親に sources.yaml が必要。"
+            "リポジトリ外のフォルダーも指定可能。省略時はフォルダー選択ダイアログを表示する。"
+        ),
     )
     arguments = parser.parse_args()
 
@@ -33,7 +36,7 @@ def main() -> int:
             source_input_folder = PROJECT_ROOT / "source_input"
             source_input_folder.mkdir(parents=True, exist_ok=True)
             selected_folder = select_directory(
-                title="比較する日付フォルダーを選択してください",
+                title="比較する日付フォルダーを選択してください（リポジトリ外も指定できます）",
                 directory=str(source_input_folder),
             )
             if selected_folder is None:

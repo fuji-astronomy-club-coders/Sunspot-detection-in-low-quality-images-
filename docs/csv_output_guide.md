@@ -175,3 +175,17 @@ with csv_path.open(encoding="utf-8-sig", newline="") as file:
 ```
 
 `excluded_by_mask_ids` が空の場合は区切り文字による分割結果も空になります。`excluded_by_mask_regions` は JSON 配列として読み込めます。
+
+
+## 5. 比較モードの CSV — 共通座標
+
+比較モードの個別 CSV には、従来の pixel 座標列を保持したまま、末尾に次の2列を追加します。統合 CSV も同じ列を含みます。
+
+| 列名 | 内容 |
+|---|---|
+| `centroid_x_normalized` | 共通座標系に変換した黒点重心の X 座標。太陽半径を1とする |
+| `centroid_y_normalized` | 共通座標系に変換した黒点重心の Y 座標。太陽北が正 |
+
+統合 CSV の先頭には、観測所を識別する `source_id`、表示用の `source_name`、画像名の `image` が追加されます。比較日は CSV 内に重複して保存せず、日付フォルダー名と `comparison_summary.json` で確認します。
+
+これらは太陽円盤の投影画像面上の相対座標です。太陽表面の緯度・経度や、観測所間で同一黒点を表す共通IDではありません。単一画像モードの CSV 列・値は従来どおりです。

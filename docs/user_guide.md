@@ -43,7 +43,7 @@ run.bat --venv
 **通常起動（ダブルクリック、または引数なし）**
 
 1. バッチファイル自身が置かれているプロジェクトフォルダーへ移動します。
-2. PATH上の **python** を探します。利用できない場合はPython Launcherの **py -3** を確認します。**.venv** は参照しません。
+2. PATH上の **python** を探し、仮想環境外のPythonであることを確認します。利用できない場合はPython Launcherの **py -3** を確認します。**.venv** や有効化中の仮想環境は使用しません。
 3. 使用するPythonが **3.13以上**であることを確認します。
 4. システムPythonで **run.py** を実行します。
 
@@ -61,7 +61,7 @@ run.bat --venv
 
 **環境設定（--setup）**
 
-1. PATH上の **python**、またはPython Launcherの **py -3** からPython 3.13以上を探します。既存の **.venv** がある場合はその環境を再利用します。
+1. 仮想環境外のPython 3.13以上をPATH上の **python**、またはPython Launcherの **py -3** から探します。既存の **.venv** がある場合はその環境を再利用します。
 2. **.venv** がない場合は新規作成します。壊れた・不完全なフォルダーだけが残っている場合は、そのフォルダーを作り直します。
 3. **ensurepip** でpipを利用可能な状態にします。
 4. **.venv** のPythonで **python -m pip install --only-binary=scikit-image -e .** を実行します。pipが **pyproject.toml** の **[project].dependencies** を読み取り、実行時依存パッケージを導入します。

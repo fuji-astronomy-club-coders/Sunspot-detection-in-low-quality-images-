@@ -470,8 +470,9 @@ class _MaskCanvas(QWidget):
             width, height = abs(x2 - x1), abs(y2 - y1)
             if width > 0 and height > 0:
                 self.regions.append((left, top, width, height))
-                self.regionsChanged.emit(len(self.regions))
         self._drawing = False
+        if point is not None:
+            self.regionsChanged.emit(len(self.regions))
         self.update()
 
     def undo(self) -> None:

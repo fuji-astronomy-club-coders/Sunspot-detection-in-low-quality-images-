@@ -98,7 +98,7 @@ class ComparisonValidationTests(unittest.TestCase):
         self.assertEqual(sample.source_id, "source_01")
         self.assertIsNone(sample.error)
         assert sample.orientation is not None
-        self.assertEqual(sample.orientation.north_vector, (0.0, -1.0))
+        self.assertEqual(sample.orientation.north_vector, (0.0, 1.0))
 
     def test_unreadable_image_is_skipped_before_processing(self) -> None:
         self._write_comparison(

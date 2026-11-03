@@ -25,7 +25,17 @@ def main() -> int:
         metavar="DATE_FOLDER",
         help="同じ日付の最大4観測所を比較する。省略時はフォルダー選択ダイアログを表示する。",
     )
+    parser.add_argument(
+        "--rotation-tool",
+        action="store_true",
+        help="2枚の太陽画像を透過重ね合わせし、回転角を測定するGUIを起動する。",
+    )
     arguments = parser.parse_args()
+
+    if arguments.rotation_tool:
+        from src.package.qt_rotation_tool import run_rotation_tool
+
+        return run_rotation_tool()
 
     if arguments.compare is not None:
         date_folder = arguments.compare
@@ -159,5 +169,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     exit_code = main()
-    if "--compare" in sys.argv:
+    if "--compare" in sys.argv or "--rotation-tool" in sys.argv:
         raise SystemExit(exit_code)

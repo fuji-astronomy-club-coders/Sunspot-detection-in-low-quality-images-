@@ -65,6 +65,10 @@ class _FinalPreviewCanvas(QWidget):
             最終確認画面のマスク塗りつぶし設定。
         invalid_sunspot_mask : numpy.ndarray | None, optional
             マスクで除外された黒点画素を True とした2次元配列。
+        solar_geometry : tuple[tuple[float, float], float] | None, optional
+            MIN2 が推定した太陽中心 (x, y) と半径。
+        rmask_radius_ratio : float, optional
+            Rmask の境界半径を求める比率。
         parent : QWidget | None, optional
             親ウィジェット。
         """
@@ -782,6 +786,8 @@ class _FinalPreviewDialog(QDialog):
         mask_regions: list[tuple[int, int, int, int]] | None = None,
         display_options: dict | None = None,
         invalid_sunspot_mask: np.ndarray | None = None,
+        solar_geometry: tuple[tuple[float, float], float] | None = None,
+        rmask_radius_ratio: float = 0.85,
         parent: QWidget | None = None,
     ) -> None:
         """ツールバー、画像キャンバス、マスク表示、座標 HUD を構築する。
@@ -948,6 +954,10 @@ def show_final_preview(
         マスク塗りつぶし・無効黒点表示の初期状態、色、不透明度を含む表示設定。
     invalid_sunspot_mask : numpy.ndarray | None, optional
         マスクで除外された黒点画素を True とした2次元配列。
+    solar_geometry : tuple[tuple[float, float], float] | None, optional
+        MIN2 が推定した太陽中心 (x, y) と半径。
+    rmask_radius_ratio : float, optional
+        Rmask の境界半径を求める比率。
     """
     ensure_qapplication()
     LOGGER.info(

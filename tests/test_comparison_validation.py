@@ -42,7 +42,6 @@ class ComparisonValidationTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 

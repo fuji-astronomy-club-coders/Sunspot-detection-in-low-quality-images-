@@ -655,7 +655,7 @@ class _MaskCanvas(QWidget):
             self.regionsChanged.emit(len(self.regions))
         self.update()
 
-    def leaveEvent(self, event: QEvent) -> None:
+    def leaveEvent(self, event: QEvent | None) -> None:
         """Clear hover highlighting when the pointer leaves the editing canvas."""
         if self._selection_mode == "connected_component" and self.hovered_label is not None:
             self.hovered_label = None

@@ -85,6 +85,7 @@ class ComparisonPlan:
     samples: tuple[PreparedSample, ...]
     mask_template_path: Path | None
     normalized_polygons: tuple[list[list[float]], ...] | None
+    mask_selection_method: str | None = None
 
 
 def _load_yaml(path: Path) -> object:
@@ -167,6 +168,9 @@ def _load_mask_template(path: Path) -> tuple[list[list[list[float]]], dict[str, 
         raise ComparisonInputError("未対応のマスクテンプレート schema_version です。")
     if template.get("coordinate_system") != "solar_disk_normalized":
         raise ComparisonInputError("マスクテンプレートの座標系が solar_disk_normalized ではありません。")
+    selection_method = template.get("selection_method", "rectangle")
+    if selection_method not in ("rectangle", "connected_component"):
+        raise ComparisonInputError("マスクテンプレートの selection_method が不正です。")
     regions = template.get("regions")
     if not isinstance(regions, list):
         raise ComparisonInputError("マスクテンプレートの regions は配列にしてください。")
@@ -301,6 +305,7 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
     mask_template_value = comparison_document.get("mask_template")
     mask_template_path: Path | None = None
     normalized_polygons: tuple[list[list[float]], ...] | None = None
+    mask_selection_method: str | None = None
     if mask_template_value is not None:
         if not isinstance(mask_template_value, str) or not mask_template_value.strip():
             raise ComparisonInputError("mask_template は相対パス文字列にしてください。")
@@ -312,8 +317,9 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
             raise ComparisonInputError("mask_template は source_input/ 配下を指定してください。")
         if not mask_template_path.is_file():
             raise ComparisonInputError(f"mask_template がありません: {mask_template_path}")
-        polygons, _template = _load_mask_template(mask_template_path)
+        polygons, template = _load_mask_template(mask_template_path)
         normalized_polygons = tuple(polygons)
+        mask_selection_method = str(template.get("selection_method", "rectangle"))
 
     source_map = {source["source_id"]: source for source in sources}
     raw_ids = [
@@ -416,6 +422,7 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         tuple(prepared_samples),
         mask_template_path,
         normalized_polygons,
+        mask_selection_method,
     )
 
 
@@ -426,6 +433,7 @@ def _write_mask_template(
     geometry: SolarGeometry,
     orientation: Orientation,
     polygons: list[list[list[float]]],
+    selection_method: str = "rectangle",
 ) -> Path:
     """Persist the selected base-image mask in normalized solar coordinates."""
     target_folder = SOURCE_INPUT_ROOT / "mask_templates"
@@ -434,6 +442,7 @@ def _write_mask_template(
     document = {
         "schema_version": 1,
         "coordinate_system": "solar_disk_normalized",
+        "selection_method": selection_method,
         "created_from": {
             "date": plan.comparison_date,
             "source_id": source_id,
@@ -1018,6 +1027,9 @@ def run_comparison(
             sample_config = copy.deepcopy(base_config)
             sample_config["Paths"]["input_image"] = str(sample.image_path)
             sample_config["Display"] = dict(sample_config.get("Display") or {})
+            if plan.mask_selection_method is not None:
+                sample_config["Mask"] = dict(sample_config.get("Mask") or {})
+                sample_config["Mask"]["selection_method"] = plan.mask_selection_method
 
             pixel_polygons: list[np.ndarray] | None = None
             if normalized_polygons is not None:
@@ -1085,18 +1097,28 @@ def run_comparison(
                 ]
                 if not selection_events:
                     raise RuntimeError("基準画像の共通マスク選択イベントを取得できませんでした。")
-                selected_regions = selection_events[-1]["details"].get("regions", [])
-                normalized_polygons = [
-                    transform.rectangle_to_normalized_polygon(
-                        (
-                            float(region["x"]),
-                            float(region["y"]),
-                            float(region["width"]),
-                            float(region["height"]),
+                selection_details = selection_events[-1]["details"]
+                if selection_details.get("selection_method") == "connected_component":
+                    selected_component_polygons = selection_details.get("polygons") or []
+                    normalized_polygons = [
+                        transform.pixel_points_to_normalized(
+                            np.asarray(polygon, dtype=np.float64)
                         )
-                    )
-                    for region in selected_regions
-                ]
+                        for polygon in selected_component_polygons
+                    ]
+                else:
+                    selected_regions = selection_details.get("regions", [])
+                    normalized_polygons = [
+                        transform.rectangle_to_normalized_polygon(
+                            (
+                                float(region["x"]),
+                                float(region["y"]),
+                                float(region["width"]),
+                                float(region["height"]),
+                            )
+                        )
+                        for region in selected_regions
+                    ]
                 generated_mask_path = _write_mask_template(
                     plan,
                     sample.source_id,
@@ -1104,6 +1126,9 @@ def run_comparison(
                     geometry,
                     sample.orientation,
                     normalized_polygons,
+                    selection_method=str(
+                        base_config.get("Mask", {}).get("selection_method", "rectangle")
+                    ),
                 )
                 run_logger.record_event(
                     "comparison_mask_template_created",

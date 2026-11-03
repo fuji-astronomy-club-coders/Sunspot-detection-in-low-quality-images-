@@ -30,9 +30,11 @@ def main() -> int:
     if arguments.compare is not None:
         date_folder = arguments.compare
         if not date_folder:
+            source_input_folder = PROJECT_ROOT / "source_input"
+            source_input_folder.mkdir(parents=True, exist_ok=True)
             selected_folder = select_directory(
                 title="比較する日付フォルダーを選択してください",
-                directory=str(PROJECT_ROOT / "source_input"),
+                directory=str(source_input_folder),
             )
             if selected_folder is None:
                 print("比較フォルダーの選択がキャンセルされました。", file=sys.stderr)

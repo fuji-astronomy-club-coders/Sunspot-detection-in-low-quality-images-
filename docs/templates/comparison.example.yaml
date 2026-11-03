@@ -1,4 +1,6 @@
-# このファイルは YYYY-MM-DD 日付フォルダーに配置します。
+# このファイルは YYYYMMDD 日付フォルダーに配置します。
+# samples の件数は日付フォルダー内の対応画像ファイル数と一致させます。
+# source_id は sources.yaml に登録済みのものを指定してください。
 # mask_template は任意です。省略すると最初に処理する画像で共通マスクを選択します。
 # mask_template: "../mask_templates/default.json"
 

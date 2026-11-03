@@ -37,6 +37,72 @@ from src.package.qt_image import colorize_intensity
 LOGGER = logging.getLogger("sunspot.mask")
 
 
+def component_polygons(
+    label_image: np.ndarray,
+    selected_labels: list[int] | set[int],
+) -> list[np.ndarray]:
+    """Convert selected connected components to pixel-coordinate outline polygons."""
+    if label_image.ndim != 2:
+        raise ValueError("ラベル画像は2次元配列にしてください。")
+    polygons: list[np.ndarray] = []
+    for label_value in sorted({int(value) for value in selected_labels if int(value) > 0}):
+        component = (label_image == label_value).astype(np.uint8)
+        if not np.any(component):
+            continue
+        contours, _ = cv2.findContours(component, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            points = contour.reshape(-1, 2).astype(np.float64)
+            if len(points) < 3:
+                ys, xs = np.nonzero(component)
+                if not xs.size:
+                    continue
+                points = np.asarray(
+                    [
+                        [xs.min() - 0.5, ys.min() - 0.5],
+                        [xs.max() + 0.5, ys.min() - 0.5],
+                        [xs.max() + 0.5, ys.max() + 0.5],
+                        [xs.min() - 0.5, ys.max() + 0.5],
+                    ],
+                    dtype=np.float64,
+                )
+            polygons.append(points)
+    return polygons
+
+
+def component_selection_details(
+    label_image: np.ndarray,
+    selected_labels: list[int] | set[int],
+) -> list[dict[str, Any]]:
+    """Return stable label, geometry, and polygon details for selected components."""
+    if label_image.ndim != 2:
+        raise ValueError("ラベル画像は2次元配列にしてください。")
+    details: list[dict[str, Any]] = []
+    for index, label_value in enumerate(
+        sorted({int(value) for value in selected_labels if int(value) > 0}),
+        start=1,
+    ):
+        ys, xs = np.nonzero(label_image == label_value)
+        if not xs.size:
+            continue
+        polygons = component_polygons(label_image, {label_value})
+        details.append(
+            {
+                "index": index,
+                "label": label_value,
+                "x": int(xs.min()),
+                "y": int(ys.min()),
+                "width": int(xs.max() - xs.min() + 1),
+                "height": int(ys.max() - ys.min() + 1),
+                "area_pixels": int(xs.size),
+                "centroid_x_px": float(xs.mean()),
+                "centroid_y_px": float(ys.mean()),
+                "excluded_candidate_labels": [label_value],
+                "polygons": [polygon.tolist() for polygon in polygons],
+            }
+        )
+    return details
+
+
 def _to_display_image(image: np.ndarray, colormap: str) -> np.ndarray:
     """輝度画像を指定カラーマップの表示用 BGR 画像へ変換する。"""
     display_image, _, _ = colorize_intensity(image, colormap)
@@ -58,6 +124,8 @@ class _MaskCanvas(QWidget):
         read_only: bool = False,
         north_vector: tuple[float, float] | None = None,
         flip_x: bool = False,
+        label_image: np.ndarray | None = None,
+        selection_mode: str = "rectangle",
     ) -> None:
         """キャンバスと画像表示用の QImage を初期化する。
 
@@ -113,6 +181,22 @@ class _MaskCanvas(QWidget):
         self._north_vector = north_vector
         self._flip_x = bool(flip_x)
         self._preview_polygons: list[np.ndarray] = []
+        self._preview_hover_polygons: list[np.ndarray] = []
+        self._label_image = None
+        if label_image is not None:
+            if label_image.ndim != 2 or label_image.shape != image.shape:
+                raise ValueError("連結成分ラベル画像は表示画像と同じ形状の2次元配列にしてください。")
+            self._label_image = np.asarray(label_image)
+        self._selection_mode = selection_mode
+        if self._selection_mode not in ("rectangle", "connected_component"):
+            raise ValueError(f"未対応のマスク選択方式です: {self._selection_mode}")
+        if self._selection_mode == "connected_component" and self._label_image is None:
+            raise ValueError("連結成分選択にはラベル画像が必要です。")
+        self.selected_labels: set[int] = set()
+        self.hovered_label: int | None = None
+        self._selection_history: list[set[int]] = []
+        self._selected_overlay: QImage | None = None
+        self._hover_overlay: QImage | None = None
         self.regions: list[tuple[int, int, int, int]] = []
         self._drawing = False
         self._start_point = (0, 0)
@@ -125,14 +209,71 @@ class _MaskCanvas(QWidget):
             Qt.CursorShape.ArrowCursor if read_only else Qt.CursorShape.CrossCursor
         )
 
-    def set_preview_polygons(self, polygons: list[np.ndarray]) -> None:
-        """Replace the synchronized polygon overlay shown by a read-only preview."""
+    def set_preview_polygons(
+        self,
+        polygons: list[np.ndarray],
+        hover_polygons: list[np.ndarray] | None = None,
+    ) -> None:
+        """Replace synchronized selected and hovered polygon overlays."""
         self._preview_polygons = [
             np.asarray(polygon, dtype=np.float64)
             for polygon in polygons
             if np.asarray(polygon).ndim == 2 and np.asarray(polygon).shape[1] == 2
         ]
+        self._preview_hover_polygons = [
+            np.asarray(polygon, dtype=np.float64)
+            for polygon in (hover_polygons or [])
+            if np.asarray(polygon).ndim == 2 and np.asarray(polygon).shape[1] == 2
+        ]
         self.update()
+
+    def _make_label_overlay(
+        self,
+        label_values: set[int],
+        color: tuple[int, int, int, int],
+    ) -> QImage | None:
+        """Create a cached transparent overlay for one or more labels."""
+        if self._label_image is None or not label_values:
+            return None
+        overlay = np.zeros((self.image_height, self.image_width, 4), dtype=np.uint8)
+        overlay[np.isin(self._label_image, tuple(label_values))] = color
+        return QImage(
+            overlay.tobytes(),
+            self.image_width,
+            self.image_height,
+            int(overlay.strides[0]),
+            QImage.Format.Format_RGBA8888,
+        ).copy()
+
+    def _refresh_component_overlays(self) -> None:
+        """Refresh cached selected and hover overlays after an interaction."""
+        self._selected_overlay = self._make_label_overlay(
+            self.selected_labels, (255, 64, 64, 145)
+        )
+        hover_values = (
+            {self.hovered_label}
+            if self.hovered_label is not None
+            and self.hovered_label > 0
+            and self.hovered_label not in self.selected_labels
+            else set()
+        )
+        self._hover_overlay = self._make_label_overlay(
+            hover_values, (255, 220, 0, 170)
+        )
+
+    def selected_component_polygons(self) -> list[np.ndarray]:
+        """Return polygon outlines for all selected components."""
+        if self._label_image is None:
+            return []
+        return component_polygons(self._label_image, self.selected_labels)
+
+    def hovered_component_polygons(self) -> list[np.ndarray]:
+        """Return polygon outlines for the current unselected hover component."""
+        if self._label_image is None or self.hovered_label is None:
+            return []
+        if self.hovered_label in self.selected_labels or self.hovered_label <= 0:
+            return []
+        return component_polygons(self._label_image, {self.hovered_label})
 
     def preview_regions(self) -> list[tuple[int, int, int, int]]:
         """Return committed regions plus the rectangle currently being dragged."""
@@ -294,6 +435,10 @@ class _MaskCanvas(QWidget):
 
         target = self._image_rect()
         painter.drawImage(target, self._qimage)
+        if self._selected_overlay is not None:
+            painter.drawImage(target, self._selected_overlay)
+        if self._hover_overlay is not None:
+            painter.drawImage(target, self._hover_overlay)
 
         # 画像の外周を二重線で囲み、暗い画像・明るい画像のどちらでも
         # 表示領域の端が分かるようにする。画像データ自体には描き込まない。
@@ -360,23 +505,27 @@ class _MaskCanvas(QWidget):
                 )
             )
 
-        if self._preview_polygons:
-            preview_pen = QPen(QColor(0, 255, 160, 230), 2)
-            preview_pen.setCosmetic(True)
-            painter.setPen(preview_pen)
-            painter.setBrush(QColor(0, 255, 160, 68))
-            for polygon_points in self._preview_polygons:
-                polygon = QPolygonF(
-                    [
-                        QPointF(
-                            target.left() + float(point[0]) * scale_x,
-                            target.top() + float(point[1]) * scale_y,
-                        )
-                        for point in polygon_points
-                    ]
-                )
-                if polygon.size() >= 3:
-                    painter.drawPolygon(polygon)
+        if self._preview_polygons or self._preview_hover_polygons:
+            for polygon_group, pen_color, fill_color in (
+                (self._preview_polygons, QColor(255, 64, 64, 230), QColor(255, 64, 64, 100)),
+                (self._preview_hover_polygons, QColor(255, 220, 0, 240), QColor(255, 220, 0, 85)),
+            ):
+                preview_pen = QPen(pen_color, 2)
+                preview_pen.setCosmetic(True)
+                painter.setPen(preview_pen)
+                painter.setBrush(fill_color)
+                for polygon_points in polygon_group:
+                    polygon = QPolygonF(
+                        [
+                            QPointF(
+                                target.left() + float(point[0]) * scale_x,
+                                target.top() + float(point[1]) * scale_y,
+                            )
+                            for point in polygon_points
+                        ]
+                    )
+                    if polygon.size() >= 3:
+                        painter.drawPolygon(polygon)
             painter.setBrush(Qt.BrushStyle.NoBrush)
 
         overlay_lines = self._overlay_lines(min(scale_x, scale_y))
@@ -419,6 +568,19 @@ class _MaskCanvas(QWidget):
         if point is None:
             return
         self.setFocus()
+        if self._selection_mode == "connected_component":
+            assert self._label_image is not None
+            label_value = int(self._label_image[point[1], point[0]])
+            if label_value > 0:
+                self._selection_history.append(self.selected_labels.copy())
+                if label_value in self.selected_labels:
+                    self.selected_labels.remove(label_value)
+                else:
+                    self.selected_labels.add(label_value)
+                self._refresh_component_overlays()
+                self.regionsChanged.emit(len(self.selected_labels))
+            self.update()
+            return
         self._drawing = True
         self._start_point = point
         self._current_point = point
@@ -437,6 +599,20 @@ class _MaskCanvas(QWidget):
             return
         if self._read_only:
             self._mouse_point = self._map_to_image(event.position())
+            self.update()
+            return
+        if self._selection_mode == "connected_component":
+            point = self._map_to_image(event.position())
+            self._mouse_point = point
+            new_label = (
+                int(self._label_image[point[1], point[0]])
+                if point is not None and self._label_image is not None
+                else None
+            )
+            if new_label != self.hovered_label:
+                self.hovered_label = new_label
+                self._refresh_component_overlays()
+                self.regionsChanged.emit(len(self.selected_labels))
             self.update()
             return
         point = self._map_to_image(event.position(), clamp=self._drawing)
@@ -458,6 +634,7 @@ class _MaskCanvas(QWidget):
             self._read_only
             or event is None
             or event.button() != Qt.MouseButton.LeftButton
+            or self._selection_mode == "connected_component"
             or not self._drawing
         ):
             return
@@ -482,7 +659,12 @@ class _MaskCanvas(QWidget):
         -------
         None
         """
-        if self.regions:
+        if self._selection_mode == "connected_component":
+            if self._selection_history:
+                self.selected_labels = self._selection_history.pop()
+                self._refresh_component_overlays()
+                self.regionsChanged.emit(len(self.selected_labels))
+        elif self.regions:
             self.regions.pop()
             self.regionsChanged.emit(len(self.regions))
         self.update()
@@ -499,6 +681,8 @@ class _MaskDialog(QDialog):
         *,
         preview_images: list[tuple[str, np.ndarray, Any]] | None = None,
         editor_transform: Any | None = None,
+        label_image: np.ndarray | None = None,
+        selection_mode: str = "rectangle",
     ) -> None:
         """画像キャンバスと操作ボタンを持つダイアログを構築する。
 
@@ -533,8 +717,12 @@ class _MaskDialog(QDialog):
             options,
             north_vector=editor_north,
             flip_x=editor_flip_x,
+            label_image=label_image,
+            selection_mode=selection_mode,
         )
-        self.region_count_label = QLabel("選択領域: 0")
+        self.region_count_label = QLabel(
+            "選択成分: 0" if selection_mode == "connected_component" else "選択領域: 0"
+        )
         undo_button = QPushButton("1つ戻す")
         undo_button.clicked.connect(self.canvas.undo)
 
@@ -550,7 +738,11 @@ class _MaskDialog(QDialog):
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         self.canvas.regionsChanged.connect(
-            lambda count: self.region_count_label.setText(f"選択領域: {count}")
+            lambda count: self.region_count_label.setText(
+                f"選択成分: {count}"
+                if selection_mode == "connected_component"
+                else f"選択領域: {count}"
+            )
         )
 
         footer = QHBoxLayout()
@@ -627,19 +819,34 @@ class _MaskDialog(QDialog):
             self.setFixedSize(initial_width, initial_height)
 
     def _sync_preview_masks(self, _region_count: int) -> None:
-        """Convert current editor rectangles to each preview image in real time."""
+        """Synchronize rectangle or component overlays across comparison images."""
         if self._editor_transform is None:
             return
-        normalized_polygons = [
-            self._editor_transform.rectangle_to_normalized_polygon(region)
-            for region in self.canvas.preview_regions()
-        ]
+        if self.canvas._selection_mode == "connected_component":
+            selected_polygons = [
+                self._editor_transform.pixel_points_to_normalized(polygon)
+                for polygon in self.canvas.selected_component_polygons()
+            ]
+            hover_polygons = [
+                self._editor_transform.pixel_points_to_normalized(polygon)
+                for polygon in self.canvas.hovered_component_polygons()
+            ]
+        else:
+            selected_polygons = [
+                self._editor_transform.rectangle_to_normalized_polygon(region)
+                for region in self.canvas.preview_regions()
+            ]
+            hover_polygons = []
         for preview_canvas, preview_transform in self.preview_canvases:
             pixel_polygons = [
                 preview_transform.normalized_points_to_pixel(polygon)
-                for polygon in normalized_polygons
+                for polygon in selected_polygons
             ]
-            preview_canvas.set_preview_polygons(pixel_polygons)
+            hover_pixel_polygons = [
+                preview_transform.normalized_points_to_pixel(polygon)
+                for polygon in hover_polygons
+            ]
+            preview_canvas.set_preview_polygons(pixel_polygons, hover_pixel_polygons)
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:
         """ユーザーによるリサイズ時にウィンドウの縦横比を維持する。
@@ -789,6 +996,63 @@ def selectMaskRegions(
         )
     return regions
 
+
+
+def selectMaskComponents(
+    image: np.ndarray,
+    label_image: np.ndarray,
+    display_options: dict | None = None,
+    *,
+    preview_images: list[tuple[str, np.ndarray, Any]] | None = None,
+    editor_transform: Any | None = None,
+) -> dict[str, Any]:
+    """Open the connected-component picker and return selected labels and polygons."""
+    if image.ndim != 2 or image.size == 0:
+        raise ValueError("入力画像は空でない2次元グレースケール画像にしてください。")
+    if label_image.ndim != 2 or label_image.shape != image.shape:
+        raise ValueError("連結成分ラベル画像は入力画像と同じ形状の2次元配列にしてください。")
+    options = {
+        "colormap": "HOT",
+        "show_coordinates": True,
+        "show_instructions": True,
+        "resizable": True,
+        "show_scale": True,
+        "window_width": 1100,
+        "window_height": 800,
+        "rectangle_color": [0, 255, 0],
+        "rectangle_thickness": 2,
+    }
+    if display_options:
+        options.update(display_options)
+    ensure_qapplication()
+    dialog = _MaskDialog(
+        image,
+        options,
+        preview_images=preview_images,
+        editor_transform=editor_transform,
+        label_image=label_image,
+        selection_mode="connected_component",
+    )
+    accepted = dialog.exec() == QDialog.DialogCode.Accepted
+    selected_labels = sorted(dialog.canvas.selected_labels) if accepted else []
+    components = component_selection_details(label_image, selected_labels)
+    selected_polygons = [
+        polygon for component in components for polygon in component["polygons"]
+    ]
+    LOGGER.info("手動選択した連結成分数: %d", len(selected_labels))
+    for component in components:
+        LOGGER.info(
+            "連結成分を手動除外: label=%d, area=%d, centroid=(%.2f, %.2f)",
+            component["label"],
+            component["area_pixels"],
+            component["centroid_x_px"],
+            component["centroid_y_px"],
+        )
+    return {
+        "selected_labels": selected_labels,
+        "components": components,
+        "polygons": selected_polygons,
+    }
 
 @overload
 def applyMask(

@@ -34,7 +34,10 @@ from src.package import (
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 from src.package.run_logger import RunLogger
-from src.package.qt_preview import show_final_preview
+from src.package.qt_preview import (
+    build_invalid_sunspot_mask,
+    show_final_preview,
+)
 
 LOGGER = logging.getLogger("sunspot.main")
 
@@ -525,9 +528,10 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
     )
     # 対話的な最終確認は設定で有効化した場合のみ PyQt ダイアログで表示する。
     if config.get("Display", {}).get("show_final_image", False):
-        invalid_sunspot_mask = np.isin(
+        invalid_sunspot_mask = build_invalid_sunspot_mask(
             sunspot_labels,
-            mask_details["excluded_candidate_labels"],
+            normal_mask_exclusions,
+            radial_exclusions,
         )
         show_final_preview(
             image,

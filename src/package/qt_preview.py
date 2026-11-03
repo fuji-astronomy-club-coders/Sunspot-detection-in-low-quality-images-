@@ -1,5 +1,6 @@
 """PyQt を使用した最終解析画像の確認ダイアログ。"""
 
+from collections.abc import Iterable
 import logging
 import math
 
@@ -34,6 +35,38 @@ from PyQt6.QtWidgets import (
 from src.package.qt_dialogs import ensure_qapplication
 
 LOGGER = logging.getLogger("sunspot.qt_preview")
+
+
+def build_invalid_sunspot_mask(
+    labels: np.ndarray,
+    *excluded_label_groups: Iterable[int],
+) -> np.ndarray:
+    """通常maskとRmaskの除外ラベルを統合し、赤色表示用マスクを作る。
+
+    Parameters
+    ----------
+    labels : numpy.ndarray
+        黒点候補のラベル画像。
+    *excluded_label_groups : Iterable[int]
+        通常mask、Rmaskなど、各除外要因のラベル一覧。
+
+    Returns
+    -------
+    numpy.ndarray
+        いずれかの除外要因に該当する黒点画素を True とした配列。
+    """
+    if labels.ndim != 2:
+        raise ValueError("黒点ラベル画像は2次元配列にしてください。")
+
+    excluded_labels = {
+        int(label)
+        for label_group in excluded_label_groups
+        for label in label_group
+        if int(label) > 0
+    }
+    if not excluded_labels:
+        return np.zeros(labels.shape, dtype=bool)
+    return np.isin(labels, tuple(excluded_labels))
 
 
 class _FinalPreviewCanvas(QWidget):

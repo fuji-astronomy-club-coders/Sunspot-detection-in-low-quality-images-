@@ -47,6 +47,64 @@ def main() -> int:
             print(f"比較入力エラー: {error}", file=sys.stderr)
             return 2
 
+        print(f"比較日付: {plan.comparison_date}")
+        print("登録観測所:")
+        for source in plan.sources:
+            policy = source["orientation_policy"]
+            if policy == "fixed":
+                orientation_source = (
+                    f"north_vector={source['north_vector']}, "
+                    f"flip_x={source['flip_x']}"
+                )
+            else:
+                orientation_source = "向きは日付別 comparison.yaml から取得"
+            print(
+                f"  - {source['source_id']} / {source['display_name']} "
+                f"({policy}; {orientation_source})"
+            )
+
+        supplied_ids = {
+            sample.source_id for sample in plan.samples if sample.source_id is not None
+        }
+        print("入力サンプル:")
+        for sample in plan.samples:
+            if sample.error is not None:
+                print(
+                    f"  - [skipped_invalid_input] {sample.source_id or '(unknown)'}: "
+                    f"{sample.error}"
+                )
+                continue
+            assert sample.source_id is not None
+            assert sample.image_path is not None
+            assert sample.pixel_scale is not None
+            assert sample.orientation is not None
+            source = next(
+                item for item in plan.sources if item["source_id"] == sample.source_id
+            )
+            direction_source = (
+                "sources.yaml"
+                if source["orientation_policy"] == "fixed"
+                else "comparison.yaml"
+            )
+            print(
+                f"  - {sample.source_id}: {sample.image_path.name}; "
+                f"{sample.pixel_scale:g} arcsec/pixel; "
+                f"north_vector={sample.orientation.north_vector}; "
+                f"flip_x={sample.orientation.flip_x}; "
+                f"方向の取得元={direction_source}"
+            )
+        for source in plan.sources:
+            if source["source_id"] not in supplied_ids:
+                print(
+                    f"  - [not_provided] {source['source_id']} / "
+                    f"{source['display_name']}"
+                )
+
+        if plan.mask_template_path is not None:
+            print(f"共通マスクテンプレート: {plan.mask_template_path}")
+        else:
+            print("共通マスク: 最初に処理が成功した画像で選択します。")
+
         run_logger = RunLogger(config)
         try:
             summary = run_comparison(plan, config, run_logger)
@@ -63,6 +121,17 @@ def main() -> int:
             },
             status=summary["overall_status"],
         )
+
+        print(f"比較結果: {summary['overall_status']}")
+        for row in summary["samples"]:
+            status = row["status"]
+            label = row.get("source_id") or "(unknown)"
+            detail = row.get("reason")
+            if detail is None and "sunspot_count" in row:
+                detail = f"検出数={row['sunspot_count']}"
+            print(f"  - [{status}] {label}" + (f": {detail}" if detail else ""))
+        print(f"比較サマリー: {run_logger.session_dir / 'comparison_summary.json'}")
+
         return 1 if summary["overall_status"] == "failed" else 0
 
     if config["Paths"]["input_image"] == "?Dialog?":

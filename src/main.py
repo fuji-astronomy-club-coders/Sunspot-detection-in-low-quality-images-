@@ -35,6 +35,7 @@ from src.package import (
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 from src.package.run_logger import RunLogger
+from src.package.solar_coordinates import SolarTransform
 from src.package.version_info import get_application_version
 from src.package.qt_preview import (
     build_invalid_sunspot_mask,

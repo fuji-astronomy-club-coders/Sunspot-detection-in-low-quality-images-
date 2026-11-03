@@ -54,7 +54,6 @@ def main() -> int:
             if policy == "fixed":
                 orientation_source = (
                     f"north_vector={source['north_vector']}, "
-                    f"north_angle_deg={source.get('north_angle_deg', 'derived')}, "
                     f"flip_x={source['flip_x']}"
                 )
             else:
@@ -91,6 +90,7 @@ def main() -> int:
                 f"  - {sample.source_id}: {sample.image_path.name}; "
                 f"{sample.pixel_scale:g} arcsec/pixel; "
                 f"north_vector={sample.orientation.north_vector}; "
+                f"north_angle_deg={sample.orientation.north_angle_deg:g}; "
                 f"flip_x={sample.orientation.flip_x}; "
                 f"方向の取得元={direction_source}"
             )

@@ -375,6 +375,7 @@ def _write_mask_template(
     geometry: SolarGeometry,
     orientation: Orientation,
     polygons: list[list[list[float]]],
+    selection_method: str = "rectangle",
 ) -> Path:
     """Persist the selected base-image mask in normalized solar coordinates."""
     target_folder = SOURCE_INPUT_ROOT / "mask_templates"
@@ -383,6 +384,7 @@ def _write_mask_template(
     document = {
         "schema_version": 1,
         "coordinate_system": "solar_disk_normalized",
+        "selection_method": selection_method,
         "created_from": {
             "date": plan.comparison_date,
             "source_id": source_id,
@@ -1033,18 +1035,28 @@ def run_comparison(
                 ]
                 if not selection_events:
                     raise RuntimeError("基準画像の共通マスク選択イベントを取得できませんでした。")
-                selected_regions = selection_events[-1]["details"].get("regions", [])
-                normalized_polygons = [
-                    transform.rectangle_to_normalized_polygon(
-                        (
-                            float(region["x"]),
-                            float(region["y"]),
-                            float(region["width"]),
-                            float(region["height"]),
+                selection_details = selection_events[-1]["details"]
+                if selection_details.get("selection_method") == "connected_component":
+                    selected_component_polygons = selection_details.get("polygons") or []
+                    normalized_polygons = [
+                        transform.pixel_points_to_normalized(
+                            np.asarray(polygon, dtype=np.float64)
                         )
-                    )
-                    for region in selected_regions
-                ]
+                        for polygon in selected_component_polygons
+                    ]
+                else:
+                    selected_regions = selection_details.get("regions", [])
+                    normalized_polygons = [
+                        transform.rectangle_to_normalized_polygon(
+                            (
+                                float(region["x"]),
+                                float(region["y"]),
+                                float(region["width"]),
+                                float(region["height"]),
+                            )
+                        )
+                        for region in selected_regions
+                    ]
                 generated_mask_path = _write_mask_template(
                     plan,
                     sample.source_id,
@@ -1052,6 +1064,9 @@ def run_comparison(
                     geometry,
                     sample.orientation,
                     normalized_polygons,
+                    selection_method=str(
+                        base_config.get("Mask", {}).get("selection_method", "rectangle")
+                    ),
                 )
                 run_logger.record_event(
                     "comparison_mask_template_created",

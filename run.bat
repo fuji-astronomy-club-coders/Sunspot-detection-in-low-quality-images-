@@ -70,6 +70,10 @@ set PYTHON_CMD="%VENV_PYTHON%"
 %PYTHON_CMD% -c "import sys; print('[INFO] Python', sys.version.split()[0]); raise SystemExit(0 if sys.version_info >= (3, 13) else 1)"
 if errorlevel 1 goto :python_version_error
 
+rem Ensure pip exists even if the existing virtual environment is incomplete.
+%PYTHON_CMD% -m ensurepip --upgrade
+if errorlevel 1 goto :install_error
+
 rem pip reads runtime dependencies from [project].dependencies in pyproject.toml.
 rem Development extras from [project.optional-dependencies] are intentionally excluded.
 echo [INFO] Installing dependencies declared in [project].dependencies...

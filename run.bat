@@ -44,17 +44,17 @@ goto :run_application
 :run_venv
 if not exist "%VENV_PYTHON%" goto :venv_not_ready
 
-set "PYTHON_CMD=%VENV_PYTHON%"
+set PYTHON_CMD="%VENV_PYTHON%"
 
 rem Check the interpreter version.
-"%PYTHON_CMD%" -c "import sys; print('[INFO] Python', sys.version.split()[0]); raise SystemExit(0 if sys.version_info >= (3, 13) else 1)"
+%PYTHON_CMD% -c "import sys; print('[INFO] Python', sys.version.split()[0]); raise SystemExit(0 if sys.version_info >= (3, 13) else 1)"
 if errorlevel 1 goto :venv_not_ready
 
 rem Check that this project was installed in the venv and its dependencies are intact.
-"%PYTHON_CMD%" -c "import tomllib; from pathlib import Path; from importlib.metadata import distribution; distribution(tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))['project']['name'])"
+%PYTHON_CMD% -c "import tomllib; from pathlib import Path; from importlib.metadata import distribution; distribution(tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))['project']['name'])"
 if errorlevel 1 goto :venv_not_ready
 
-"%PYTHON_CMD%" -m pip check
+%PYTHON_CMD% -m pip check
 if errorlevel 1 goto :venv_not_ready
 
 goto :run_application
@@ -75,27 +75,27 @@ if exist "%VENV_DIR%\." (
 )
 if errorlevel 1 goto :error
 
-set "PYTHON_CMD=%VENV_PYTHON%"
+set PYTHON_CMD="%VENV_PYTHON%"
 goto :setup_venv_check
 
 
 :setup_existing_venv
-set "PYTHON_CMD=%VENV_PYTHON%"
+set PYTHON_CMD="%VENV_PYTHON%"
 
 
 :setup_venv_check
-"%PYTHON_CMD%" -c "import sys; print('[INFO] Python', sys.version.split()[0]); raise SystemExit(0 if sys.version_info >= (3, 13) else 1)"
+%PYTHON_CMD% -c "import sys; print('[INFO] Python', sys.version.split()[0]); raise SystemExit(0 if sys.version_info >= (3, 13) else 1)"
 if errorlevel 1 goto :python_version_error
 
 rem Ensure pip exists even if the existing virtual environment is incomplete.
-"%PYTHON_CMD%" -m ensurepip --upgrade
+%PYTHON_CMD% -m ensurepip --upgrade
 if errorlevel 1 goto :install_error
 
 rem pip reads runtime dependencies from [project].dependencies in pyproject.toml.
 rem Development extras from [project.optional-dependencies] are intentionally excluded.
 echo [INFO] Installing dependencies declared in [project].dependencies...
 echo [INFO] Using prebuilt scikit-image wheels to avoid local compilation.
-"%PYTHON_CMD%" -m pip install --only-binary=scikit-image -e .
+%PYTHON_CMD% -m pip install --only-binary=scikit-image -e .
 if errorlevel 1 goto :install_error
 
 echo.

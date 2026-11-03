@@ -23,8 +23,8 @@ from scipy.optimize import linear_sum_assignment
 from src.main import process_image
 from src.package import limb_darking_resolution as ldr
 from src.package import utils
-from src.package.qt_preview import show_comparison_final_previews
 from src.package.config import PROJECT_ROOT
+from src.package.qt_preview import show_comparison_final_previews
 from src.package.run_logger import RunLogger
 from src.package.solar_coordinates import Orientation, SolarGeometry, SolarTransform
 

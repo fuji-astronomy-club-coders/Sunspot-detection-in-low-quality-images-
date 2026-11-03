@@ -159,8 +159,8 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         raise ComparisonInputError("日付フォルダー名は YYYY-MM-DD 形式にしてください。")
     try:
         comparison_date = date.fromisoformat(selected_folder.name).isoformat()
-    except ValueError as error:
-        raise ComparisonInputError("日付フォルダー名は実在する YYYY-MM-DD にしてください。") from error
+    except ValueError as date_error:
+        raise ComparisonInputError("日付フォルダー名は実在する YYYY-MM-DD にしてください。") from date_error
 
     sources_path = source_root / "sources.yaml"
     if not sources_path.is_file():
@@ -214,8 +214,8 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         if policy == "fixed":
             try:
                 orientation = _parse_orientation(raw_source)
-            except ValueError as error:
-                raise ComparisonInputError(f"{source_id}: {error}") from error
+            except ValueError as orientation_error:
+                raise ComparisonInputError(f"{source_id}: {orientation_error}") from orientation_error
             normalized_source["north_vector"] = {
                 "x": orientation.north_vector[0],
                 "y": orientation.north_vector[1],
@@ -359,7 +359,7 @@ def _write_mask_template(
     image_path: Path,
     geometry: SolarGeometry,
     orientation: Orientation,
-    polygons: list[list[float]],
+    polygons: list[list[list[float]]],
 ) -> Path:
     """Persist the selected base-image mask in normalized solar coordinates."""
     target_folder = SOURCE_INPUT_ROOT / "mask_templates"

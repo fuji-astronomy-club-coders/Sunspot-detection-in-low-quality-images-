@@ -1,6 +1,7 @@
 """設定ファイルに基づいて太陽画像処理を実行するエントリーポイント。"""
 
 import argparse
+import logging
 import sys
 
 from src.main import main as run_processing
@@ -12,6 +13,8 @@ from src.package.comparison import (
 from src.package.config import PROJECT_ROOT, config
 from src.package.qt_dialogs import select_directory, select_file
 from src.package.run_logger import RunLogger
+
+LOGGER = logging.getLogger("sunspot")
 
 
 def main() -> int:
@@ -110,6 +113,7 @@ def main() -> int:
             print("共通マスク: 最初に処理が成功した画像で選択します。")
 
         run_logger = RunLogger(config)
+        LOGGER.info("Selected comparison date folder: %s", plan.date_folder)
         try:
             summary = run_comparison(plan, config, run_logger)
         except BaseException as error:

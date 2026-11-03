@@ -18,7 +18,7 @@ class ComparisonValidationTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name)
         self.source_root = self.root / "external_observatory_data"
-        self.date_folder = self.source_root / "2026-11-02"
+        self.date_folder = self.source_root / "20261102"
         self.date_folder.mkdir(parents=True)
         self.sources = [
             {
@@ -41,13 +41,33 @@ class ComparisonValidationTests(unittest.TestCase):
             yaml.safe_dump({"sources": self.sources}, allow_unicode=True),
             encoding="utf-8",
         )
-        (self.date_folder / "source_01.tif").write_bytes(b"placeholder")
-        (self.date_folder / "source_04.tif").write_bytes(b"placeholder")
+
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
     def _write_comparison(self, document: dict) -> None:
+        """Write YAML and mirror its in-folder image references as test files."""
+        for existing in self.date_folder.rglob("*"):
+            if existing.is_file() and existing.suffix.lower() in comparison.IMAGE_SUFFIXES:
+                existing.unlink()
+
+        samples = document.get("samples", [])
+        if isinstance(samples, list):
+            for sample in samples:
+                if not isinstance(sample, dict) or not isinstance(sample.get("image"), str):
+                    continue
+                image_path = Path(sample["image"])
+                if image_path.is_absolute():
+                    continue
+                resolved = (self.date_folder / image_path).resolve()
+                if (
+                    resolved.is_relative_to(self.date_folder.resolve())
+                    and resolved.suffix.lower() in comparison.IMAGE_SUFFIXES
+                ):
+                    resolved.parent.mkdir(parents=True, exist_ok=True)
+                    resolved.write_bytes(b"placeholder")
+
         (self.date_folder / "comparison.yaml").write_text(
             yaml.safe_dump(document, allow_unicode=True),
             encoding="utf-8",
@@ -280,6 +300,7 @@ class ComparisonValidationTests(unittest.TestCase):
                 ]
             }
         )
+        (self.date_folder / "source_01.tif").write_bytes(b"placeholder")
 
         plan = comparison.prepare_comparison(self.date_folder)
 

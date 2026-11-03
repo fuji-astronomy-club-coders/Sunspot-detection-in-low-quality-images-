@@ -17,7 +17,7 @@ class ComparisonValidationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name)
-        self.source_root = self.root / "source_input"
+        self.source_root = self.root / "external_observatory_data"
         self.date_folder = self.source_root / "2026-11-02"
         self.date_folder.mkdir(parents=True)
         self.sources = [
@@ -44,15 +44,8 @@ class ComparisonValidationTests(unittest.TestCase):
         (self.date_folder / "source_01.tif").write_bytes(b"placeholder")
         (self.date_folder / "source_04.tif").write_bytes(b"placeholder")
         self._root_patch = patch.object(comparison, "PROJECT_ROOT", self.root)
-        self._source_patch = patch.object(
-            comparison,
-            "SOURCE_INPUT_ROOT",
-            self.source_root,
-        )
         self._root_patch.start()
-        self._source_patch.start()
         self.addCleanup(self._root_patch.stop)
-        self.addCleanup(self._source_patch.stop)
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
@@ -93,6 +86,7 @@ class ComparisonValidationTests(unittest.TestCase):
             plan = comparison.prepare_comparison(self.date_folder)
 
         self.assertEqual(plan.comparison_date, "2026-11-02")
+        self.assertEqual(plan.source_input_root, self.source_root.resolve())
         self.assertEqual(len(plan.sources), 4)
         sample = plan.samples[0]
         self.assertEqual(sample.source_id, "source_01")

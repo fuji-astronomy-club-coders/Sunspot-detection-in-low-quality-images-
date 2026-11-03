@@ -41,12 +41,20 @@ COMPARISON_STAGES = {
     "emphasized": "Emphasized image",
     "binary": "Binary extraction",
 }
-SOURCE_KEYS = {"source_id", "display_name", "orientation_policy", "north_vector", "flip_x"}
+SOURCE_KEYS = {
+    "source_id",
+    "display_name",
+    "orientation_policy",
+    "north_vector",
+    "north_angle_deg",
+    "flip_x",
+}
 SAMPLE_KEYS = {
     "source_id",
     "image",
     "pixel_scale_arcsec_per_pixel",
     "north_vector",
+    "north_angle_deg",
     "flip_x",
 }
 
@@ -101,14 +109,47 @@ def _parse_north_vector(value: object) -> tuple[float, float]:
     return x, y
 
 
+def _parse_north_angle(value: object) -> tuple[float, float]:
+    """Convert a Cartesian polar angle in degrees into a north unit vector.
+
+    The angle starts at +X (right), increases counter-clockwise, and accepts
+    the inclusive range 0..360. 360 degrees is equivalent to 0 degrees.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("north_angle_deg は数値で指定してください。")
+    angle = float(value)
+    if not math.isfinite(angle) or not 0.0 <= angle <= 360.0:
+        raise ValueError("north_angle_deg は 0～360 の有限値にしてください。")
+    normalized_angle = angle % 360.0
+    radians = math.radians(normalized_angle)
+    x = math.cos(radians)
+    y = math.sin(radians)
+    if math.isclose(x, 0.0, abs_tol=1e-12):
+        x = 0.0
+    if math.isclose(y, 0.0, abs_tol=1e-12):
+        y = 0.0
+    return x, y
+
+
 def _parse_orientation(value: dict[str, Any]) -> Orientation:
-    """Create an orientation after validating both required per-image fields."""
-    if "north_vector" not in value or "flip_x" not in value:
-        raise ValueError("north_vector と flip_x の両方を指定してください。")
+    """Create an orientation from either a Cartesian vector or a 0..360° angle."""
+    has_vector = "north_vector" in value
+    has_angle = "north_angle_deg" in value
+    if has_vector == has_angle:
+        raise ValueError(
+            "north_vector または north_angle_deg のどちらか一方と flip_x を指定してください。"
+        )
+    if "flip_x" not in value:
+        raise ValueError("flip_x を指定してください。")
     if not isinstance(value["flip_x"], bool):
         raise ValueError("flip_x は true または false にしてください。")
+    north_vector = (
+        _parse_north_vector(value["north_vector"])
+        if has_vector
+        else _parse_north_angle(value["north_angle_deg"])
+    )
     return Orientation(
-        north_vector=_parse_north_vector(value["north_vector"]),
+        north_vector=north_vector,
         flip_x=value["flip_x"],
     )
 
@@ -221,7 +262,9 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         normalized_source["source_id"] = source_id
         normalized_source["display_name"] = display_name
         if policy == "per_sample" and (
-            "north_vector" in raw_source or "flip_x" in raw_source
+            "north_vector" in raw_source
+            or "north_angle_deg" in raw_source
+            or "flip_x" in raw_source
         ):
             raise ComparisonInputError(
                 f"{source_id}: per_sample の方向は comparison.yaml に指定してください。"
@@ -231,6 +274,7 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
                 orientation = _parse_orientation(raw_source)
             except ValueError as orientation_error:
                 raise ComparisonInputError(f"{source_id}: {orientation_error}") from orientation_error
+            normalized_source.pop("north_angle_deg", None)
             normalized_source["north_vector"] = {
                 "x": orientation.north_vector[0],
                 "y": orientation.north_vector[1],
@@ -337,8 +381,15 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         orientation: Orientation | None = None
         if error is None and source is not None:
             if source["orientation_policy"] == "fixed":
-                if "north_vector" in raw_sample or "flip_x" in raw_sample:
-                    error = "fixed の観測所では日付別の north_vector / flip_x を指定できません。"
+                if (
+                    "north_vector" in raw_sample
+                    or "north_angle_deg" in raw_sample
+                    or "flip_x" in raw_sample
+                ):
+                    error = (
+                        "fixed の観測所では日付別の north_vector / north_angle_deg / "
+                        "flip_x を指定できません。"
+                    )
                 else:
                     orientation = _parse_orientation(source)
             else:

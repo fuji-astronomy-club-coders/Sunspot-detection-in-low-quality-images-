@@ -1,7 +1,7 @@
 """黒点候補を矩形領域によって除外するモジュール。"""
 
 import logging
-from typing import Literal, overload
+from typing import Any, Literal, overload
 
 import cv2
 import numpy as np

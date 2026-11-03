@@ -134,6 +134,18 @@ class _MaskCanvas(QWidget):
         ]
         self.update()
 
+    def preview_regions(self) -> list[tuple[int, int, int, int]]:
+        """Return committed regions plus the rectangle currently being dragged."""
+        regions = self.regions.copy()
+        if self._drawing:
+            x1, y1 = self._start_point
+            x2, y2 = self._current_point
+            width = abs(x2 - x1)
+            height = abs(y2 - y1)
+            if width > 0 and height > 0:
+                regions.append((min(x1, x2), min(y1, y2), width, height))
+        return regions
+
     def _draw_orientation_axes(self, painter: QPainter, target: QRectF) -> None:
         """Draw Cartesian +X and solar-north +Y arrows over the image."""
         if self._north_vector is None:
@@ -431,6 +443,7 @@ class _MaskCanvas(QWidget):
         self._mouse_point = point
         if self._drawing and point is not None:
             self._current_point = point
+            self.regionsChanged.emit(len(self.regions))
         self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
@@ -618,7 +631,7 @@ class _MaskDialog(QDialog):
             return
         normalized_polygons = [
             self._editor_transform.rectangle_to_normalized_polygon(region)
-            for region in self.canvas.regions
+            for region in self.canvas.preview_regions()
         ]
         for preview_canvas, preview_transform in self.preview_canvases:
             pixel_polygons = [

@@ -1,8 +1,8 @@
 """輝度ヒストグラムを対数目盛で描画する Qt ウィジェット。"""
 
 import numpy as np
-from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor, QPaintEvent, QPainter, QPen
+from PyQt6.QtCore import QEvent, QRectF, Qt
+from PyQt6.QtGui import QColor, QMouseEvent, QPaintEvent, QPainter, QPen
 from PyQt6.QtWidgets import QWidget
 
 
@@ -80,8 +80,40 @@ def log_scaled_counts(counts: np.ndarray) -> np.ndarray:
     return transformed / maximum
 
 
+def histogram_bin_index(
+    position: float,
+    left: float,
+    width: float,
+    bin_count: int,
+) -> int | None:
+    """カーソルのX座標からヒストグラムのビン番号を求める。
+
+    Parameters
+    ----------
+    position : float
+        ウィジェット上のカーソルX座標。
+    left : float
+        プロット領域の左端座標。
+    width : float
+        プロット領域の幅。
+    bin_count : int
+        ヒストグラムのビン数。
+
+    Returns
+    -------
+    int | None
+        対応するビン番号。プロット領域外または幅・ビン数が不正な場合はNone。
+    """
+    if width <= 0.0 or bin_count <= 0:
+        return None
+    relative_position = position - left
+    if relative_position < 0.0 or relative_position > width:
+        return None
+    return min(int(relative_position / width * bin_count), bin_count - 1)
+
+
 class BrightnessHistogramWidget(QWidget):
-    """輝度分布を対数縦軸で表示する軽量なQPainterウィジェット。"""
+    """カーソル位置の輝度値と画素数を確認できる対数ヒストグラム。"""
 
     def __init__(
         self,
@@ -106,14 +138,91 @@ class BrightnessHistogramWidget(QWidget):
             self._pixel_count,
         ) = calculate_brightness_histogram(image)
         self._relative_heights = log_scaled_counts(self._counts)
+        self._hovered_bin: int | None = None
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CursorShape.CrossCursor)
         self.setMinimumHeight(132)
         self.setMaximumHeight(176)
         self.setToolTip(
-            "横軸: 輝度値  |  縦軸: 画素数（log10(count + 1)）"
+            "グラフ上にカーソルを移動すると、その位置の輝度値と画素数を表示します。"
+        )
+
+    def _plot_rect(self) -> QRectF:
+        """グラフの描画領域を返す。
+
+        Returns
+        -------
+        QRectF
+            軸ラベルを除いたヒストグラムのプロット領域。
+        """
+        return QRectF(
+            64,
+            27,
+            max(1, self.width() - 88),
+            max(1, self.height() - 61),
+        )
+
+    def mouseMoveEvent(self, event: QMouseEvent | None) -> None:
+        """カーソル位置に対応する輝度ビンを選択する。
+
+        Parameters
+        ----------
+        event : QMouseEvent | None
+            マウス移動イベント。
+        """
+        if event is None:
+            return
+        plot = self._plot_rect()
+        position = event.position()
+        if plot.top() <= position.y() <= plot.bottom():
+            selected_bin = histogram_bin_index(
+                position.x(),
+                plot.left(),
+                plot.width(),
+                self._counts.size,
+            )
+        else:
+            selected_bin = None
+
+        if selected_bin != self._hovered_bin:
+            self._hovered_bin = selected_bin
+            self.update()
+
+    def leaveEvent(self, event: QEvent | None) -> None:
+        """カーソルがヒストグラムから離れたときに選択表示を解除する。
+
+        Parameters
+        ----------
+        event : QEvent | None
+            マウス離脱イベント。
+        """
+        self._hovered_bin = None
+        self.update()
+        super().leaveEvent(event)
+
+    def _hover_text(self) -> str:
+        """選択中のビンに対応する輝度範囲と画素数を整形する。
+
+        Returns
+        -------
+        str
+            ヒストグラム上部に表示するカーソル位置の情報。
+        """
+        if self._hovered_bin is None:
+            return f"輝度ヒストグラム  |  対象画素: {self._pixel_count:,}"
+
+        index = self._hovered_bin
+        lower = float(self._edges[index])
+        upper = float(self._edges[index + 1])
+        center = (lower + upper) / 2.0
+        count = int(self._counts[index])
+        return (
+            f"輝度: {center:.6g}  [{lower:.6g}, {upper:.6g})"
+            f"  |  画素数: {count:,}  |  合計: {self._pixel_count:,}"
         )
 
     def paintEvent(self, event: QPaintEvent | None) -> None:
-        """対数縦軸の棒グラフ、目盛り、輝度範囲を描画する。
+        """対数縦軸の棒グラフ、カーソルガイド、値ラベルを描画する。
 
         Parameters
         ----------
@@ -132,15 +241,10 @@ class BrightnessHistogramWidget(QWidget):
         painter.drawText(
             QRectF(8, 2, self.width() - 16, 20),
             Qt.AlignmentFlag.AlignCenter,
-            f"輝度ヒストグラム  |  対象画素: {self._pixel_count:,}",
+            self._hover_text(),
         )
 
-        plot = QRectF(
-            64,
-            27,
-            max(1, self.width() - 88),
-            max(1, self.height() - 61),
-        )
+        plot = self._plot_rect()
         maximum_count = int(self._counts.max(initial=0))
         maximum_log = float(np.log10(maximum_count + 1.0))
         if maximum_log <= 0.0:
@@ -199,6 +303,27 @@ class BrightnessHistogramWidget(QWidget):
                     bar_height,
                 )
                 painter.drawRect(bar)
+
+            if self._hovered_bin is not None:
+                index = self._hovered_bin
+                marker_x = plot.left() + (index + 0.5) * bin_width
+                guide_pen = QPen(QColor(255, 220, 120), 1.5, Qt.PenStyle.DashLine)
+                guide_pen.setCosmetic(True)
+                painter.setPen(guide_pen)
+                painter.drawLine(
+                    int(round(marker_x)),
+                    int(plot.top()),
+                    int(round(marker_x)),
+                    int(plot.bottom()),
+                )
+
+                selected_height = float(self._relative_heights[index]) * plot.height()
+                marker_y = plot.bottom() - max(1.0, selected_height)
+                painter.setPen(QPen(QColor(255, 245, 190), 1.5))
+                painter.setBrush(QColor(255, 190, 70))
+                painter.drawEllipse(
+                    QRectF(marker_x - 3.5, marker_y - 3.5, 7.0, 7.0)
+                )
 
         painter.setPen(muted_color)
         if self._minimum == self._maximum:

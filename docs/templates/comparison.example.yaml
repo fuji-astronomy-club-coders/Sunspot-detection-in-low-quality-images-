@@ -1,0 +1,17 @@
+# このファイルは YYYY-MM-DD 日付フォルダーに配置します。
+# samples の件数は日付フォルダー内の対応画像ファイル数と一致させます。
+# source_id は sources.yaml に登録済みのものを指定してください。
+# mask_template は任意です。省略すると最初に処理する画像で共通マスクを選択します。
+# mask_template: "../mask_templates/default.json"
+
+samples:
+  - source_id: source_01
+    image: "source_01.tif"
+    pixel_scale_arcsec_per_pixel: 0.60  # 秒角/画素
+
+  # orientation_policy: per_sample の観測所では north_vector または north_angle_deg と flip_x を入力します。
+  - source_id: source_04
+    image: "source_04.tif"
+    pixel_scale_arcsec_per_pixel: 0.80  # 秒角/画素
+    north_angle_deg: 90.0  # 度。0°=+X（右）、反時計回りが正。位置角ではない
+    flip_x: false  # 左右反転の有無（真偽値）

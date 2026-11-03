@@ -1,4 +1,3 @@
-*.tiff
 *.log
 *__pycache__/
 .ruff_cache/
@@ -7,3 +6,9 @@ build/
 dist/
 /results/
 /output/
+
+# Local observatory images and comparison metadata
+/source_input/
+
+# Python package build metadata
+*.egg-info/

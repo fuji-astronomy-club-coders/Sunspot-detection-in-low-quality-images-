@@ -83,3 +83,11 @@ Display:
   rmask_fill_alpha: 64 # Rmaskの不透明度（0: 透明 ～ 255: 不透明）
   solar_circle_color: [0, 220, 255] # 太陽近似円・中心マーカーの色（RGB）
   solar_circle_thickness: 2 # 太陽近似円の線幅
+
+# 比較モード設定
+Comparison:
+  matching:
+    tolerance_normalized: 0.025 # 太陽半径に対する比（秒角ではない）
+  angular_radius_warning_arcsec:
+    min: 900.0 # 秒角
+    max: 1000.0 # 秒角

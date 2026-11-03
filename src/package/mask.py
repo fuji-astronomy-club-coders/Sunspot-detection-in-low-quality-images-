@@ -16,11 +16,13 @@ from PyQt6.QtGui import (
     QPaintEvent,
     QPainter,
     QPen,
+    QPolygonF,
     QResizeEvent,
 )
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -31,6 +33,7 @@ from PyQt6.QtWidgets import (
 from src.package.qt_dialogs import ensure_qapplication
 from src.package.qt_histogram import BrightnessHistogramWidget
 from src.package.qt_image import colorize_intensity
+from src.package.solar_coordinates import SolarTransform
 
 LOGGER = logging.getLogger("sunspot.mask")
 
@@ -52,6 +55,10 @@ class _MaskCanvas(QWidget):
         display_image: np.ndarray,
         options: dict,
         parent: QWidget | None = None,
+        *,
+        read_only: bool = False,
+        north_vector: tuple[float, float] | None = None,
+        flip_x: bool = False,
     ) -> None:
         """キャンバスと画像表示用の QImage を初期化する。
 
@@ -103,6 +110,10 @@ class _MaskCanvas(QWidget):
         ).copy()
 
         self._options = options
+        self._read_only = read_only
+        self._north_vector = north_vector
+        self._flip_x = bool(flip_x)
+        self._preview_polygons: list[np.ndarray] = []
         self.regions: list[tuple[int, int, int, int]] = []
         self._drawing = False
         self._start_point = (0, 0)
@@ -111,7 +122,66 @@ class _MaskCanvas(QWidget):
         self.setMinimumSize(320, 240)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setCursor(Qt.CursorShape.CrossCursor)
+        self.setCursor(
+            Qt.CursorShape.ArrowCursor if read_only else Qt.CursorShape.CrossCursor
+        )
+
+    def set_preview_polygons(self, polygons: list[np.ndarray]) -> None:
+        """Replace the synchronized polygon overlay shown by a read-only preview."""
+        self._preview_polygons = [
+            np.asarray(polygon, dtype=np.float64)
+            for polygon in polygons
+            if np.asarray(polygon).ndim == 2 and np.asarray(polygon).shape[1] == 2
+        ]
+        self.update()
+
+    def preview_regions(self) -> list[tuple[int, int, int, int]]:
+        """Return committed regions plus the rectangle currently being dragged."""
+        regions = self.regions.copy()
+        if self._drawing:
+            x1, y1 = self._start_point
+            x2, y2 = self._current_point
+            width = abs(x2 - x1)
+            height = abs(y2 - y1)
+            if width > 0 and height > 0:
+                regions.append((min(x1, x2), min(y1, y2), width, height))
+        return regions
+
+    def _draw_orientation_axes(self, painter: QPainter, target: QRectF) -> None:
+        """Draw Cartesian +X and solar-north +Y arrows over the image."""
+        if self._north_vector is None:
+            return
+        north_cartesian = np.asarray(self._north_vector, dtype=np.float64)
+        norm = float(np.linalg.norm(north_cartesian))
+        if not np.isfinite(norm) or norm == 0:
+            return
+        north_cartesian /= norm
+        north_image = np.asarray(
+            [north_cartesian[0], -north_cartesian[1]],
+            dtype=np.float64,
+        )
+        positive_x = np.asarray([-north_image[1], north_image[0]], dtype=np.float64)
+        if self._flip_x:
+            positive_x *= -1.0
+        origin = QPointF(target.left() + 58.0, target.top() + 62.0)
+        axis_length = 42.0
+        painter.save()
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for vector, color, label in (
+            (positive_x, QColor(80, 220, 255), "+X"),
+            (north_image, QColor(255, 220, 70), "+Y 北"),
+        ):
+            endpoint = QPointF(
+                origin.x() + float(vector[0]) * axis_length,
+                origin.y() + float(vector[1]) * axis_length,
+            )
+            pen = QPen(color, 3)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.drawLine(origin, endpoint)
+            painter.drawEllipse(endpoint, 2.5, 2.5)
+            painter.drawText(endpoint + QPointF(5.0, -5.0), label)
+        painter.restore()
 
     def _image_rect(self) -> QRectF:
         """キャンバス内で画像をアスペクト比を保って配置する領域を返す。
@@ -237,6 +307,7 @@ class _MaskCanvas(QWidget):
         inner_border.setCosmetic(True)
         painter.setPen(inner_border)
         painter.drawRect(image_border)
+        self._draw_orientation_axes(painter, target)
 
         colorbar = QRectF(target.right() + 14, target.top(), 16, target.height())
         painter.drawImage(colorbar, self._colorbar_qimage)
@@ -290,6 +361,25 @@ class _MaskCanvas(QWidget):
                 )
             )
 
+        if self._preview_polygons:
+            preview_pen = QPen(QColor(0, 255, 160, 230), 2)
+            preview_pen.setCosmetic(True)
+            painter.setPen(preview_pen)
+            painter.setBrush(QColor(0, 255, 160, 68))
+            for polygon_points in self._preview_polygons:
+                polygon = QPolygonF(
+                    [
+                        QPointF(
+                            target.left() + float(point[0]) * scale_x,
+                            target.top() + float(point[1]) * scale_y,
+                        )
+                        for point in polygon_points
+                    ]
+                )
+                if polygon.size() >= 3:
+                    painter.drawPolygon(polygon)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+
         overlay_lines = self._overlay_lines(min(scale_x, scale_y))
         if overlay_lines:
             font = QFont("Meiryo", 10)
@@ -320,7 +410,11 @@ class _MaskCanvas(QWidget):
         event : QMouseEvent | None
             マウス押下イベント。
         """
-        if event is None or event.button() != Qt.MouseButton.LeftButton:
+        if (
+            self._read_only
+            or event is None
+            or event.button() != Qt.MouseButton.LeftButton
+        ):
             return
         point = self._map_to_image(event.position())
         if point is None:
@@ -342,10 +436,15 @@ class _MaskCanvas(QWidget):
         """
         if event is None:
             return
+        if self._read_only:
+            self._mouse_point = self._map_to_image(event.position())
+            self.update()
+            return
         point = self._map_to_image(event.position(), clamp=self._drawing)
         self._mouse_point = point
         if self._drawing and point is not None:
             self._current_point = point
+            self.regionsChanged.emit(len(self.regions))
         self.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
@@ -356,7 +455,12 @@ class _MaskCanvas(QWidget):
         event : QMouseEvent | None
             マウス解放イベント。
         """
-        if event is None or event.button() != Qt.MouseButton.LeftButton or not self._drawing:
+        if (
+            self._read_only
+            or event is None
+            or event.button() != Qt.MouseButton.LeftButton
+            or not self._drawing
+        ):
             return
         point = self._map_to_image(event.position(), clamp=True)
         if point is not None:
@@ -367,8 +471,9 @@ class _MaskCanvas(QWidget):
             width, height = abs(x2 - x1), abs(y2 - y1)
             if width > 0 and height > 0:
                 self.regions.append((left, top, width, height))
-                self.regionsChanged.emit(len(self.regions))
         self._drawing = False
+        if point is not None:
+            self.regionsChanged.emit(len(self.regions))
         self.update()
 
     def undo(self) -> None:
@@ -392,6 +497,12 @@ class _MaskDialog(QDialog):
         image: np.ndarray,
         options: dict,
         parent: QWidget | None = None,
+        *,
+        preview_images: list[
+            tuple[str, np.ndarray | None, SolarTransform | None]
+        ] | None = None,
+        editor_transform: SolarTransform | None = None,
+        preview_editor_index: int = 0,
     ) -> None:
         """画像キャンバスと操作ボタンを持つダイアログを構築する。
 
@@ -412,8 +523,25 @@ class _MaskDialog(QDialog):
         )
         self._adjusting_size = False
         self.setWindowTitle("Select Mask Regions")
+        self._editor_transform = editor_transform
+        self._preview_editor_index = min(max(int(preview_editor_index), 0), 3)
+        self.preview_canvases: list[tuple[_MaskCanvas, SolarTransform]] = []
 
-        self.canvas = _MaskCanvas(image, _to_display_image(image, str(options["colormap"])), options)
+        editor_north: tuple[float, float] | None = None
+        editor_flip_x = False
+        if editor_transform is not None:
+            editor_north = (
+                float(editor_transform.orientation.north_vector[0]),
+                float(editor_transform.orientation.north_vector[1]),
+            )
+            editor_flip_x = bool(editor_transform.orientation.flip_x)
+        self.canvas = _MaskCanvas(
+            image,
+            _to_display_image(image, str(options["colormap"])),
+            options,
+            north_vector=editor_north,
+            flip_x=editor_flip_x,
+        )
         self.region_count_label = QLabel("選択領域: 0")
         undo_button = QPushButton("1つ戻す")
         undo_button.clicked.connect(self.canvas.undo)
@@ -443,7 +571,62 @@ class _MaskDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
-        layout.addWidget(self.canvas, 1)
+        if preview_images:
+            preview_grid = QGridLayout()
+            preview_grid.setContentsMargins(0, 0, 0, 0)
+            preview_grid.setSpacing(8)
+            for index in range(4):
+                row, column = divmod(index, 2)
+                slot = preview_images[index] if index < len(preview_images) else None
+                title = slot[0] if slot is not None else f"観測所スロット {index + 1}"
+
+                if index == self._preview_editor_index:
+                    canvas = self.canvas
+                    if slot is None or slot[1] is None or slot[2] is None:
+                        raise ValueError("編集対象のプレビュー画像がありません。")
+                elif slot is not None and slot[1] is not None and slot[2] is not None:
+                    preview_image = slot[1]
+                    preview_transform = slot[2]
+                    preview_north = (
+                        float(preview_transform.orientation.north_vector[0]),
+                        float(preview_transform.orientation.north_vector[1]),
+                    )
+                    canvas = _MaskCanvas(
+                        preview_image,
+                        _to_display_image(
+                            preview_image,
+                            str(options["colormap"]),
+                        ),
+                        options,
+                        read_only=True,
+                        north_vector=preview_north,
+                        flip_x=bool(preview_transform.orientation.flip_x),
+                    )
+                    self.preview_canvases.append((canvas, preview_transform))
+                else:
+                    placeholder = QLabel(f"{title}\n画像未提供")
+                    placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    placeholder.setMinimumSize(320, 240)
+                    placeholder.setStyleSheet(
+                        "background: #303030; color: #cccccc; border: 1px solid #666666;"
+                    )
+                    preview_grid.addWidget(placeholder, row, column)
+                    continue
+
+                pane = QWidget(self)
+                pane_layout = QVBoxLayout(pane)
+                pane_layout.setContentsMargins(2, 2, 2, 2)
+                title_label = QLabel(
+                    f"{title} — {'編集' if index == self._preview_editor_index else '同期プレビュー'}"
+                )
+                title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                pane_layout.addWidget(title_label)
+                pane_layout.addWidget(canvas, 1)
+                preview_grid.addWidget(pane, row, column)
+            self.canvas.regionsChanged.connect(self._sync_preview_masks)
+            layout.addLayout(preview_grid, 1)
+        else:
+            layout.addWidget(self.canvas, 1)
         layout.addWidget(self.histogram)
         layout.addLayout(footer)
 
@@ -458,6 +641,21 @@ class _MaskDialog(QDialog):
             self.resize(initial_width, initial_height)
         else:
             self.setFixedSize(initial_width, initial_height)
+
+    def _sync_preview_masks(self, _region_count: int) -> None:
+        """Convert current editor rectangles to each preview image in real time."""
+        if self._editor_transform is None:
+            return
+        normalized_polygons = [
+            self._editor_transform.rectangle_to_normalized_polygon(region)
+            for region in self.canvas.preview_regions()
+        ]
+        for preview_canvas, preview_transform in self.preview_canvases:
+            pixel_polygons = [
+                preview_transform.normalized_points_to_pixel(polygon)
+                for polygon in normalized_polygons
+            ]
+            preview_canvas.set_preview_polygons(pixel_polygons)
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:
         """ユーザーによるリサイズ時にウィンドウの縦横比を維持する。
@@ -537,6 +735,12 @@ class _MaskDialog(QDialog):
 def selectMaskRegions(
     image: np.ndarray,
     display_options: dict | None = None,
+    *,
+    preview_images: list[
+        tuple[str, np.ndarray | None, SolarTransform | None]
+    ] | None = None,
+    editor_transform: SolarTransform | None = None,
+    preview_editor_index: int = 0,
 ) -> list[tuple[int, int, int, int]]:
     """PyQt ダイアログで複数の矩形マスク領域を選択する。
 
@@ -580,7 +784,13 @@ def selectMaskRegions(
         options.update(display_options)
 
     ensure_qapplication()
-    dialog = _MaskDialog(image, options)
+    dialog = _MaskDialog(
+        image,
+        options,
+        preview_images=preview_images,
+        editor_transform=editor_transform,
+        preview_editor_index=preview_editor_index,
+    )
     regions = (
         dialog.canvas.regions.copy()
         if dialog.exec() == QDialog.DialogCode.Accepted
@@ -770,6 +980,268 @@ def applyMask(
         "remaining_candidate_count": int(count),
     }
     return count, masked_image, details
+
+
+def _single_polygon_coverage(
+    shape: tuple[int, int],
+    vertices: np.ndarray,
+) -> np.ndarray:
+    """Test image pixel centers against one polygon using an even-odd rule."""
+    height, width = int(shape[0]), int(shape[1])
+    vertices = np.asarray(vertices, dtype=np.float64)
+    if vertices.ndim != 2 or vertices.shape[0] < 3 or vertices.shape[1] != 2:
+        raise ValueError("多角形マスクは3点以上の (x, y) 座標で指定してください。")
+    if not np.all(np.isfinite(vertices)):
+        raise ValueError("多角形マスクの頂点には有限値を指定してください。")
+
+    vertices = np.clip(
+        vertices,
+        [-width * 4, -height * 4],
+        [width * 5, height * 5],
+    )
+    x_min = max(0, int(np.floor(vertices[:, 0].min())))
+    x_max = min(width, int(np.ceil(vertices[:, 0].max())) + 1)
+    y_min = max(0, int(np.floor(vertices[:, 1].min())))
+    y_max = min(height, int(np.ceil(vertices[:, 1].max())) + 1)
+    coverage = np.zeros((height, width), dtype=bool)
+    if x_min >= x_max or y_min >= y_max:
+        return coverage
+
+    grid_x, grid_y = np.meshgrid(
+        np.arange(x_min, x_max, dtype=np.float64),
+        np.arange(y_min, y_max, dtype=np.float64),
+    )
+    inside = np.zeros(grid_x.shape, dtype=bool)
+    on_boundary = np.zeros(grid_x.shape, dtype=bool)
+    for index in range(len(vertices)):
+        first = vertices[index]
+        second = vertices[(index + 1) % len(vertices)]
+        x1, y1 = float(first[0]), float(first[1])
+        x2, y2 = float(second[0]), float(second[1])
+        delta_x, delta_y = x2 - x1, y2 - y1
+        relative_x, relative_y = grid_x - x1, grid_y - y1
+        cross = relative_x * delta_y - relative_y * delta_x
+        dot = relative_x * delta_x + relative_y * delta_y
+        length_squared = delta_x * delta_x + delta_y * delta_y
+        on_boundary |= (
+            (np.abs(cross) <= 1e-9)
+            & (dot >= -1e-9)
+            & (dot <= length_squared + 1e-9)
+        )
+
+        if delta_y != 0.0:
+            crosses_ray = (y1 > grid_y) != (y2 > grid_y)
+            intersection_x = x1 + (grid_y - y1) * delta_x / delta_y
+            inside ^= crosses_ray & (grid_x < intersection_x)
+
+    coverage[y_min:y_max, x_min:x_max] = inside | on_boundary
+    return coverage
+
+
+def polygon_coverage_mask(
+    shape: tuple[int, int],
+    polygons: list[np.ndarray],
+) -> np.ndarray:
+    """Rasterize polygons by testing pixel centers in the image coordinate plane.
+
+    Parameters
+    ----------
+    shape : tuple[int, int]
+        Image height and width.
+    polygons : list[numpy.ndarray]
+        Polygon vertices in image pixel coordinates.
+
+    Returns
+    -------
+    numpy.ndarray
+        Boolean array identifying pixel centers covered by any polygon.
+    """
+    height, width = int(shape[0]), int(shape[1])
+    if height <= 0 or width <= 0:
+        raise ValueError("マスク対象の画像サイズは正の値にしてください。")
+
+    coverage = np.zeros((height, width), dtype=bool)
+    for polygon in polygons:
+        coverage |= _single_polygon_coverage((height, width), polygon)
+    return coverage
+
+
+@overload
+def applyPolygonMask(
+    labels: np.ndarray,
+    polygons: list[np.ndarray],
+    original_count: int,
+    return_details: Literal[False] = False,
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
+) -> tuple[int, np.ndarray]: ...
+
+
+@overload
+def applyPolygonMask(
+    labels: np.ndarray,
+    polygons: list[np.ndarray],
+    original_count: int,
+    return_details: Literal[True],
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
+) -> tuple[int, np.ndarray, dict]: ...
+
+
+def applyPolygonMask(
+    labels: np.ndarray,
+    polygons: list[np.ndarray],
+    original_count: int,
+    return_details: bool = False,
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
+) -> tuple[int, np.ndarray] | tuple[int, np.ndarray, dict]:
+    """Exclude sunspot candidates using polygons in image pixel coordinates.
+
+    Parameters
+    ----------
+    labels : numpy.ndarray
+        Two-dimensional labeled candidate image.
+    polygons : list[numpy.ndarray]
+        Polygon vertices in zero-based image pixel coordinates.
+    original_count : int
+        Candidate count before applying the masks.
+    return_details : bool, optional
+        Whether to return per-polygon exclusion details.
+    boundary_policy : Literal["overlap", "centroid", "contained"], optional
+        Candidate boundary policy, matching the rectangular mask behavior.
+
+    Returns
+    -------
+    tuple
+        Remaining count and binary image, with details when requested.
+    """
+    if labels.ndim != 2:
+        raise ValueError("ラベル画像は2次元配列にしてください。")
+    if boundary_policy not in ("overlap", "centroid", "contained"):
+        raise ValueError(f"未対応のマスク境界判定方式です: {boundary_policy}")
+
+    height, width = labels.shape
+    candidate_labels = np.unique(labels)
+    candidate_labels = candidate_labels[candidate_labels > 0]
+    candidate_centroids: dict[int, tuple[float, float]] = {}
+    for label_value in candidate_labels:
+        y_coordinates, x_coordinates = np.nonzero(labels == label_value)
+        if x_coordinates.size:
+            candidate_centroids[int(label_value)] = (
+                float(x_coordinates.mean()),
+                float(y_coordinates.mean()),
+            )
+
+    polygon_masks: list[np.ndarray] = []
+    for polygon in polygons:
+        vertices = np.asarray(polygon, dtype=np.float64)
+        if vertices.ndim != 2 or vertices.shape[0] < 3 or vertices.shape[1] != 2:
+            raise ValueError("多角形マスクは3点以上の (x, y) 座標で指定してください。")
+        if not np.all(np.isfinite(vertices)):
+            raise ValueError("多角形マスクの頂点には有限値を指定してください。")
+        polygon_masks.append(_single_polygon_coverage((height, width), vertices))
+
+    mask_coverage = (
+        np.logical_or.reduce(polygon_masks)
+        if polygon_masks
+        else np.zeros((height, width), dtype=bool)
+    )
+    contained_labels: set[int] = set()
+    if boundary_policy == "contained":
+        for label_value in candidate_labels:
+            y_coordinates, x_coordinates = np.nonzero(labels == label_value)
+            if x_coordinates.size and np.all(mask_coverage[y_coordinates, x_coordinates]):
+                contained_labels.add(int(label_value))
+
+    excluded_labels: set[int] = set()
+    physically_overlapping_labels: set[int] = set()
+    region_details: list[dict] = []
+
+    for index, (polygon, region_mask) in enumerate(
+        zip(polygons, polygon_masks, strict=True),
+        start=1,
+    ):
+        vertices = np.asarray(polygon, dtype=np.float64)
+        ys, xs = np.nonzero(region_mask)
+        if xs.size:
+            x1, x2 = int(xs.min()), int(xs.max()) + 1
+            y1, y2 = int(ys.min()), int(ys.max()) + 1
+            overlapping_values = np.unique(labels[region_mask])
+            overlapping_labels = {
+                int(value) for value in overlapping_values if value > 0
+            }
+        else:
+            x1 = y1 = x2 = y2 = 0
+            overlapping_labels = set()
+
+        physically_overlapping_labels.update(overlapping_labels)
+        if boundary_policy == "overlap":
+            selected_labels = overlapping_labels
+        elif boundary_policy == "centroid":
+            points = vertices.astype(np.float32)
+            selected_labels = {
+                label_value
+                for label_value, centroid in candidate_centroids.items()
+                if cv2.pointPolygonTest(points, centroid, False) >= 0
+            }
+        else:
+            selected_labels = contained_labels.intersection(overlapping_labels)
+
+        excluded_labels.update(selected_labels)
+        area_pixels = int(np.count_nonzero(region_mask))
+        region_details.append(
+            {
+                "index": index,
+                "x": int(x1),
+                "y": int(y1),
+                "width": int(max(0, x2 - x1)),
+                "height": int(max(0, y2 - y1)),
+                "vertices": vertices.tolist(),
+                "clipped_bounds": (
+                    {
+                        "x1": int(x1),
+                        "y1": int(y1),
+                        "x2_exclusive": int(x2),
+                        "y2_exclusive": int(y2),
+                    }
+                    if area_pixels
+                    else None
+                ),
+                "area_pixels": area_pixels,
+                "image_coverage_percent": round(area_pixels / (width * height) * 100, 4),
+                "overlapping_candidate_count": len(overlapping_labels),
+                "overlapping_candidate_labels": sorted(overlapping_labels),
+                "excluded_candidate_count": len(selected_labels),
+                "excluded_candidate_labels": sorted(selected_labels),
+            }
+        )
+
+    masked_labels = labels.copy()
+    if excluded_labels:
+        masked_labels[np.isin(masked_labels, list(excluded_labels))] = 0
+    count = max(0, int(original_count) - len(excluded_labels))
+    masked_image = np.where(masked_labels > 0, 0, 255).astype(np.uint8)
+    LOGGER.info(
+        "多角形マスクで除外した黒点数: %d (boundary_policy=%s)",
+        len(excluded_labels),
+        boundary_policy,
+    )
+
+    if not return_details:
+        return count, masked_image
+
+    details = {
+        "image_width": int(width),
+        "image_height": int(height),
+        "selected_region_count": len(polygons),
+        "boundary_policy": boundary_policy,
+        "regions": region_details,
+        "original_candidate_count": int(original_count),
+        "overlapping_candidate_labels": sorted(physically_overlapping_labels),
+        "excluded_candidate_count": len(excluded_labels),
+        "excluded_candidate_labels": sorted(excluded_labels),
+        "remaining_candidate_count": int(count),
+    }
+    return count, masked_image, details
+
 
 
 @overload

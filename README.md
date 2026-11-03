@@ -1,9 +1,8 @@
-# pyproject-template
+# 太陽黒点検出アプリケーション
 
-This is a template for Python project repositories, intended for use by team members.
+低品質の太陽画像から黒点候補を抽出し、画像処理の各段階を確認する Python アプリケーションです。比較モードでは、同一日の最大4観測所の画像を太陽中心・北方向・太陽半径に基づく共通座標で比較し、対応候補のCSVを出力します。
 
-このテンプレートを使用する方法の詳細は、tutorialフォルダを参照してください。
-なお、本リポジトリは`Require a pull request`を有効にしているため、`pull-request-manual`を参照しながら開発を行ってください。
+本リポジトリでは、単一画像モードと複数観測所の比較モードを提供します。開発・運用手順は本 README と `docs/` を参照してください。
 
 tutorial
 
@@ -23,6 +22,8 @@ run.bat --setup
 ```
 
 このコマンドは `.venv` を作成または再利用し、`pyproject.toml` の `[project].dependencies` に定義された実行時依存パッケージをインストールします。開発用の `[project.optional-dependencies].dev` はインストールしません。セットアップ後は、引数なしの `run.bat` で自動的に `.venv` が使用されます。
+
+プロジェクト配布名（`pyproject.toml` の `[project].name`）を変更した後は、既存の仮想環境に登録された配布メタデータも更新するため、`run.bat --setup` を再実行してください。ランチャーはこの名前を使ってインストール状態を確認します。
 
 システムPythonへインストールする場合:
 
@@ -81,3 +82,29 @@ CSV の列名・値の意味・座標系・複数マスクに重なった場合�
 - [総合利用説明書](docs/user_guide.md)：起動手順、3つのダイアログ、設定項目、出力ファイル、ログの読み方を説明します。
 - [CSV出力ガイド](docs/csv_output_guide.md)：CSVの各列、座標系、除外理由の詳細を説明します。
 - [画像確認ダイアログ操作ガイド](docs/image_viewer_guide.md)：最終結果確認画面の操作方法を説明します。
+
+## 比較モード（最大4観測所）
+
+同じ日付に入手できた最大4観測所の太陽画像を、太陽中心・北方向・太陽半径で定義した共通座標上で比較できます。画像自体は回転・反転せず、黒点座標と共通マスクを変換します。
+
+初回は `docs/templates/sources.example.yaml` を入力データルートの `sources.yaml` にコピーして4観測所の実際の向きを登録します。日付フォルダー名は `YYYY-MM-DD` とし、画像の枚数と `comparison.yaml` の `samples` 件数を一致させてください。各サンプルの `source_id` は `sources.yaml` に登録済みである必要があります。
+
+入力データルート（既定の `source_input/`）はリポジトリの外に置いても構いません。任意の場所に `sources.yaml` と日付フォルダーをまとめ、`--compare` に日付フォルダーのパスを指定してください。
+
+```powershell
+python run.py --compare
+python run.py --compare source_input/2026-11-02
+# リポジトリ外に置いた場合の例
+python run.py --compare "E:/SolarData/2026-11-02"
+```
+
+Windows の `run.bat` からも起動できます。
+
+```bat
+run.bat --compare
+run.bat --compare source_input\2026-11-02
+run.bat --venv --compare source_input\2026-11-02
+run.bat --compare "E:\SolarData\2026-11-02"
+```
+
+比較モードでは4画像同期マスク編集、方向軸表示、north_vector または 0～360°の north_angle_deg による方向指定、解析段階別比較サマリー、画像座標・共通座標で分割したCSV、黒点の自動対応付けを利用できます。詳しい準備と出力仕様は [比較モード利用マニュアル](docs/comparison_mode_manual.md) を参照してください。従来の `python run.py` / `run.bat` による単一画像モードは変更ありません。

@@ -63,8 +63,9 @@ run.bat --venv
 
 1. PATH上の **python**、またはPython Launcherの **py -3** からPython 3.13以上を探します。既存の **.venv** がある場合はその環境を再利用します。
 2. **.venv** がない場合は新規作成します。壊れた・不完全なフォルダーだけが残っている場合は、そのフォルダーを作り直します。
-3. **.venv** のPythonで **python -m pip install --only-binary=scikit-image -e .** を実行します。pipが **pyproject.toml** の **[project].dependencies** を読み取り、実行時依存パッケージを導入します。
-4. セットアップ結果を表示して終了します。アプリケーションは起動しません。
+3. **ensurepip** でpipを利用可能な状態にします。
+4. **.venv** のPythonで **python -m pip install --only-binary=scikit-image -e .** を実行します。pipが **pyproject.toml** の **[project].dependencies** を読み取り、実行時依存パッケージを導入します。
+5. セットアップ結果を表示して終了します。アプリケーションは起動しません。
 
 **--setup** は初回だけでなく、仮想環境の依存パッケージを更新・修復したい場合にも使用できます。既存の **.venv** がPython 3.13未満の場合は、案内に従って **.venv** を削除してから再実行してください。
 

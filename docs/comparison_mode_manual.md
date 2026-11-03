@@ -20,7 +20,7 @@
 
 ## 1. 比較モードでできること
 
-- 固定された4観測所のうち、その日に入手できた1～4枚を1回の実行でまとめて解析します。
+- `sources.yaml` に登録された最大4観測所のうち、その日に入手できた画像を1～4枚まとめて解析します。
 - 黒点位置を、太陽中心を原点・太陽北を +Y・太陽半径を 1 とする共通座標に変換して CSV に出力します。
 - マスクを共通座標の多角形として保存し、向きや大きさの異なる画像に同じ領域を適用できます。
 - 画像解析そのものでは元画像を回転・反転・リサイズしません。マスクと黒点の座標を共通座標へ変換します。
@@ -109,7 +109,7 @@ sources:
 
 ### 4-1. 日付フォルダーを作る
 
-入力データルートの下に `YYYY-MM-DD` 形式のフォルダーを作ります。既定の場所を使う場合の例: `source_input/2026-11-02/`。
+入力データルートの下に `YYYYMMDD` 形式のフォルダーを作ります。既定の場所を使う場合の例: `source_input/20261102/`。
 
 **フォルダー名が比較日付の唯一の情報源**です。`comparison.yaml` や各サンプルには日付を書きません。
 
@@ -119,7 +119,7 @@ sources:
 
 ### 4-3. `comparison.yaml` を書く
 
-`docs/templates/comparison.example.yaml` を日付フォルダーへコピーして編集します。入手できた観測所だけを記載し、未提供の観測所用の空項目は不要です。
+`docs/templates/comparison.example.yaml` を日付フォルダーへコピーして編集します。入手できた観測所だけを記載します。`samples` の件数は日付フォルダー内の対応画像ファイル数と一致させてください。4件固定ではありません。各 `source_id` は `sources.yaml` に登録済みである必要があり、未登録IDがある場合は比較全体がエラーになります。
 
 ```yaml
 # 省略可。省略時は初回に作成した共通マスクを使用します。
@@ -160,7 +160,7 @@ python run.py --compare
 ### コマンドラインで指定
 
 ```powershell
-python run.py --compare source_input/2026-11-02
+python run.py --compare source_input/20261102
 ```
 
 相対パスはプロジェクトルート基準です。絶対パスならリポジトリ外の任意の場所を指定できます。空白を含むパスは引用符で囲みます。選択した日付フォルダーの**親フォルダーが入力データルート**として扱われ、その直下に `sources.yaml` が必要です。日付フォルダー内には `comparison.yaml` と画像を配置します。画像は日付フォルダー内、`mask_template` は入力データルート内を指定してください。
@@ -171,9 +171,9 @@ Windows では次のように `run.bat` からも起動できます。既存の 
 
 ```bat
 run.bat --compare
-run.bat --compare source_input\2026-11-02
-run.bat --venv --compare source_input\2026-11-02
-run.bat --compare "E:\SolarData\2026-11-02"
+run.bat --compare source_input\20261102
+run.bat --venv --compare source_input\20261102
+run.bat --compare "E:\SolarData\20261102"
 ```
 
 `python run.py`（引数なし）および `run.bat`（引数なし）は従来どおり単一画像モードで、動作・出力は変わりません。
@@ -281,7 +281,9 @@ results/session_YYYYMMDD_HHMMSS_xxxxxx/
 | 原因 | 対処 |
 |---|---|
 | `sources.yaml` がない・構文不正・4か所でない・ID重複・方向設定が不正 | `sources.yaml` を修正 |
-| 日付フォルダー名が `YYYY-MM-DD` でない・実在しない日付 | フォルダー名を修正 |
+| 日付フォルダー名が `YYYYMMDD` でない・実在しない日付 | フォルダー名を修正 |
+| 日付フォルダー内の対応画像数と `samples` 件数が異なる | 画像と `samples` を1件ずつ対応させる |
+| `comparison.yaml` の `source_id` が `sources.yaml` に未登録 | `sources.yaml` に登録するか、IDを修正 |
 | `comparison.yaml` がない・`samples` が空・未対応キーがある | `comparison.yaml` を修正 |
 | `mask_template` で指定したファイルがない | パスを修正するか項目を削除 |
 
@@ -289,8 +291,7 @@ results/session_YYYYMMDD_HHMMSS_xxxxxx/
 
 | 原因 | 対処 |
 |---|---|
-| `source_id` が未登録 | IDを修正 |
-| 同じ `source_id` が複数行ある | 該当IDの全行がスキップされるため、1行にする |
+ | 同じ `source_id` が複数行ある | 該当IDの全行がスキップされるため、1行にする |
 | 画像がない・対応外形式・読み込めない・2次元でない | ファイルを確認 |
 | 分解能が未入力、0以下、NaN、無限大 | 正の数値を入力 |
 | `per_sample` で方向項目が欠落・不正 | `north_vector` または `north_angle_deg` のどちらかと `flip_x` を入力 |

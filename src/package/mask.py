@@ -29,68 +29,16 @@ from PyQt6.QtWidgets import (
 )
 
 from src.package.qt_dialogs import ensure_qapplication
+from src.package.qt_histogram import BrightnessHistogramWidget
+from src.package.qt_image import colorize_intensity
 
 LOGGER = logging.getLogger("sunspot.mask")
 
 
 def _to_display_image(image: np.ndarray, colormap: str) -> np.ndarray:
-    """入力画像を指定カラーマップの表示用 BGR 画像へ変換する。
-
-    Parameters
-    ----------
-    image : numpy.ndarray
-        表示対象の2次元画像。
-    colormap : str
-        OpenCV のカラーマップ名。``GRAY`` の場合はグレースケール表示。
-
-    Returns
-    -------
-    numpy.ndarray
-        8 bit の BGR 表示画像。
-
-    Raises
-    ------
-    ValueError
-        未対応のカラーマップが指定された場合。
-    """
-    normalized = np.empty(image.shape, dtype=np.uint8)
-    cv2.normalize(
-        image,
-        normalized,
-        0,
-        255,
-        cv2.NORM_MINMAX,
-        dtype=cv2.CV_8U,
-    )
-
-    colormaps = {
-        "AUTUMN": cv2.COLORMAP_AUTUMN,
-        "BONE": cv2.COLORMAP_BONE,
-        "JET": cv2.COLORMAP_JET,
-        "WINTER": cv2.COLORMAP_WINTER,
-        "RAINBOW": cv2.COLORMAP_RAINBOW,
-        "OCEAN": cv2.COLORMAP_OCEAN,
-        "SUMMER": cv2.COLORMAP_SUMMER,
-        "SPRING": cv2.COLORMAP_SPRING,
-        "COOL": cv2.COLORMAP_COOL,
-        "HSV": cv2.COLORMAP_HSV,
-        "PINK": cv2.COLORMAP_PINK,
-        "HOT": cv2.COLORMAP_HOT,
-        "PARULA": cv2.COLORMAP_PARULA,
-        "TURBO": cv2.COLORMAP_TURBO,
-        "TWILIGHT": cv2.COLORMAP_TWILIGHT,
-        "TWILIGHT_SHIFTED": cv2.COLORMAP_TWILIGHT_SHIFTED,
-        "VIRIDIS": cv2.COLORMAP_VIRIDIS,
-        "PLASMA": cv2.COLORMAP_PLASMA,
-        "INFERNO": cv2.COLORMAP_INFERNO,
-        "MAGMA": cv2.COLORMAP_MAGMA,
-        "CIVIDIS": cv2.COLORMAP_CIVIDIS,
-    }
-    if colormap.upper() == "GRAY":
-        return cv2.cvtColor(normalized, cv2.COLOR_GRAY2BGR)
-    if colormap.upper() not in colormaps:
-        raise ValueError(f"未対応のカラーマップです: {colormap}")
-    return cv2.applyColorMap(normalized, colormaps[colormap.upper()])
+    """輝度画像を指定カラーマップの表示用 BGR 画像へ変換する。"""
+    display_image, _, _ = colorize_intensity(image, colormap)
+    return display_image
 
 
 class _MaskCanvas(QWidget):
@@ -130,14 +78,13 @@ class _MaskCanvas(QWidget):
             QImage.Format.Format_RGB888,
         ).copy()
 
-        finite_values = np.nan_to_num(
-            image.astype(np.float64),
-            nan=0.0,
-            posinf=0.0,
-            neginf=0.0,
-        )
-        self._minimum = float(finite_values.min())
-        self._maximum = float(finite_values.max())
+        finite_values = image[np.isfinite(image)]
+        if finite_values.size:
+            self._minimum = float(finite_values.min())
+            self._maximum = float(finite_values.max())
+        else:
+            self._minimum = 0.0
+            self._maximum = 0.0
 
         # 画像と同じ OpenCV カラーマップで、上端が最大値・下端が最小値の
         # 縦向きカラーバーを作成する。
@@ -492,9 +439,12 @@ class _MaskDialog(QDialog):
         footer.addWidget(undo_button)
         footer.addWidget(button_box)
 
+        self.histogram = BrightnessHistogramWidget(image, self)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.addWidget(self.canvas, 1)
+        layout.addWidget(self.histogram)
         layout.addLayout(footer)
 
         requested_width = max(480, int(options["window_width"]))

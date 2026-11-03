@@ -34,6 +34,7 @@ from src.package import (
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 from src.package.run_logger import RunLogger
+from src.package.version_info import get_application_version
 from src.package.qt_preview import (
     build_invalid_sunspot_mask,
     show_final_preview,
@@ -158,7 +159,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         )
         LOGGER.debug("画像メタデータ取得時の詳細:", exc_info=True)
 
-    moduleVersions = {}
+    moduleVersions: dict[str, Any] = {"Application": get_application_version()}
     raw_image = image
     solar_geometry: tuple[tuple[float, float], float] | None = None
     min_area_exclusions: list[tuple[np.ndarray, list[int], str, int]] = []
@@ -248,6 +249,9 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         svFolder = output_root
 
         if extractionMethod == "countComponents":
+            moduleVersions["Extraction"] = {
+                "countComponents": connection_count.version,
+            }
             imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}.png"
 
             count, image, binary_image, connected_component_details = (
@@ -267,6 +271,10 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
                     )
                 )
         elif extractionMethod == "watershed":
+            moduleVersions["Extraction"] = {
+                "countComponents": connection_count.version,
+                "watershed": watershed.version,
+            }
             imgName = f"watershed_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}_minDistance{extractionConfig['watershed']['min_distance']}.png"
 
             count, image, binary_image, connected_component_details = (
@@ -304,8 +312,11 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
 
+        # 領域選択の背景には黒点ラベルではなく、周縁減光補正後の輝度画像を表示する。
+        # マスク対象のラベル画像は sunspot_labels として別に保持する。
         regions = mask.selectMaskRegions(
-            binary_image, config.get("MaskDialog", {}).get("display")
+            limb_corrected_image,
+            config.get("MaskDialog", {}).get("display"),
         )
 
         # 選択した除外領域を0で埋め、強調画像のマスク適用版も保存する。
@@ -449,6 +460,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
             }
         )
         if run_logger is not None:
+            run_logger.record_event("module_versions", moduleVersions)
             run_logger.record_event("mask_applied", mask_details)
 
         statistics_path = output_root / "sunspot_statistics.csv"
@@ -534,7 +546,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
             radial_exclusions,
         )
         show_final_preview(
-            image,
+            limb_corrected_image,
             regions,
             config.get("Display", {}),
             invalid_sunspot_mask,

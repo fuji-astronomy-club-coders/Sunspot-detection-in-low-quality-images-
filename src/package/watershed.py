@@ -4,13 +4,14 @@
 import logging
 from typing import Literal, TypedDict, overload
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy import ndimage
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 
 LOGGER = logging.getLogger("sunspot.watershed")
+
+version = "1.00"
 
 
 class MinAreaFilterDetails(TypedDict):
@@ -65,7 +66,7 @@ def watershedCount(
     Returns
     -------
     tuple
-        領域数、色分け画像、フィルター後ラベル画像。return_details=True の場合は
+        領域数、二値画像、フィルター後ラベル画像。return_details=True の場合は
         minArea 適用前ラベル画像・除外ラベル・最小面積を含む情報も返す。
     """
     # 黒点候補をTrue、背景をFalseにする
@@ -73,11 +74,7 @@ def watershedCount(
 
     # 黒点候補が存在しない場合
     if not np.any(sunspot_mask):
-        empty_image = np.full(
-            (*binary_image.shape, 3),
-            255,
-            dtype=np.uint8,
-        )
+        empty_image = np.full(binary_image.shape, 255, dtype=np.uint8)
         empty_labels = np.zeros(binary_image.shape, dtype=np.intp)
         if return_details:
             return 0, empty_image, empty_labels, {
@@ -137,16 +134,9 @@ def watershedCount(
     # 小さな領域を除外したラベル画像を作成
     filtered_labels = np.where(filtered_mask, labels, 0)
 
-     # ラベル画像をカラフルなRGB画像に変換
-    normalized_labels = filtered_labels.astype(np.float64)
-    max_label = int(normalized_labels.max())
-
-    if max_label > 0:
-        normalized_labels /= max_label
-
-    result_image = (
-        plt.get_cmap("nipy_spectral")(normalized_labels)[..., :3] * 255
-    ).astype(np.uint8)
+    # ラベルIDを画素色へ変換せず、抽出結果は通常の二値画像として返す。
+    result_image = np.full(binary_image.shape, 255, dtype=np.uint8)
+    result_image[filtered_mask] = 0
 
     # ラベル0は除外済みなので、そのまま数える。
     count = int(np.count_nonzero(keep_mask))

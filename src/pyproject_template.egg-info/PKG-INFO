@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: pyproject-template
-Version: 0.0.0
+Version: 0.2.0
 Summary: This is a template for Python project repositories, intended for use by team members.
 Requires-Python: >=3.13
 License-File: LICENSE

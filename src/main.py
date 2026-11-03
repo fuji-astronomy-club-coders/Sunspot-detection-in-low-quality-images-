@@ -317,9 +317,11 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
                 raise ValueError("Rmask を使用するには MIN2 の太陽中心・半径が必要です。")
             (center_x, center_y), solar_radius = solar_geometry
             radius_ratio = float(radial_settings.get("radius_ratio", 0.85))
-            if not 0.0 < radius_ratio <= 1.0:
-                raise ValueError("Mask.Rmask.radius_ratio は 0 より大きく 1 以下にしてください。")
+            if not np.isfinite(radius_ratio) or radius_ratio <= 0.0:
+                raise ValueError("Mask.Rmask.radius_ratio は正の有限値にしてください。")
             radial_limit = solar_radius * radius_ratio
+            if not np.isfinite(radial_limit):
+                raise ValueError("Mask.Rmask の除外境界半径が有限値の範囲を超えています。")
             image_y, image_x = np.indices(masked_emphasized_image.shape[:2], dtype=np.float32)
             radial_area = np.hypot(image_x - center_x, image_y - center_y) >= radial_limit
             masked_emphasized_image[radial_area] = 0
@@ -532,6 +534,10 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
             regions,
             config.get("Display", {}),
             invalid_sunspot_mask,
+            solar_geometry=solar_geometry,
+            rmask_radius_ratio=float(
+                config.get("Mask", {}).get("Rmask", {}).get("radius_ratio", 0.85)
+            ),
         )
     
 

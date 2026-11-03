@@ -684,19 +684,27 @@ def applyMask(
     """
     if labels.ndim != 2:
         raise ValueError("ラベル画像は2次元配列にしてください。")
-    if boundary_policy not in ("overlap", "centroid"):
+    if boundary_policy not in ("overlap", "centroid", "contained"):
         raise ValueError(f"未対応のマスク境界判定方式です: {boundary_policy}")
 
     height, width = labels.shape
     candidate_labels = np.unique(labels)
     candidate_labels = candidate_labels[candidate_labels > 0]
     candidate_centroids: dict[int, tuple[float, float]] = {}
+    candidate_bounds: dict[int, tuple[int, int, int, int]] = {}
     for label_value in candidate_labels:
         y_coordinates, x_coordinates = np.nonzero(labels == label_value)
         if x_coordinates.size:
-            candidate_centroids[int(label_value)] = (
+            label = int(label_value)
+            candidate_centroids[label] = (
                 float(x_coordinates.mean()),
                 float(y_coordinates.mean()),
+            )
+            candidate_bounds[label] = (
+                int(x_coordinates.min()),
+                int(x_coordinates.max()),
+                int(y_coordinates.min()),
+                int(y_coordinates.max()),
             )
 
     excluded_labels: set[int] = set()
@@ -736,11 +744,18 @@ def applyMask(
 
         if boundary_policy == "overlap":
             selected_labels = overlapping_labels
-        else:
+        elif boundary_policy == "centroid":
             selected_labels = {
                 label_value
                 for label_value, (centroid_x, centroid_y) in candidate_centroids.items()
                 if x1 <= centroid_x < x2 and y1 <= centroid_y < y2
+            }
+        else:
+            # 外接矩形がROI内に収まれば、黒点の全画素がこのROI内にある。
+            selected_labels = {
+                label_value
+                for label_value, (min_x, max_x, min_y, max_y) in candidate_bounds.items()
+                if x1 <= min_x and max_x < x2 and y1 <= min_y and max_y < y2
             }
 
         excluded_labels.update(selected_labels)
@@ -840,10 +855,10 @@ def applyRadialMask(
     """
     if labels.ndim != 2:
         raise ValueError("ラベル画像は2次元配列にしてください。")
-    if boundary_policy not in ("overlap", "centroid"):
+    if boundary_policy not in ("overlap", "centroid", "contained"):
         raise ValueError(f"未対応のマスク境界判定方式です: {boundary_policy}")
-    if not np.isfinite(radius_ratio) or not 0.0 < radius_ratio <= 1.0:
-        raise ValueError("Rmask.radius_ratio は 0 より大きく 1 以下にしてください。")
+    if not np.isfinite(radius_ratio) or radius_ratio <= 0.0:
+        raise ValueError("Rmask.radius_ratio は正の有限値にしてください。")
     if not np.isfinite(solar_radius) or solar_radius <= 0:
         raise ValueError("太陽半径は正の有限値である必要があります。")
     center_x, center_y = float(center[0]), float(center[1])
@@ -851,6 +866,8 @@ def applyRadialMask(
         raise ValueError("太陽中心は有限値である必要があります。")
 
     threshold_radius = float(solar_radius) * float(radius_ratio)
+    if not np.isfinite(threshold_radius):
+        raise ValueError("Rmask の除外境界半径が有限値の範囲を超えています。")
     candidate_labels = np.unique(labels)
     candidate_labels = candidate_labels[candidate_labels > 0]
     excluded_labels: list[int] = []
@@ -871,8 +888,11 @@ def applyRadialMask(
 
         if boundary_policy == "overlap":
             should_exclude = bool(np.any(pixel_distances >= threshold_radius))
-        else:
+        elif boundary_policy == "centroid":
             should_exclude = centroid_distance >= threshold_radius
+        else:
+            # 黒点の全画素が境界円の外側にある場合だけ除外する。
+            should_exclude = bool(np.all(pixel_distances >= threshold_radius))
 
         if should_exclude:
             label = int(label_value)

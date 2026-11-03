@@ -76,7 +76,57 @@ class MaskBoundaryPolicyTests(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(details["excluded_candidate_labels"], [])
 
-    def test_radial_ratio_must_be_between_zero_and_one(self) -> None:
+    def test_rectangular_contained_policy_excludes_only_fully_contained_spots(self) -> None:
+        labels = np.zeros((12, 12), dtype=np.int32)
+        labels[5, 5:8] = 1
+        labels[6, 7:10] = 2
+
+        count, _image, details = mask.applyMask(
+            labels,
+            [(5, 5, 3, 1)],
+            2,
+            return_details=True,
+            boundary_policy="contained",
+        )
+
+        self.assertEqual(count, 1)
+        self.assertEqual(details["excluded_candidate_labels"], [1])
+
+    def test_radial_contained_policy_excludes_only_fully_outer_spots(self) -> None:
+        labels = np.zeros((25, 25), dtype=np.int32)
+        labels[12, 20:22] = 1
+        labels[12, 22:24] = 2
+
+        count, _image, details = mask.applyRadialMask(
+            labels,
+            2,
+            (12.0, 12.0),
+            10.0,
+            0.85,
+            return_details=True,
+            boundary_policy="contained",
+        )
+
+        self.assertEqual(count, 1)
+        self.assertEqual(details["excluded_candidate_labels"], [2])
+
+    def test_radial_ratio_above_one_is_allowed(self) -> None:
+        labels = np.zeros((40, 40), dtype=np.int32)
+        labels[15, 31] = 1
+
+        count, _image, details = mask.applyRadialMask(
+            labels,
+            1,
+            (15.0, 15.0),
+            10.0,
+            1.6,
+            return_details=True,
+        )
+
+        self.assertEqual(count, 0)
+        self.assertEqual(details["threshold_radius_px"], 16.0)
+
+    def test_radial_ratio_must_be_positive_and_finite(self) -> None:
         labels = np.zeros((3, 3), dtype=np.int32)
 
         with self.assertRaises(ValueError):

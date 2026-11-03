@@ -12,6 +12,7 @@ from PyQt6.QtGui import (
     QImage,
     QKeyEvent,
     QLinearGradient,
+    QPainterPath,
     QKeySequence,
     QMouseEvent,
     QPaintEvent,
@@ -48,6 +49,8 @@ class _FinalPreviewCanvas(QWidget):
         mask_regions: list[tuple[int, int, int, int]] | None = None,
         display_options: dict | None = None,
         invalid_sunspot_mask: np.ndarray | None = None,
+        solar_geometry: tuple[tuple[float, float], float] | None = None,
+        rmask_radius_ratio: float = 0.85,
         parent: QWidget | None = None,
     ) -> None:
         """表示画像、マスク領域オーバーレイ、初期表示範囲を構築する。
@@ -87,6 +90,41 @@ class _FinalPreviewCanvas(QWidget):
             max(int(options.get("mask_fill_alpha", 72)), 0),
             255,
         )
+        self._show_rmask_fill = bool(options.get("show_rmask_fill", False))
+        rmask_color = options.get("rmask_fill_color", [255, 165, 0])
+        if not isinstance(rmask_color, (list, tuple)) or len(rmask_color) != 3:
+            rmask_color = [255, 165, 0]
+        self._rmask_fill_color = tuple(
+            min(max(int(value), 0), 255) for value in rmask_color
+        )
+        self._rmask_fill_alpha = min(
+            max(int(options.get("rmask_fill_alpha", 64)), 0),
+            255,
+        )
+        self._show_solar_circle = bool(options.get("show_solar_circle", False))
+        solar_color = options.get("solar_circle_color", [0, 220, 255])
+        if not isinstance(solar_color, (list, tuple)) or len(solar_color) != 3:
+            solar_color = [0, 220, 255]
+        self._solar_circle_color = tuple(
+            min(max(int(value), 0), 255) for value in solar_color
+        )
+        self._solar_circle_thickness = max(
+            1.0,
+            float(options.get("solar_circle_thickness", 2)),
+        )
+        self._solar_geometry: tuple[float, float, float] | None = None
+        if solar_geometry is not None:
+            (center_x, center_y), radius = solar_geometry
+            geometry_values = (float(center_x), float(center_y), float(radius))
+            if (
+                not all(math.isfinite(value) for value in geometry_values)
+                or geometry_values[2] <= 0
+            ):
+                raise ValueError("太陽近似円の中心・半径は有限値かつ正の半径である必要があります。")
+            self._solar_geometry = geometry_values
+        if not math.isfinite(rmask_radius_ratio) or rmask_radius_ratio <= 0:
+            raise ValueError("Rmask.radius_ratio は正の有限値にしてください。")
+        self._rmask_radius_ratio = float(rmask_radius_ratio)
         self._show_invalid_sunspots = bool(
             options.get("show_invalid_sunspots", True)
         )
@@ -164,6 +202,20 @@ class _FinalPreviewCanvas(QWidget):
         if self._show_mask_fill == visible:
             return
         self._show_mask_fill = visible
+        self.update()
+
+    def set_rmask_fill_visible(self, visible: bool) -> None:
+        """Rmask の円外領域の塗りつぶし表示を切り替える。"""
+        if self._show_rmask_fill == visible:
+            return
+        self._show_rmask_fill = visible
+        self.update()
+
+    def set_solar_circle_visible(self, visible: bool) -> None:
+        """MIN2 の太陽近似円と中心マーカーの表示を切り替える。"""
+        if self._show_solar_circle == visible:
+            return
+        self._show_solar_circle = visible
         self.update()
 
     def set_invalid_sunspots_visible(self, visible: bool) -> None:
@@ -449,11 +501,63 @@ class _FinalPreviewCanvas(QWidget):
                 painter.drawRect(rectangle)
             painter.setBrush(Qt.BrushStyle.NoBrush)
 
+        if self._show_rmask_fill and self._solar_geometry is not None:
+            center_x, center_y, solar_radius = self._solar_geometry
+            radial_radius = solar_radius * self._rmask_radius_ratio
+            center_screen = QPointF(
+                image_rect.left() + (center_x - self._view_x_min) * scale,
+                image_rect.top() + (center_y - self._view_y_min) * scale,
+            )
+            radial_circle = QRectF(
+                center_screen.x() - radial_radius * scale,
+                center_screen.y() - radial_radius * scale,
+                2.0 * radial_radius * scale,
+                2.0 * radial_radius * scale,
+            )
+            radial_path = QPainterPath()
+            radial_path.setFillRule(Qt.FillRule.OddEvenFill)
+            radial_path.addRect(image_rect)
+            radial_path.addEllipse(radial_circle)
+            radial_color = QColor(*self._rmask_fill_color)
+            radial_color.setAlpha(self._rmask_fill_alpha)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.fillPath(radial_path, radial_color)
+
         if self._show_invalid_sunspots and self._invalid_sunspots_qimage is not None:
             painter.drawImage(
                 image_rect,
                 self._invalid_sunspots_qimage,
                 source_rect,
+            )
+
+        if self._show_solar_circle and self._solar_geometry is not None:
+            center_x, center_y, solar_radius = self._solar_geometry
+            center_screen = QPointF(
+                image_rect.left() + (center_x - self._view_x_min) * scale,
+                image_rect.top() + (center_y - self._view_y_min) * scale,
+            )
+            solar_circle = QRectF(
+                center_screen.x() - solar_radius * scale,
+                center_screen.y() - solar_radius * scale,
+                2.0 * solar_radius * scale,
+                2.0 * solar_radius * scale,
+            )
+            solar_pen = QPen(
+                QColor(*self._solar_circle_color),
+                self._solar_circle_thickness,
+            )
+            solar_pen.setCosmetic(True)
+            painter.setPen(solar_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(solar_circle)
+            cross_size = 8.0
+            painter.drawLine(
+                QPointF(center_screen.x() - cross_size, center_screen.y()),
+                QPointF(center_screen.x() + cross_size, center_screen.y()),
+            )
+            painter.drawLine(
+                QPointF(center_screen.x(), center_screen.y() - cross_size),
+                QPointF(center_screen.x(), center_screen.y() + cross_size),
             )
         painter.restore()
 
@@ -703,6 +807,8 @@ class _FinalPreviewDialog(QDialog):
             mask_regions,
             display_options,
             invalid_sunspot_mask,
+            solar_geometry,
+            rmask_radius_ratio,
         )
         toolbar = QToolBar(self)
         toolbar.setMovable(False)
@@ -755,6 +861,24 @@ class _FinalPreviewDialog(QDialog):
         mask_fill_checkbox.setToolTip("選択したマスク範囲の塗りつぶしを表示／非表示")
         mask_fill_checkbox.toggled.connect(self.canvas.set_mask_fill_visible)
         toolbar.addWidget(mask_fill_checkbox)
+
+        rmask_fill_checkbox = QCheckBox("Rmask Fill", self)
+        rmask_fill_checkbox.setChecked(
+            bool((display_options or {}).get("show_rmask_fill", False))
+        )
+        rmask_fill_checkbox.setEnabled(solar_geometry is not None)
+        rmask_fill_checkbox.setToolTip("Rmask の除外領域（境界円の外側）の塗りつぶしを表示／非表示")
+        rmask_fill_checkbox.toggled.connect(self.canvas.set_rmask_fill_visible)
+        toolbar.addWidget(rmask_fill_checkbox)
+
+        solar_circle_checkbox = QCheckBox("太陽近似円", self)
+        solar_circle_checkbox.setChecked(
+            bool((display_options or {}).get("show_solar_circle", False))
+        )
+        solar_circle_checkbox.setEnabled(solar_geometry is not None)
+        solar_circle_checkbox.setToolTip("MIN2 が推定した太陽近似円と中心位置を表示／非表示")
+        solar_circle_checkbox.toggled.connect(self.canvas.set_solar_circle_visible)
+        toolbar.addWidget(solar_circle_checkbox)
 
         invalid_sunspots_checkbox = QCheckBox("無効黒点", self)
         invalid_sunspots_checkbox.setChecked(
@@ -809,6 +933,8 @@ def show_final_preview(
     mask_regions: list[tuple[int, int, int, int]] | None = None,
     display_options: dict | None = None,
     invalid_sunspot_mask: np.ndarray | None = None,
+    solar_geometry: tuple[tuple[float, float], float] | None = None,
+    rmask_radius_ratio: float = 0.85,
 ) -> None:
     """PyQt ダイアログで最終解析画像とマスク領域を操作・確認する。
 
@@ -834,6 +960,8 @@ def show_final_preview(
         mask_regions,
         display_options,
         invalid_sunspot_mask,
+        solar_geometry,
+        rmask_radius_ratio,
     )
     dialog.exec()
     LOGGER.info("Final result preview closed.")

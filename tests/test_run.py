@@ -54,14 +54,14 @@ class ComparisonEntryPointLoggingTests(unittest.TestCase):
 
     def test_folder_selection_cancel_returns_exit_code_two(self) -> None:
         """Canceling the comparison folder chooser exits before creating a run."""
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            with (
-                patch.object(sys, "argv", ["run.py", "--compare"]),
-                patch.object(run, "PROJECT_ROOT", Path(temporary_directory)),
-                patch.object(run, "select_directory", return_value=None),
-                patch.object(run, "RunLogger") as logger_class,
-            ):
-                exit_code = run.main()
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.object(sys, "argv", ["run.py", "--compare"]),
+            patch.object(run, "PROJECT_ROOT", Path(temporary_directory)),
+            patch.object(run, "select_directory", return_value=None),
+            patch.object(run, "RunLogger") as logger_class,
+        ):
+            exit_code = run.main()
 
         self.assertEqual(exit_code, 2)
         logger_class.assert_not_called()

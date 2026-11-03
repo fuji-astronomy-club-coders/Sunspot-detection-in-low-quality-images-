@@ -401,19 +401,30 @@ class _MaskCanvas(QWidget):
                     f"Cursor: x={self._mouse_point[0]}, y={self._mouse_point[1]}  "
                     f"|  Image: {self.image_width} x {self.image_height}"
                 )
-            if self._drawing:
-                x1, y1 = self._start_point
-                x2, y2 = self._current_point
-                lines.append(
-                    f"Selection: x={min(x1, x2)}, y={min(y1, y2)}, "
-                    f"width={abs(x2 - x1)}, height={abs(y2 - y1)}"
-                )
-            elif self.regions:
-                x, y, width, height = self.regions[-1]
-                lines.append(f"Last ROI: x={x}, y={y}, width={width}, height={height}")
+            if self._selection_mode == "connected_component":
+                if self.hovered_label is not None and self.hovered_label > 0:
+                    hover_area = int(np.count_nonzero(self._label_image == self.hovered_label))
+                    lines.append(
+                        f"Hovered component: label={self.hovered_label}, area={hover_area} px"
+                    )
+                lines.append(f"Selected components: {len(self.selected_labels)}")
+            else:
+                if self._drawing:
+                    x1, y1 = self._start_point
+                    x2, y2 = self._current_point
+                    lines.append(
+                        f"Selection: x={min(x1, x2)}, y={min(y1, y2)}, "
+                        f"width={abs(x2 - x1)}, height={abs(y2 - y1)}"
+                    )
+                elif self.regions:
+                    x, y, width, height = self.regions[-1]
+                    lines.append(f"Last ROI: x={x}, y={y}, width={width}, height={height}")
 
         if self._options["show_instructions"]:
-            lines.append("Drag: select ROI | Enter/Esc: finish | Backspace: undo")
+            if self._selection_mode == "connected_component":
+                lines.append("Hover: highlight component | Click: toggle exclusion | Backspace: undo")
+            else:
+                lines.append("Drag: select ROI | Enter/Esc: finish | Backspace: undo")
         if self._options["show_scale"]:
             lines.append(f"Display scale: {scale * 100:.1f}%")
         return lines
@@ -702,7 +713,11 @@ class _MaskDialog(QDialog):
             float(options["window_width"]) / max(float(options["window_height"]), 1.0),
         )
         self._adjusting_size = False
-        self.setWindowTitle("Select Mask Regions")
+        self.setWindowTitle(
+            "Select Connected Components"
+            if selection_mode == "connected_component"
+            else "Select Mask Regions"
+        )
         self._editor_transform = editor_transform
         self.preview_canvases: list[tuple[_MaskCanvas, Any]] = []
 
@@ -916,7 +931,11 @@ class _MaskDialog(QDialog):
             self.accept()
         elif event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
             self.canvas.undo()
-            self.region_count_label.setText(f"選択領域: {len(self.canvas.regions)}")
+            self.region_count_label.setText(
+                f"選択成分: {len(self.canvas.selected_labels)}"
+                if self.canvas._selection_mode == "connected_component"
+                else f"選択領域: {len(self.canvas.regions)}"
+            )
         elif event.key() == Qt.Key.Key_Escape:
             self.accept()
         else:

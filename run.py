@@ -54,6 +54,7 @@ def main() -> int:
             if policy == "fixed":
                 orientation_source = (
                     f"north_vector={source['north_vector']}, "
+                    f"north_angle_deg={source.get('north_angle_deg', 'derived')}, "
                     f"flip_x={source['flip_x']}"
                 )
             else:

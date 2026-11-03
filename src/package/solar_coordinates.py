@@ -132,14 +132,10 @@ class SolarTransform:
             float(-(north[0] * center_x + north[1] * center_y) / radius),
         ]
         return {
-            "coordinate_system": "cartesian_xy",
+            "coordinate_system": "solar_disk_normalized",
+            "direction_coordinate_system": "cartesian_xy",
             "positive_x": "right",
             "positive_y": "up",
-            "north_vector": {
-                "x": float(self.orientation.north_vector[0]),
-                "y": float(self.orientation.north_vector[1]),
-            },
-            "flip_x": bool(self.orientation.flip_x),
             "matrix": matrix,
             "offset": offset,
             "center_x_px": float(center_x),
@@ -150,5 +146,4 @@ class SolarTransform:
                 "y": float(self.orientation.north_vector[1]),
             },
             "flip_x": bool(self.orientation.flip_x),
-            "coordinate_system": "solar_disk_normalized",
         }

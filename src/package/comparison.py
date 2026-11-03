@@ -564,7 +564,18 @@ def _auto_match_common_spots(
                 first_points[:, np.newaxis, :] - second_points[np.newaxis, :, :],
                 axis=2,
             )
-            assigned_first, assigned_second = linear_sum_assignment(distances)
+            # A plain distance-minimizing assignment can sacrifice a valid
+            # in-tolerance pair to reduce the total cost of an out-of-range pair.
+            # Penalize invalid edges enough to maximize the number of valid matches
+            # first, then minimize distance among assignments with that cardinality.
+            assignment_count = min(distances.shape)
+            invalid_penalty = (assignment_count + 1) * (tolerance + 1.0)
+            assignment_costs = np.where(
+                distances <= tolerance,
+                distances,
+                invalid_penalty,
+            )
+            assigned_first, assigned_second = linear_sum_assignment(assignment_costs)
             for row_index, column_index in zip(assigned_first, assigned_second, strict=True):
                 distance = float(distances[row_index, column_index])
                 if distance <= tolerance:

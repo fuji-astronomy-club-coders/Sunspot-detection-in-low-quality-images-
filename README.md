@@ -107,3 +107,13 @@ run.bat --compare "E:\SolarData\2026-11-02"
 ```
 
 比較モードでは4画像同期マスク編集、方向軸表示、north_vector または 0～360°の north_angle_deg による方向指定、解析段階別比較サマリー、画像座標・共通座標で分割したCSV、黒点の自動対応付けを利用できます。詳しい準備と出力仕様は [比較モード利用マニュアル](docs/comparison_mode_manual.md) を参照してください。従来の `python run.py` / `run.bat` による単一画像モードは変更ありません。
+
+## 画像間の回転角測定ツール
+
+2枚の太陽画像を対応点で位置合わせし、透過重ね合わせで回転角を確認する GUI を利用できます。
+
+```powershell
+python run.py --rotation-tool
+```
+
+使い方、角度の符号、測定時の注意は [太陽画像 回転角測定ツール](docs/rotation_measurement_tool.md) を参照してください。

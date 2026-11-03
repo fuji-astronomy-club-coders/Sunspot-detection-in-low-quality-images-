@@ -18,7 +18,7 @@ class ComparisonValidationTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name)
         self.source_root = self.root / "external_observatory_data"
-        self.date_folder = self.source_root / "20261102"
+        self.date_folder = self.source_root / "2026-11-02"
         self.date_folder.mkdir(parents=True)
         self.sources = [
             {
@@ -337,12 +337,12 @@ class ComparisonValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(comparison.ComparisonInputError, "未登録の source_id"):
             comparison.prepare_comparison(self.date_folder)
 
-    def test_old_hyphenated_date_folder_name_is_rejected(self) -> None:
-        old_style_folder = self.source_root / "2026-11-02"
-        old_style_folder.mkdir()
+    def test_compact_date_folder_name_is_rejected(self) -> None:
+        compact_folder = self.source_root / "20261102"
+        compact_folder.mkdir()
 
-        with self.assertRaisesRegex(comparison.ComparisonInputError, "YYYYMMDD"):
-            comparison.prepare_comparison(old_style_folder)
+        with self.assertRaisesRegex(comparison.ComparisonInputError, "YYYY-MM-DD"):
+            comparison.prepare_comparison(compact_folder)
 
     def test_duplicate_source_rows_are_all_skipped(self) -> None:
         first = {

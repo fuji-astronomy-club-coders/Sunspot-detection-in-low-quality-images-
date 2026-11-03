@@ -206,15 +206,19 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
 
     if not selected_folder.is_dir():
         raise ComparisonInputError(f"日付フォルダーがありません: {selected_folder}")
-    # The data root is the parent of the selected YYYY-MM-DD folder. It may
+    # The data root is the parent of the selected YYYYMMDD folder. It may
     # live outside the repository (for example, on a separate data drive).
     source_root = selected_folder.parent.resolve()
-    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", selected_folder.name) is None:
-        raise ComparisonInputError("日付フォルダー名は YYYY-MM-DD 形式にしてください。")
+    if re.fullmatch(r"\d{8}", selected_folder.name) is None:
+        raise ComparisonInputError("日付フォルダー名は YYYYMMDD 形式にしてください。")
     try:
-        comparison_date = date.fromisoformat(selected_folder.name).isoformat()
+        comparison_date = date(
+            int(selected_folder.name[:4]),
+            int(selected_folder.name[4:6]),
+            int(selected_folder.name[6:8]),
+        ).isoformat()
     except ValueError as date_error:
-        raise ComparisonInputError("日付フォルダー名は実在する YYYY-MM-DD にしてください。") from date_error
+        raise ComparisonInputError("日付フォルダー名は実在する YYYYMMDD にしてください。") from date_error
 
     sources_path = source_root / "sources.yaml"
     if not sources_path.is_file():
@@ -293,8 +297,22 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
             + ", ".join(sorted(unknown_top_level))
         )
     raw_samples = comparison_document.get("samples")
-    if not isinstance(raw_samples, list) or not 1 <= len(raw_samples) <= 4:
-        raise ComparisonInputError("samples には1～4観測所を指定してください。")
+    if not isinstance(raw_samples, list) or not 1 <= len(raw_samples) <= len(sources):
+        raise ComparisonInputError(
+            f"samples には1～{len(sources)}観測所を指定してください。"
+        )
+
+    image_files = [
+        path
+        for path in selected_folder.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES
+    ]
+    if len(raw_samples) != len(image_files):
+        raise ComparisonInputError(
+            "日付フォルダー内の対応画像数 "
+            f"({len(image_files)}) と comparison.yaml の samples 件数 "
+            f"({len(raw_samples)}) が一致しません。"
+        )
 
     mask_template_value = comparison_document.get("mask_template")
     mask_template_path: Path | None = None
@@ -314,6 +332,15 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         normalized_polygons = tuple(polygons)
 
     source_map = {source["source_id"]: source for source in sources}
+    for index, raw_sample in enumerate(raw_samples, start=1):
+        if isinstance(raw_sample, dict):
+            source_id = raw_sample.get("source_id")
+            if not isinstance(source_id, str) or source_id not in source_map:
+                raise ComparisonInputError(
+                    f"comparison.yaml の samples {index} に未登録の source_id "
+                    f"があります: {source_id}"
+                )
+
     raw_ids = [
         row.get("source_id")
         for row in raw_samples

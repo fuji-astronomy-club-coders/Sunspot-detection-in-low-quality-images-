@@ -177,15 +177,58 @@ with csv_path.open(encoding="utf-8-sig", newline="") as file:
 `excluded_by_mask_ids` が空の場合は区切り文字による分割結果も空になります。`excluded_by_mask_regions` は JSON 配列として読み込めます。
 
 
-## 5. 比較モードの CSV — 共通座標
+## 5. 比較モードの CSV — 座標系別出力
 
-比較モードの個別 CSV には、従来の pixel 座標列を保持したまま、末尾に次の2列を追加します。統合 CSV も同じ列を含みます。
+比較モードでは、画像座標と共通座標のCSVを混在させず、次の2フォルダーに分けて保存します。
+
+```text
+session_.../
+├─ image_coordinates/
+│  ├─ comparison_sunspot_statistics.csv
+│  ├─ comparison_sunspot_exclusion_list.csv
+│  └─ source_01/
+│     ├─ sunspot_statistics.csv
+│     └─ sunspot_exclusion_list.csv
+└─ common_coordinates/
+   ├─ comparison_sunspot_statistics.csv
+   ├─ comparison_sunspot_exclusion_list.csv
+   └─ source_01/
+      ├─ sunspot_statistics.csv
+      └─ sunspot_exclusion_list.csv
+```
+
+各フォルダーには観測所ごとのCSVと、成功した観測所をまとめた統合CSVが保存されます。どちらもUTF-8 BOM付きです。
+
+### 画像座標CSV
+
+`image_coordinates/` は元画像の pixel 座標を保持します。画像左上が原点、+Xが右、+Yが下で、座標は0始まりです。単一画像モードと同じ列を使用します。
+
+### 共通座標CSV
+
+`common_coordinates/` は太陽中心を原点とし、+Xを右、+Yを太陽北、太陽半径を1とするデカルト座標です。方向設定の `north_vector` もこの規約で表現します。
+
+統計CSVでは、pixel座標列を次の共通座標列に置き換えます。
 
 | 列名 | 内容 |
 |---|---|
-| `centroid_x_normalized` | 共通座標系に変換した黒点重心の X 座標。太陽半径を1とする |
-| `centroid_y_normalized` | 共通座標系に変換した黒点重心の Y 座標。太陽北が正 |
+| `centroid_x_common` / `centroid_y_common` | 黒点重心の共通座標 |
+| `bbox_x_common` / `bbox_y_common` | 共通座標上の外接矩形左上 |
+| `bbox_width_common` / `bbox_height_common` | 共通座標上の外接矩形幅・高さ |
 
-統合 CSV の先頭には、観測所を識別する `source_id`、表示用の `source_name`、画像名の `image` が追加されます。比較日は CSV 内に重複して保存せず、日付フォルダー名と `comparison_summary.json` で確認します。
+共通座標の外接矩形は、元画像の外接矩形の4隅を変換して求めた軸平行の矩形です。回転した候補の輪郭そのものを表すものではありません。`area_px` は元画像の画素数であり、共通座標の面積ではありません。
 
-これらは太陽円盤の投影画像面上の相対座標です。太陽表面の緯度・経度や、観測所間で同一黒点を表す共通IDではありません。単一画像モードの CSV 列・値は従来どおりです。
+除外一覧CSVの重心・外接矩形も共通座標へ変換されます。一方、除外理由の補足列（たとえば `radial_center_x_px`、`radial_distance_px`、`excluded_by_mask_regions` 内のpixel座標）は、名前どおり元画像のpixel座標です。
+
+### 共通黒点ID
+
+統計CSVには次の列を追加します。
+
+| 列名 | 内容 |
+|---|---|
+| `common_sunspot_id` | 観測所間で対応付けられた共通ID。例: `CS0001`。未対応は空欄 |
+| `matched_source_count` | 同じIDに含まれる観測所数。未対応候補は `1` |
+| `match_status` | `matched` または `unmatched` |
+
+対応付けには共通座標の重心間距離を使用します。初期許容距離は太陽半径の0.025倍です。観測所の各ペアに対してHungarian法で一対一候補を選び、同じ観測所から複数候補が同一IDに入らないように統合します。これは自動初期対応であり、太陽自転・観測時刻差・差動回転の補正や、人手による確認を代替するものではありません。実観測画像に対して一致・不一致を検証してください。
+
+単一画像モードのCSV列・値・保存先は従来どおりです。

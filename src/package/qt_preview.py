@@ -4,6 +4,7 @@ from collections.abc import Iterable
 import logging
 import math
 
+import cv2
 import numpy as np
 from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import (
@@ -12,7 +13,6 @@ from PyQt6.QtGui import (
     QColor,
     QImage,
     QKeyEvent,
-    QLinearGradient,
     QPainterPath,
     QKeySequence,
     QMouseEvent,
@@ -33,6 +33,8 @@ from PyQt6.QtWidgets import (
 )
 
 from src.package.qt_dialogs import ensure_qapplication
+from src.package.qt_histogram import BrightnessHistogramWidget
+from src.package.qt_image import colorize_intensity
 
 LOGGER = logging.getLogger("sunspot.qt_preview")
 
@@ -179,33 +181,32 @@ class _FinalPreviewCanvas(QWidget):
                 QImage.Format.Format_RGBA8888,
             ).copy()
 
-        values = np.nan_to_num(
-            image.astype(np.float64),
-            nan=0.0,
-            posinf=0.0,
-            neginf=0.0,
+        options = display_options or {}
+        colormap = str(options.get("colormap", "GRAY"))
+        display_bgr, self._minimum, self._maximum = colorize_intensity(
+            image,
+            colormap,
         )
-        self._minimum = float(values.min())
-        self._maximum = float(values.max())
-        if self._maximum > self._minimum:
-            normalized = np.rint(
-                (values - self._minimum)
-                / (self._maximum - self._minimum)
-                * 255
-            ).astype(np.uint8)
-        else:
-            normalized = np.full(values.shape, 127, dtype=np.uint8)
-
-        # マスク選択画面と同じ左上原点の画像配列を、そのまま表示する。
-        normalized = np.ascontiguousarray(normalized)
-        self._image_height, self._image_width = normalized.shape
-        image_bytes = normalized.tobytes()
+        display_rgb = cv2.cvtColor(display_bgr, cv2.COLOR_BGR2RGB)
+        display_rgb = np.ascontiguousarray(display_rgb)
+        self._image_height, self._image_width = image.shape
         self._qimage = QImage(
-            image_bytes,
+            display_rgb.tobytes(),
             self._image_width,
             self._image_height,
-            int(normalized.strides[0]),
-            QImage.Format.Format_Grayscale8,
+            int(display_rgb.strides[0]),
+            QImage.Format.Format_RGB888,
+        ).copy()
+
+        gradient_values = np.arange(255, -1, -1, dtype=np.uint8).reshape(256, 1)
+        gradient_bgr, _, _ = colorize_intensity(gradient_values, colormap)
+        gradient_rgb = cv2.cvtColor(gradient_bgr, cv2.COLOR_BGR2RGB)
+        self._colorbar_qimage = QImage(
+            gradient_rgb.tobytes(),
+            1,
+            256,
+            int(gradient_rgb.strides[0]),
+            QImage.Format.Format_RGB888,
         ).copy()
 
         self._view_x_min = 0.0
@@ -620,15 +621,7 @@ class _FinalPreviewCanvas(QWidget):
         painter.restore()
 
         colorbar = QRectF(image_rect.right() + 18, image_rect.top(), 18, image_rect.height())
-        gradient = QLinearGradient(
-            colorbar.left(),
-            colorbar.top(),
-            colorbar.left(),
-            colorbar.bottom(),
-        )
-        gradient.setColorAt(0.0, QColor(255, 255, 255))
-        gradient.setColorAt(1.0, QColor(0, 0, 0))
-        painter.fillRect(colorbar, gradient)
+        painter.drawImage(colorbar, self._colorbar_qimage)
         painter.setPen(border_pen)
         painter.drawRect(colorbar)
         painter.drawText(
@@ -849,6 +842,7 @@ class _FinalPreviewDialog(QDialog):
             solar_geometry,
             rmask_radius_ratio,
         )
+        self.histogram = BrightnessHistogramWidget(image, self)
         toolbar = QToolBar(self)
         toolbar.setMovable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -961,6 +955,7 @@ class _FinalPreviewDialog(QDialog):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.addWidget(toolbar)
         layout.addWidget(self.canvas, 1)
+        layout.addWidget(self.histogram)
         layout.addLayout(status_layout)
         layout.addWidget(button_box)
         self.setMinimumSize(640, 480)

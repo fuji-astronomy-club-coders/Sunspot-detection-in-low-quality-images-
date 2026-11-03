@@ -526,7 +526,10 @@ class _MaskDialog(QDialog):
         editor_north = None
         editor_flip_x = False
         if editor_transform is not None:
-            editor_north = tuple(editor_transform.orientation.north_vector)
+            editor_north = (
+                float(editor_transform.orientation.north_vector[0]),
+                float(editor_transform.orientation.north_vector[1]),
+            )
             editor_flip_x = bool(editor_transform.orientation.flip_x)
         self.canvas = _MaskCanvas(
             image,
@@ -575,7 +578,10 @@ class _MaskDialog(QDialog):
                     canvas = self.canvas
                 elif index < len(preview_images):
                     title, preview_image, preview_transform = preview_images[index]
-                    preview_north = tuple(preview_transform.orientation.north_vector)
+                    preview_north = (
+                        float(preview_transform.orientation.north_vector[0]),
+                        float(preview_transform.orientation.north_vector[1]),
+                    )
                     canvas = _MaskCanvas(
                         preview_image,
                         _to_display_image(

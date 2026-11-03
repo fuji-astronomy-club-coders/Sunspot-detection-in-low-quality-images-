@@ -210,14 +210,16 @@ results/session_YYYYMMDD_HHMMSS_xxxxxx/
 ├─ comparison_summary_limb_corrected.png
 ├─ comparison_summary_emphasized.png
 ├─ comparison_summary_binary.png
+├─ source_01/                         # 解析画像・観測所ごとのサマリー
+├─ source_02/
 ├─ image_coordinates/
 │  ├─ comparison_sunspot_statistics.csv
 │  ├─ comparison_sunspot_exclusion_list.csv
-│  └─ source_01/ ...
+│  └─ source_01/                      # 画像座標の個別CSV
 └─ common_coordinates/
    ├─ comparison_sunspot_statistics.csv
    ├─ comparison_sunspot_exclusion_list.csv
-   └─ source_01/ ...
+   └─ source_01/                      # 共通座標の個別CSV
 ```
 
 - 未提供・スキップ・失敗した観測所の出力フォルダーは作成されません。

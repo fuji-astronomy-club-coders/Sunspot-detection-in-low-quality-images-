@@ -7,6 +7,7 @@ import csv
 import json
 import logging
 import math
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -154,10 +155,12 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         )
     if not selected_folder.is_dir():
         raise ComparisonInputError(f"日付フォルダーがありません: {selected_folder}")
+    if re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", selected_folder.name) is None:
+        raise ComparisonInputError("日付フォルダー名は YYYY-MM-DD 形式にしてください。")
     try:
         comparison_date = date.fromisoformat(selected_folder.name).isoformat()
     except ValueError as error:
-        raise ComparisonInputError("日付フォルダー名は YYYY-MM-DD 形式にしてください。") from error
+        raise ComparisonInputError("日付フォルダー名は実在する YYYY-MM-DD にしてください。") from error
 
     sources_path = source_root / "sources.yaml"
     if not sources_path.is_file():
@@ -184,8 +187,13 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         source_id = raw_source.get("source_id")
         display_name = raw_source.get("display_name")
         policy = raw_source.get("orientation_policy")
-        if not isinstance(source_id, str) or not source_id.strip():
-            raise ComparisonInputError(f"{index} 番目の観測所に source_id が必要です。")
+        if (
+            not isinstance(source_id, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", source_id) is None
+        ):
+            raise ComparisonInputError(
+                f"{index} 番目の観測所 source_id は英数字・ハイフン・アンダースコアで指定してください。"
+            )
         if source_id in source_ids:
             raise ComparisonInputError(f"source_id が重複しています: {source_id}")
         source_ids.add(source_id)
@@ -197,6 +205,12 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         normalized_source = dict(raw_source)
         normalized_source["source_id"] = source_id
         normalized_source["display_name"] = display_name
+        if policy == "per_sample" and (
+            "north_vector" in raw_source or "flip_x" in raw_source
+        ):
+            raise ComparisonInputError(
+                f"{source_id}: per_sample の方向は comparison.yaml に指定してください。"
+            )
         if policy == "fixed":
             try:
                 orientation = _parse_orientation(raw_source)
@@ -235,6 +249,8 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         if candidate_template.is_absolute():
             raise ComparisonInputError("mask_template は日付フォルダーからの相対パスにしてください。")
         mask_template_path = (selected_folder / candidate_template).resolve()
+        if not mask_template_path.is_relative_to(source_root):
+            raise ComparisonInputError("mask_template は source_input/ 配下を指定してください。")
         if not mask_template_path.is_file():
             raise ComparisonInputError(f"mask_template がありません: {mask_template_path}")
         polygons, _template = _load_mask_template(mask_template_path)
@@ -512,7 +528,8 @@ def run_comparison(
 
             sample_config = copy.deepcopy(base_config)
             sample_config["Paths"]["input_image"] = str(sample.image_path)
-            sample_config.setdefault("Display", {})["show_final_image"] = False
+            sample_config["Display"] = dict(sample_config.get("Display") or {})
+            sample_config["Display"]["show_final_image"] = False
 
             pixel_polygons: list[np.ndarray] | None = None
             if normalized_polygons is not None:

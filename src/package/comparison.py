@@ -775,7 +775,7 @@ def _save_comparison_stage_summaries(
     image_size = 640
     tile_size = 360
     sheet_width = tile_size * 4
-    sheet_height = tile_size + 72
+    sheet_height = tile_size + 112
     output_names: list[str] = []
 
     for stage_name, stage_title in COMPARISON_STAGES.items():

@@ -121,8 +121,8 @@ def process_image(
     output_dir: str | Path | None = None,
     solar_geometry_override: tuple[tuple[float, float], float] | None = None,
     mask_polygons: list[np.ndarray] | None = None,
-    mask_preview_images: list[tuple[str, np.ndarray, Any]] | None = None,
-    mask_editor_transform: Any | None = None,
+    mask_preview_images: list[tuple[str, np.ndarray, SolarTransform]] | None = None,
+    mask_editor_transform: SolarTransform | None = None,
     export_comparison_stages: bool = False,
 ) -> int:
     """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。

@@ -81,3 +81,16 @@ CSV の列名・値の意味・座標系・複数マスクに重なった場合�
 - [総合利用説明書](docs/user_guide.md)：起動手順、3つのダイアログ、設定項目、出力ファイル、ログの読み方を説明します。
 - [CSV出力ガイド](docs/csv_output_guide.md)：CSVの各列、座標系、除外理由の詳細を説明します。
 - [画像確認ダイアログ操作ガイド](docs/image_viewer_guide.md)：最終結果確認画面の操作方法を説明します。
+
+## 比較モード（最大4観測所）
+
+同じ日付に入手できた最大4観測所の太陽画像を、太陽中心・北方向・太陽半径で定義した共通座標上で比較できます。画像自体は回転・反転せず、黒点座標と共通マスクを変換します。
+
+初回は `docs/templates/sources.example.yaml` を `source_input/sources.yaml` にコピーして4観測所の実際の向きを登録します。日付フォルダーに画像と `comparison.yaml` を配置して、次のコマンドで実行します。
+
+```powershell
+python run.py --compare
+python run.py --compare source_input/2026-11-02
+```
+
+詳しい準備、共通座標、マスク、出力 CSV、ステータスは [比較モード利用マニュアル](docs/comparison_mode_manual.md) を参照してください。従来の `python run.py` による単一画像モードは変更ありません。

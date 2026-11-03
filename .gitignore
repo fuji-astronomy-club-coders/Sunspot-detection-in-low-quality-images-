@@ -7,3 +7,6 @@ build/
 dist/
 /results/
 /output/
+
+# Local observatory images and comparison metadata
+/source_input/

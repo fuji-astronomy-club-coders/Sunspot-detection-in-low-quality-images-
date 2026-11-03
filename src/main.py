@@ -15,6 +15,7 @@
 """
 
 import logging
+from pathlib import Path
 from pprint import pformat
 from typing import Any
 
@@ -113,7 +114,14 @@ def _format_analysis_parameters(config: dict[str, Any]) -> str:
     return "\n\n".join(sections)
 
 
-def main(config: dict, run_logger: RunLogger | None = None) -> int:
+def process_image(
+    config: dict,
+    run_logger: RunLogger | None = None,
+    *,
+    output_dir: str | Path | None = None,
+    solar_geometry_override: tuple[tuple[float, float], float] | None = None,
+    mask_polygons: list[np.ndarray] | None = None,
+) -> int:
     """設定に従って太陽画像の補正、強調、黒点候補抽出を実行する。
 
     Parameters
@@ -135,9 +143,13 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
 
     image_path = configMOD.resolve_path(config["Paths"]["input_image"])
     output_root = (
-        run_logger.session_dir
-        if run_logger is not None
-        else configMOD.resolve_path(config["Paths"]["output_folder"])
+        Path(output_dir)
+        if output_dir is not None
+        else (
+            run_logger.session_dir
+            if run_logger is not None
+            else configMOD.resolve_path(config["Paths"]["output_folder"])
+        )
     )
     output_root.mkdir(parents=True, exist_ok=True)
 
@@ -161,7 +173,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
 
     moduleVersions: dict[str, Any] = {"Application": get_application_version()}
     raw_image = image
-    solar_geometry: tuple[tuple[float, float], float] | None = None
+    solar_geometry = solar_geometry_override
     min_area_exclusions: list[tuple[np.ndarray, list[int], str, int]] = []
 
     try:
@@ -173,7 +185,8 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
 
         if darkingMethod == "polynomialFit":
             moduleVersions["LimbDarkingResolution"] = ldr.version
-            solar_geometry = ldr.find_solar_geometry(image)
+            if solar_geometry is None:
+                solar_geometry = ldr.find_solar_geometry(image)
             image: ndarray[_AnyShape, dtype[Any]] = ldr.polynomialFit(
                 image=image,
                 solar_geometry=solar_geometry,
@@ -249,9 +262,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         svFolder = output_root
 
         if extractionMethod == "countComponents":
-            moduleVersions["Extraction"] = {
-                "countComponents": connection_count.version,
-            }
+            moduleVersions["Extraction"] = {"countComponents": connection_count.version}
             imgName = f"countComponents_c{extractionConfig['countComponents']['c']}_threshold{extractionConfig['countComponents']['space_threshold']}_minArea{extractionConfig['countComponents']['min_area']}.png"
 
             count, image, binary_image, connected_component_details = (
@@ -312,11 +323,12 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
 
-        # 領域選択の背景には黒点ラベルではなく、周縁減光補正後の輝度画像を表示する。
-        # マスク対象のラベル画像は sunspot_labels として別に保持する。
-        regions = mask.selectMaskRegions(
-            limb_corrected_image,
-            config.get("MaskDialog", {}).get("display"),
+        regions = (
+            mask.selectMaskRegions(
+                limb_corrected_image, config.get("MaskDialog", {}).get("display")
+            )
+            if mask_polygons is None
+            else []
         )
 
         # 選択した除外領域を0で埋め、強調画像のマスク適用版も保存する。
@@ -365,6 +377,11 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
                     "height": y2 - y1,
                 }
             )
+        if mask_polygons is not None:
+            polygon_coverage = mask.polygon_coverage_mask(
+                masked_emphasized_image.shape[:2], mask_polygons
+            )
+            masked_emphasized_image[polygon_coverage] = 0
 
         masked_emphasis_path = svFolder / (
             emphasis_img_name.removesuffix(".png") + "_masked.png"
@@ -379,6 +396,11 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
                     "fill_value": 0,
                     "coordinate_origin": "top-left",
                     "regions": mask_output_regions,
+                    "polygons": (
+                        [polygon.tolist() for polygon in mask_polygons]
+                        if mask_polygons is not None
+                        else []
+                    ),
                     "radial_mask": radial_mask_output,
                 },
             },
@@ -402,18 +424,32 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
                         }
                         for index, (x, y, width, height) in enumerate(regions, start=1)
                     ],
+                    "polygons": (
+                        [polygon.tolist() for polygon in mask_polygons]
+                        if mask_polygons is not None
+                        else None
+                    ),
                 },
             )
 
         sunspot_labels = binary_image.copy()
         boundary_policy = mask_settings.get("boundary_policy", "overlap")
-        _, _, mask_details = mask.applyMask(
-            sunspot_labels,
-            regions,
-            count,
-            return_details=True,
-            boundary_policy=boundary_policy,
-        )
+        if mask_polygons is None:
+            _, _, mask_details = mask.applyMask(
+                sunspot_labels,
+                regions,
+                count,
+                return_details=True,
+                boundary_policy=boundary_policy,
+            )
+        else:
+            _, _, mask_details = mask.applyPolygonMask(
+                sunspot_labels,
+                mask_polygons,
+                count,
+                return_details=True,
+                boundary_policy=boundary_policy,
+            )
         normal_mask_exclusions = list(mask_details["excluded_candidate_labels"])
 
         radial_details: dict[str, Any] = {
@@ -559,3 +595,9 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
 
     LOGGER.info("Processing completed: %d sunspots detected", count)
     return count
+
+
+
+def main(config: dict, run_logger: RunLogger | None = None) -> int:
+    """Run the standard single-image workflow without comparison-specific options."""
+    return process_image(config=config, run_logger=run_logger)

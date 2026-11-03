@@ -1,11 +1,11 @@
-"""黒点候補を矩形領域によって除外するモジュール。"""
+"""マスク選択によって黒点候補を除外するモジュール。"""
 
 import logging
 from typing import Any, Literal, overload
 
 import cv2
 import numpy as np
-from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QCloseEvent,
@@ -648,6 +648,16 @@ class _MaskCanvas(QWidget):
             self._current_point = point
             self.regionsChanged.emit(len(self.regions))
         self.update()
+
+    def leaveEvent(self, event: QEvent) -> None:
+        """Clear hover highlighting when the pointer leaves the editing canvas."""
+        if self._selection_mode == "connected_component" and self.hovered_label is not None:
+            self.hovered_label = None
+            self._mouse_point = None
+            self._refresh_component_overlays()
+            self.regionsChanged.emit(len(self.selected_labels))
+            self.update()
+        super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
         """ドラッグを終了し、有効な矩形を選択領域へ追加する。

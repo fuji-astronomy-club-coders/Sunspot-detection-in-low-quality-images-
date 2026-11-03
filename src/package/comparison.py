@@ -77,6 +77,7 @@ class ComparisonPlan:
     samples: tuple[PreparedSample, ...]
     mask_template_path: Path | None
     normalized_polygons: tuple[list[list[float]], ...] | None
+    mask_selection_method: str | None = None
 
 
 def _load_yaml(path: Path) -> object:
@@ -126,6 +127,9 @@ def _load_mask_template(path: Path) -> tuple[list[list[list[float]]], dict[str, 
         raise ComparisonInputError("未対応のマスクテンプレート schema_version です。")
     if template.get("coordinate_system") != "solar_disk_normalized":
         raise ComparisonInputError("マスクテンプレートの座標系が solar_disk_normalized ではありません。")
+    selection_method = template.get("selection_method", "rectangle")
+    if selection_method not in ("rectangle", "connected_component"):
+        raise ComparisonInputError("マスクテンプレートの selection_method が不正です。")
     regions = template.get("regions")
     if not isinstance(regions, list):
         raise ComparisonInputError("マスクテンプレートの regions は配列にしてください。")
@@ -257,6 +261,7 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
     mask_template_value = comparison_document.get("mask_template")
     mask_template_path: Path | None = None
     normalized_polygons: tuple[list[list[float]], ...] | None = None
+    mask_selection_method: str | None = None
     if mask_template_value is not None:
         if not isinstance(mask_template_value, str) or not mask_template_value.strip():
             raise ComparisonInputError("mask_template は相対パス文字列にしてください。")
@@ -268,8 +273,9 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
             raise ComparisonInputError("mask_template は source_input/ 配下を指定してください。")
         if not mask_template_path.is_file():
             raise ComparisonInputError(f"mask_template がありません: {mask_template_path}")
-        polygons, _template = _load_mask_template(mask_template_path)
+        polygons, template = _load_mask_template(mask_template_path)
         normalized_polygons = tuple(polygons)
+        mask_selection_method = str(template.get("selection_method", "rectangle"))
 
     source_map = {source["source_id"]: source for source in sources}
     raw_ids = [
@@ -365,6 +371,7 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         tuple(prepared_samples),
         mask_template_path,
         normalized_polygons,
+        mask_selection_method,
     )
 
 
@@ -968,6 +975,9 @@ def run_comparison(
             sample_config = copy.deepcopy(base_config)
             sample_config["Paths"]["input_image"] = str(sample.image_path)
             sample_config["Display"] = dict(sample_config.get("Display") or {})
+            if plan.mask_selection_method is not None:
+                sample_config["Mask"] = dict(sample_config.get("Mask") or {})
+                sample_config["Mask"]["selection_method"] = plan.mask_selection_method
 
             pixel_polygons: list[np.ndarray] | None = None
             if normalized_polygons is not None:

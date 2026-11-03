@@ -304,8 +304,11 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         else:
             raise ValueError(f"Unknown extraction method: {extractionMethod}")
 
+        # 領域選択の背景には黒点ラベルではなく、周縁減光補正後の輝度画像を表示する。
+        # マスク対象のラベル画像は sunspot_labels として別に保持する。
         regions = mask.selectMaskRegions(
-            binary_image, config.get("MaskDialog", {}).get("display")
+            limb_corrected_image,
+            config.get("MaskDialog", {}).get("display"),
         )
 
         # 選択した除外領域を0で埋め、強調画像のマスク適用版も保存する。
@@ -534,7 +537,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
             radial_exclusions,
         )
         show_final_preview(
-            image,
+            limb_corrected_image,
             regions,
             config.get("Display", {}),
             invalid_sunspot_mask,

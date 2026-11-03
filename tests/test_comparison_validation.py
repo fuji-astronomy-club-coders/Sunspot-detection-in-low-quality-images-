@@ -25,7 +25,7 @@ class ComparisonValidationTests(unittest.TestCase):
                 "source_id": f"source_0{index}",
                 "display_name": f"観測所{index}",
                 "orientation_policy": "fixed",
-                "north_vector": {"x": 0.0, "y": -1.0},
+                "north_vector": {"x": 0.0, "y": 1.0},
                 "flip_x": False,
             }
             for index in range(1, 4)

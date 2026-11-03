@@ -1,7 +1,7 @@
 """黒点候補を矩形領域によって除外するモジュール。"""
 
 import logging
-from typing import Any, Literal, overload
+from typing import Literal, overload
 
 import cv2
 import numpy as np
@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
 from src.package.qt_dialogs import ensure_qapplication
 from src.package.qt_histogram import BrightnessHistogramWidget
 from src.package.qt_image import colorize_intensity
+from src.package.solar_coordinates import SolarTransform
 
 LOGGER = logging.getLogger("sunspot.mask")
 
@@ -497,8 +498,8 @@ class _MaskDialog(QDialog):
         options: dict,
         parent: QWidget | None = None,
         *,
-        preview_images: list[tuple[str, np.ndarray, Any]] | None = None,
-        editor_transform: Any | None = None,
+        preview_images: list[tuple[str, np.ndarray, SolarTransform]] | None = None,
+        editor_transform: SolarTransform | None = None,
     ) -> None:
         """画像キャンバスと操作ボタンを持つダイアログを構築する。
 
@@ -720,8 +721,8 @@ def selectMaskRegions(
     image: np.ndarray,
     display_options: dict | None = None,
     *,
-    preview_images: list[tuple[str, np.ndarray, Any]] | None = None,
-    editor_transform: Any | None = None,
+    preview_images: list[tuple[str, np.ndarray, SolarTransform]] | None = None,
+    editor_transform: SolarTransform | None = None,
 ) -> list[tuple[int, int, int, int]]:
     """PyQt ダイアログで複数の矩形マスク領域を選択する。
 

@@ -200,6 +200,7 @@ class _MaskCanvas(QWidget):
         self._selection_mode = selection_mode
         self.selected_labels: set[int] = set()
         self.hovered_label: int | None = None
+        self._hovered_component_area = 0
         self._selection_history: list[set[int]] = []
         self._selected_overlay: QImage | None = None
         self._hover_overlay: QImage | None = None
@@ -267,6 +268,11 @@ class _MaskCanvas(QWidget):
         self._hover_overlay = self._make_label_overlay(
             hover_labels,
             (255, 220, 0, 170),
+        )
+        self._hovered_component_area = (
+            int(np.count_nonzero(self._label_image == self.hovered_label))
+            if hover_labels and self._label_image is not None
+            else 0
         )
 
     def selected_component_polygons(self) -> list[np.ndarray]:
@@ -411,9 +417,9 @@ class _MaskCanvas(QWidget):
                 )
             if self._selection_mode == "connected_component":
                 if self.hovered_label is not None and self.hovered_label > 0:
-                    area = int(np.count_nonzero(self._label_image == self.hovered_label))
                     lines.append(
-                        f"Hovered component: label={self.hovered_label}, area={area} px"
+                        f"Hovered component: label={self.hovered_label}, "
+                        f"area={self._hovered_component_area} px"
                     )
                 lines.append(f"Selected components: {len(self.selected_labels)}")
             else:

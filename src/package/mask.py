@@ -822,6 +822,229 @@ def applyMask(
     return count, masked_image, details
 
 
+def polygon_coverage_mask(
+    shape: tuple[int, int],
+    polygons: list[np.ndarray],
+) -> np.ndarray:
+    """Rasterize image-space polygons into a boolean coverage mask.
+
+    Parameters
+    ----------
+    shape : tuple[int, int]
+        Image height and width.
+    polygons : list[numpy.ndarray]
+        Polygon vertices in image pixel coordinates.
+
+    Returns
+    -------
+    numpy.ndarray
+        Boolean array identifying pixels covered by any polygon.
+    """
+    height, width = int(shape[0]), int(shape[1])
+    if height <= 0 or width <= 0:
+        raise ValueError("マスク対象の画像サイズは正の値にしてください。")
+
+    coverage = np.zeros((height, width), dtype=np.uint8)
+    for polygon in polygons:
+        vertices = np.asarray(polygon, dtype=np.float64)
+        if vertices.ndim != 2 or vertices.shape[0] < 3 or vertices.shape[1] != 2:
+            raise ValueError("多角形マスクは3点以上の (x, y) 座標で指定してください。")
+        if not np.all(np.isfinite(vertices)):
+            raise ValueError("多角形マスクの頂点には有限値を指定してください。")
+        bounded = np.clip(
+            np.rint(vertices),
+            [-width * 4, -height * 4],
+            [width * 5, height * 5],
+        ).astype(np.int32)
+        cv2.fillPoly(coverage, [bounded], 1)
+
+    return coverage.astype(bool)
+
+
+@overload
+def applyPolygonMask(
+    labels: np.ndarray,
+    polygons: list[np.ndarray],
+    original_count: int,
+    return_details: Literal[False] = False,
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
+) -> tuple[int, np.ndarray]: ...
+
+
+@overload
+def applyPolygonMask(
+    labels: np.ndarray,
+    polygons: list[np.ndarray],
+    original_count: int,
+    return_details: Literal[True],
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
+) -> tuple[int, np.ndarray, dict]: ...
+
+
+def applyPolygonMask(
+    labels: np.ndarray,
+    polygons: list[np.ndarray],
+    original_count: int,
+    return_details: bool = False,
+    boundary_policy: Literal["overlap", "centroid", "contained"] = "overlap",
+) -> tuple[int, np.ndarray] | tuple[int, np.ndarray, dict]:
+    """Exclude sunspot candidates using polygons in image pixel coordinates.
+
+    Parameters
+    ----------
+    labels : numpy.ndarray
+        Two-dimensional labeled candidate image.
+    polygons : list[numpy.ndarray]
+        Polygon vertices in zero-based image pixel coordinates.
+    original_count : int
+        Candidate count before applying the masks.
+    return_details : bool, optional
+        Whether to return per-polygon exclusion details.
+    boundary_policy : Literal["overlap", "centroid", "contained"], optional
+        Candidate boundary policy, matching the rectangular mask behavior.
+
+    Returns
+    -------
+    tuple
+        Remaining count and binary image, with details when requested.
+    """
+    if labels.ndim != 2:
+        raise ValueError("ラベル画像は2次元配列にしてください。")
+    if boundary_policy not in ("overlap", "centroid", "contained"):
+        raise ValueError(f"未対応のマスク境界判定方式です: {boundary_policy}")
+
+    height, width = labels.shape
+    candidate_labels = np.unique(labels)
+    candidate_labels = candidate_labels[candidate_labels > 0]
+    candidate_centroids: dict[int, tuple[float, float]] = {}
+    for label_value in candidate_labels:
+        y_coordinates, x_coordinates = np.nonzero(labels == label_value)
+        if x_coordinates.size:
+            candidate_centroids[int(label_value)] = (
+                float(x_coordinates.mean()),
+                float(y_coordinates.mean()),
+            )
+
+    polygon_masks: list[np.ndarray] = []
+    for polygon in polygons:
+        vertices = np.asarray(polygon, dtype=np.float64)
+        if vertices.ndim != 2 or vertices.shape[0] < 3 or vertices.shape[1] != 2:
+            raise ValueError("多角形マスクは3点以上の (x, y) 座標で指定してください。")
+        if not np.all(np.isfinite(vertices)):
+            raise ValueError("多角形マスクの頂点には有限値を指定してください。")
+        bounded = np.clip(
+            np.rint(vertices),
+            [-width * 4, -height * 4],
+            [width * 5, height * 5],
+        ).astype(np.int32)
+        region_mask = np.zeros((height, width), dtype=np.uint8)
+        cv2.fillPoly(region_mask, [bounded], 1)
+        polygon_masks.append(region_mask.astype(bool))
+
+    mask_coverage = (
+        np.logical_or.reduce(polygon_masks)
+        if polygon_masks
+        else np.zeros((height, width), dtype=bool)
+    )
+    contained_labels: set[int] = set()
+    if boundary_policy == "contained":
+        for label_value in candidate_labels:
+            y_coordinates, x_coordinates = np.nonzero(labels == label_value)
+            if x_coordinates.size and np.all(mask_coverage[y_coordinates, x_coordinates]):
+                contained_labels.add(int(label_value))
+
+    excluded_labels: set[int] = set()
+    physically_overlapping_labels: set[int] = set()
+    region_details: list[dict] = []
+
+    for index, (polygon, region_mask) in enumerate(
+        zip(polygons, polygon_masks, strict=True),
+        start=1,
+    ):
+        vertices = np.asarray(polygon, dtype=np.float64)
+        ys, xs = np.nonzero(region_mask)
+        if xs.size:
+            x1, x2 = int(xs.min()), int(xs.max()) + 1
+            y1, y2 = int(ys.min()), int(ys.max()) + 1
+            overlapping_values = np.unique(labels[region_mask])
+            overlapping_labels = {
+                int(value) for value in overlapping_values if value > 0
+            }
+        else:
+            x1 = y1 = x2 = y2 = 0
+            overlapping_labels = set()
+
+        physically_overlapping_labels.update(overlapping_labels)
+        if boundary_policy == "overlap":
+            selected_labels = overlapping_labels
+        elif boundary_policy == "centroid":
+            points = vertices.astype(np.float32)
+            selected_labels = {
+                label_value
+                for label_value, centroid in candidate_centroids.items()
+                if cv2.pointPolygonTest(points, centroid, False) >= 0
+            }
+        else:
+            selected_labels = contained_labels.intersection(overlapping_labels)
+
+        excluded_labels.update(selected_labels)
+        area_pixels = int(np.count_nonzero(region_mask))
+        region_details.append(
+            {
+                "index": index,
+                "x": int(x1),
+                "y": int(y1),
+                "width": int(max(0, x2 - x1)),
+                "height": int(max(0, y2 - y1)),
+                "vertices": vertices.tolist(),
+                "clipped_bounds": (
+                    {
+                        "x1": int(x1),
+                        "y1": int(y1),
+                        "x2_exclusive": int(x2),
+                        "y2_exclusive": int(y2),
+                    }
+                    if area_pixels
+                    else None
+                ),
+                "area_pixels": area_pixels,
+                "image_coverage_percent": round(area_pixels / (width * height) * 100, 4),
+                "overlapping_candidate_count": len(overlapping_labels),
+                "overlapping_candidate_labels": sorted(overlapping_labels),
+                "excluded_candidate_count": len(selected_labels),
+                "excluded_candidate_labels": sorted(selected_labels),
+            }
+        )
+
+    masked_labels = labels.copy()
+    if excluded_labels:
+        masked_labels[np.isin(masked_labels, list(excluded_labels))] = 0
+    count = max(0, int(original_count) - len(excluded_labels))
+    masked_image = np.where(masked_labels > 0, 0, 255).astype(np.uint8)
+    LOGGER.info(
+        "多角形マスクで除外した黒点数: %d (boundary_policy=%s)",
+        len(excluded_labels),
+        boundary_policy,
+    )
+
+    if not return_details:
+        return count, masked_image
+
+    details = {
+        "image_width": int(width),
+        "image_height": int(height),
+        "selected_region_count": len(polygons),
+        "boundary_policy": boundary_policy,
+        "regions": region_details,
+        "original_candidate_count": int(original_count),
+        "overlapping_candidate_labels": sorted(physically_overlapping_labels),
+        "excluded_candidate_count": len(excluded_labels),
+        "excluded_candidate_labels": sorted(excluded_labels),
+        "remaining_candidate_count": int(count),
+    }
+    return count, masked_image, details
+
+
 @overload
 def applyRadialMask(
     labels: np.ndarray,

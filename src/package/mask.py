@@ -1054,6 +1054,64 @@ def selectMaskComponents(
         "polygons": selected_polygons,
     }
 
+
+def applyComponentMask(
+    labels: np.ndarray,
+    selected_labels: list[int] | set[int],
+    original_count: int,
+    return_details: bool = False,
+) -> tuple[int, np.ndarray] | tuple[int, np.ndarray, dict]:
+    """Exclude exactly the selected connected-component labels."""
+    if labels.ndim != 2:
+        raise ValueError("ラベル画像は2次元配列にしてください。")
+    available = {int(value) for value in np.unique(labels) if int(value) > 0}
+    excluded_labels = sorted(
+        {int(value) for value in selected_labels if int(value) > 0}.intersection(available)
+    )
+    regions = component_selection_details(labels, excluded_labels)
+    masked_labels = labels.copy()
+    if excluded_labels:
+        masked_labels[np.isin(masked_labels, excluded_labels)] = 0
+    remaining_count = max(0, int(original_count) - len(excluded_labels))
+    masked_image = np.where(masked_labels > 0, 0, 255).astype(np.uint8)
+    LOGGER.info("連結成分クリック選択で除外した黒点数: %d", len(excluded_labels))
+    LOGGER.info("連結成分マスク適用後の黒点数: %d", remaining_count)
+    if not return_details:
+        return remaining_count, masked_image
+
+    height, width = labels.shape
+    for region in regions:
+        x1 = max(0, int(region["x"]))
+        y1 = max(0, int(region["y"]))
+        x2 = min(width, int(region["x"] + region["width"]))
+        y2 = min(height, int(region["y"] + region["height"]))
+        region["clipped_bounds"] = {
+            "x1": x1,
+            "y1": y1,
+            "x2_exclusive": x2,
+            "y2_exclusive": y2,
+        }
+        region["image_coverage_percent"] = round(
+            region["area_pixels"] / (width * height) * 100, 6
+        )
+        region["overlapping_candidate_count"] = 1
+        region["overlapping_candidate_labels"] = [int(region["label"])]
+        region["excluded_candidate_count"] = 1
+    details = {
+        "image_width": int(width),
+        "image_height": int(height),
+        "selected_region_count": len(regions),
+        "selection_method": "connected_component",
+        "boundary_policy": "exact_component",
+        "regions": regions,
+        "original_candidate_count": int(original_count),
+        "overlapping_candidate_labels": excluded_labels,
+        "excluded_candidate_count": len(excluded_labels),
+        "excluded_candidate_labels": excluded_labels,
+        "remaining_candidate_count": int(remaining_count),
+    }
+    return remaining_count, masked_image, details
+
 @overload
 def applyMask(
     labels: np.ndarray,

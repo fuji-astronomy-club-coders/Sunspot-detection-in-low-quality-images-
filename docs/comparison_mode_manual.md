@@ -291,7 +291,7 @@ results/session_YYYYMMDD_HHMMSS_xxxxxx/
 
 | 原因 | 対処 |
 |---|---|
- | 同じ `source_id` が複数行ある | 該当IDの全行がスキップされるため、1行にする |
+| 同じ `source_id` が複数行ある | 該当IDの全行がスキップされるため、1行にする |
 | 画像がない・対応外形式・読み込めない・2次元でない | ファイルを確認 |
 | 分解能が未入力、0以下、NaN、無限大 | 正の数値を入力 |
 | `per_sample` で方向項目が欠落・不正 | `north_vector` または `north_angle_deg` のどちらかと `flip_x` を入力 |

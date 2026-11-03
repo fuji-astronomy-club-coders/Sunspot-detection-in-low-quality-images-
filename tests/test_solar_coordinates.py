@@ -14,7 +14,7 @@ class SolarTransformTests(unittest.TestCase):
         self.geometry = SolarGeometry(center=(100.0, 100.0), radius=50.0)
 
     def test_north_up_maps_image_right_to_positive_x(self) -> None:
-        transform = SolarTransform(self.geometry, Orientation((0.0, -1.0)))
+        transform = SolarTransform(self.geometry, Orientation((0.0, 1.0)))
         self.assertEqual(transform.pixel_to_normalized(150.0, 100.0), (1.0, 0.0))
         self.assertEqual(transform.pixel_to_normalized(100.0, 50.0), (0.0, 1.0))
 

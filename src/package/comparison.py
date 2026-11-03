@@ -536,7 +536,6 @@ def run_comparison(
             sample_config = copy.deepcopy(base_config)
             sample_config["Paths"]["input_image"] = str(sample.image_path)
             sample_config["Display"] = dict(sample_config.get("Display") or {})
-            sample_config["Display"]["show_final_image"] = False
 
             pixel_polygons: list[np.ndarray] | None = None
             if normalized_polygons is not None:

@@ -171,9 +171,9 @@ Windows では次のように `run.bat` からも起動できます。既存の 
 
 ```bat
 run.bat --compare
-run.bat --compare source_input\20261102
-run.bat --venv --compare source_input\20261102
-run.bat --compare "E:\SolarData\20261102"
+run.bat --compare source_input\2026-11-02
+run.bat --venv --compare source_input\2026-11-02
+run.bat --compare "E:\SolarData\2026-11-02"
 ```
 
 `python run.py`（引数なし）および `run.bat`（引数なし）は従来どおり単一画像モードで、動作・出力は変わりません。

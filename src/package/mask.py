@@ -1,4 +1,4 @@
-"""黒点候補を矩形領域によって除外するモジュール。"""
+"""マスク選択によって黒点候補を除外するモジュール。"""
 
 import logging
 from typing import Any, Literal, overload

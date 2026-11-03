@@ -109,7 +109,7 @@ sources:
 
 ### 4-1. 日付フォルダーを作る
 
-入力データルートの下に `YYYYMMDD` 形式のフォルダーを作ります。既定の場所を使う場合の例: `source_input/20261102/`。
+入力データルートの下に `YYYY-MM-DD` 形式のフォルダーを作ります。既定の場所を使う場合の例: `source_input/2026-11-02/`。
 
 **フォルダー名が比較日付の唯一の情報源**です。`comparison.yaml` や各サンプルには日付を書きません。
 
@@ -160,7 +160,7 @@ python run.py --compare
 ### コマンドラインで指定
 
 ```powershell
-python run.py --compare source_input/20261102
+python run.py --compare source_input/2026-11-02
 ```
 
 相対パスはプロジェクトルート基準です。絶対パスならリポジトリ外の任意の場所を指定できます。空白を含むパスは引用符で囲みます。選択した日付フォルダーの**親フォルダーが入力データルート**として扱われ、その直下に `sources.yaml` が必要です。日付フォルダー内には `comparison.yaml` と画像を配置します。画像は日付フォルダー内、`mask_template` は入力データルート内を指定してください。
@@ -281,7 +281,7 @@ results/session_YYYYMMDD_HHMMSS_xxxxxx/
 | 原因 | 対処 |
 |---|---|
 | `sources.yaml` がない・構文不正・4か所でない・ID重複・方向設定が不正 | `sources.yaml` を修正 |
-| 日付フォルダー名が `YYYYMMDD` でない・実在しない日付 | フォルダー名を修正 |
+| 日付フォルダー名が `YYYY-MM-DD` でない・実在しない日付 | フォルダー名を修正 |
 | 日付フォルダー内の対応画像数と `samples` 件数が異なる | 画像と `samples` を1件ずつ対応させる |
 | `comparison.yaml` の `source_id` が `sources.yaml` に未登録 | `sources.yaml` に登録するか、IDを修正 |
 | `comparison.yaml` がない・`samples` が空・未対応キーがある | `comparison.yaml` を修正 |

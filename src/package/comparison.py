@@ -611,7 +611,7 @@ def _auto_match_common_spots(
                     )
                 )
             )
-            if maximum_separation > tolerance * 2.0:
+            if maximum_separation > tolerance:
                 continue
         parents[second_root] = first_root
         members[first_root] = combined
@@ -781,7 +781,7 @@ def _save_comparison_stage_summaries(
     for stage_name, stage_title in COMPARISON_STAGES.items():
         sheet = Image.new("RGB", (sheet_width, sheet_height), (24, 24, 24))
         draw = ImageDraw.Draw(sheet)
-        draw.text((16, 12), f"Comparison — {stage_title}", fill=(245, 245, 245))
+        draw.text((16, 12), f"Comparison - {stage_title}", fill=(245, 245, 245))
         draw.text(
             (16, 38),
             "Common Cartesian view: +X right, +Y north",
@@ -814,7 +814,7 @@ def _save_comparison_stage_summaries(
             tile_image.thumbnail((tile_size - 24, tile_size - 24))
             draw.text(
                 (left + 12, 72),
-                f"{source_id} / {source['source_name']}",
+                f"{source_id}",
                 fill=(245, 245, 245),
             )
             paste_x = left + (tile_size - tile_image.width) // 2

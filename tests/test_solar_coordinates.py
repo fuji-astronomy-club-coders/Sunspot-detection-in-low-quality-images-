@@ -21,7 +21,7 @@ class SolarTransformTests(unittest.TestCase):
     def test_flip_x_reverses_only_horizontal_coordinate(self) -> None:
         transform = SolarTransform(
             self.geometry,
-            Orientation((0.0, -1.0), flip_x=True),
+            Orientation((0.0, 1.0), flip_x=True),
         )
         self.assertEqual(transform.pixel_to_normalized(150.0, 100.0), (-1.0, 0.0))
         self.assertEqual(transform.pixel_to_normalized(100.0, 50.0), (0.0, 1.0))

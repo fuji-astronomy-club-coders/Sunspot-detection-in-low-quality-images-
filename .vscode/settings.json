@@ -1,3 +1,34 @@
 {
-	"python-envs.defaultEnvManager": "ms-python.python:venv"
+  "python-envs.defaultEnvManager": "ms-python.python:venv",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "basedpyright.analysis.typeCheckingMode": "standard",
+  "basedpyright.analysis.diagnosticMode": "workspace",
+  "basedpyright.analysis.autoSearchPaths": true,
+  "basedpyright.analysis.useLibraryCodeForTypes": true,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.formatOnSave": true,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  "yaml.validate": true,
+  "yaml.hover": true,
+  "yaml.completion": true,
+  "githubPullRequests.remotes": [
+    "origin"
+  ],
+  "githubPullRequests.focusedMode": true,
+  "github-actions.workflows.pinned.workflows": [
+    ".github/workflows/ci.yml"
+  ],
+  "gitlens.currentLine.enabled": true,
+  "git.autofetch": true
 }

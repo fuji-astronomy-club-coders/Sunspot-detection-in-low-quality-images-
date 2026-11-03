@@ -1,9 +1,8 @@
-# pyproject-template
+# 太陽黒点検出アプリケーション
 
-This is a template for Python project repositories, intended for use by team members.
+低品質の太陽画像から黒点候補を抽出し、画像処理の各段階を確認する Python アプリケーションです。比較モードでは、同一日の最大4観測所の画像を太陽中心・北方向・太陽半径に基づく共通座標で比較し、対応候補のCSVを出力します。
 
-このテンプレートを使用する方法の詳細は、tutorialフォルダを参照してください。
-なお、本リポジトリは`Require a pull request`を有効にしているため、`pull-request-manual`を参照しながら開発を行ってください。
+本リポジトリでは、単一画像モードと複数観測所の比較モードを提供します。開発・運用手順は本 README と `docs/` を参照してください。
 
 tutorial
 
@@ -23,6 +22,8 @@ run.bat --setup
 ```
 
 このコマンドは `.venv` を作成または再利用し、`pyproject.toml` の `[project].dependencies` に定義された実行時依存パッケージをインストールします。開発用の `[project.optional-dependencies].dev` はインストールしません。セットアップ後は、引数なしの `run.bat` で自動的に `.venv` が使用されます。
+
+プロジェクト配布名（`pyproject.toml` の `[project].name`）を変更した後は、既存の仮想環境に登録された配布メタデータも更新するため、`run.bat --setup` を再実行してください。ランチャーはこの名前を使ってインストール状態を確認します。
 
 システムPythonへインストールする場合:
 

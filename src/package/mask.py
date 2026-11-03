@@ -498,8 +498,11 @@ class _MaskDialog(QDialog):
         options: dict,
         parent: QWidget | None = None,
         *,
-        preview_images: list[tuple[str, np.ndarray, SolarTransform]] | None = None,
+        preview_images: list[
+            tuple[str, np.ndarray | None, SolarTransform | None]
+        ] | None = None,
         editor_transform: SolarTransform | None = None,
+        preview_editor_index: int = 0,
     ) -> None:
         """画像キャンバスと操作ボタンを持つダイアログを構築する。
 
@@ -521,6 +524,7 @@ class _MaskDialog(QDialog):
         self._adjusting_size = False
         self.setWindowTitle("Select Mask Regions")
         self._editor_transform = editor_transform
+        self._preview_editor_index = min(max(int(preview_editor_index), 0), 3)
         self.preview_canvases: list[tuple[_MaskCanvas, SolarTransform]] = []
 
         editor_north: tuple[float, float] | None = None
@@ -573,11 +577,16 @@ class _MaskDialog(QDialog):
             preview_grid.setSpacing(8)
             for index in range(4):
                 row, column = divmod(index, 2)
-                if index == 0:
-                    title = preview_images[0][0]
+                slot = preview_images[index] if index < len(preview_images) else None
+                title = slot[0] if slot is not None else f"観測所スロット {index + 1}"
+
+                if index == self._preview_editor_index:
                     canvas = self.canvas
-                elif index < len(preview_images):
-                    title, preview_image, preview_transform = preview_images[index]
+                    if slot is None or slot[1] is None or slot[2] is None:
+                        raise ValueError("編集対象のプレビュー画像がありません。")
+                elif slot is not None and slot[1] is not None and slot[2] is not None:
+                    preview_image = slot[1]
+                    preview_transform = slot[2]
                     preview_north = (
                         float(preview_transform.orientation.north_vector[0]),
                         float(preview_transform.orientation.north_vector[1]),
@@ -595,7 +604,7 @@ class _MaskDialog(QDialog):
                     )
                     self.preview_canvases.append((canvas, preview_transform))
                 else:
-                    placeholder = QLabel("画像未提供")
+                    placeholder = QLabel(f"{title}\n画像未提供")
                     placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
                     placeholder.setMinimumSize(320, 240)
                     placeholder.setStyleSheet(
@@ -608,7 +617,7 @@ class _MaskDialog(QDialog):
                 pane_layout = QVBoxLayout(pane)
                 pane_layout.setContentsMargins(2, 2, 2, 2)
                 title_label = QLabel(
-                    f"{title} — {'編集' if index == 0 else '同期プレビュー'}"
+                    f"{title} — {'編集' if index == self._preview_editor_index else '同期プレビュー'}"
                 )
                 title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 pane_layout.addWidget(title_label)
@@ -727,8 +736,11 @@ def selectMaskRegions(
     image: np.ndarray,
     display_options: dict | None = None,
     *,
-    preview_images: list[tuple[str, np.ndarray, SolarTransform]] | None = None,
+    preview_images: list[
+        tuple[str, np.ndarray | None, SolarTransform | None]
+    ] | None = None,
     editor_transform: SolarTransform | None = None,
+    preview_editor_index: int = 0,
 ) -> list[tuple[int, int, int, int]]:
     """PyQt ダイアログで複数の矩形マスク領域を選択する。
 
@@ -777,6 +789,7 @@ def selectMaskRegions(
         options,
         preview_images=preview_images,
         editor_transform=editor_transform,
+        preview_editor_index=preview_editor_index,
     )
     regions = (
         dialog.canvas.regions.copy()

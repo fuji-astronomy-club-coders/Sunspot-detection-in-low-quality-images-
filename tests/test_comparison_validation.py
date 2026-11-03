@@ -380,5 +380,49 @@ class ComparisonValidationTests(unittest.TestCase):
         self.assertIn("外", self._sample_error(plan))
 
 
+    def test_comparison_settings_read_configurable_units(self) -> None:
+        """Tolerance is a solar-radius fraction; warning bounds are arcseconds."""
+        settings = comparison._load_comparison_settings({
+            "Comparison": {
+                "matching": {"tolerance_normalized": 0.03},
+                "angular_radius_warning_arcsec": {"min": 850.0, "max": 1050.0},
+            }
+        })
+
+        self.assertEqual(settings["matching_tolerance_normalized"], 0.03)
+        self.assertEqual(settings["angular_radius_warning_min_arcsec"], 850.0)
+        self.assertEqual(settings["angular_radius_warning_max_arcsec"], 1050.0)
+
+    def test_comparison_settings_reject_invalid_warning_bounds(self) -> None:
+        with self.assertRaisesRegex(ValueError, "min / max"):
+            comparison._load_comparison_settings({
+                "Comparison": {
+                    "angular_radius_warning_arcsec": {"min": 1000.0, "max": 900.0}
+                }
+            })
+
+    def test_recursive_sample_image_can_be_located_in_subfolder(self) -> None:
+        nested_image = self.date_folder / "archive" / "camera_a.tif"
+        nested_image.parent.mkdir(parents=True)
+        nested_image.write_bytes(b"image placeholder")
+        self._write_comparison({
+            "samples": [{
+                "source_id": "source_01",
+                "image": "archive/camera_a.tif",
+                "pixel_scale_arcsec_per_pixel": 0.6,
+            }]
+        })
+
+        with patch.object(
+            comparison.utils,
+            "loadImage",
+            return_value=np.zeros((32, 32), dtype=np.uint8),
+        ):
+            plan = comparison.prepare_comparison(self.date_folder)
+
+        self.assertEqual(len(plan.samples), 1)
+        self.assertIsNone(plan.samples[0].error)
+        self.assertEqual(plan.samples[0].image_path, nested_image)
+
 if __name__ == "__main__":
     unittest.main()

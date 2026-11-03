@@ -9,12 +9,29 @@ set "VENV_DIR=%~dp0.venv"
 set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
 set "PYTHON_CMD="
 
-rem The default is the system Python. Virtual environments are opt-in.
-if /i "%~1"=="--help" goto :help
-if /i "%~1"=="--setup" goto :setup
-if /i "%~1"=="--venv" goto :run_venv
+rem Parse supported options.
+if /i "%~1"=="--help" (
+    if not "%~2"=="" goto :invalid_option
+    goto :help
+)
+if /i "%~1"=="--setup" (
+    if /i "%~2"=="--global" (
+        if not "%~3"=="" goto :invalid_option
+        goto :setup_global
+    )
+    if not "%~2"=="" goto :invalid_option
+    goto :setup_venv
+)
+if /i "%~1"=="--venv" (
+    if not "%~2"=="" goto :invalid_option
+    goto :run_venv
+)
 if not "%~1"=="" goto :invalid_option
 
+rem Prefer an existing .venv during normal startup.
+rem If the directory exists but is incomplete, report it instead of silently
+rem falling back to the system Python.
+if exist "%VENV_DIR%\." goto :run_venv
 goto :run_system
 
 
@@ -25,7 +42,6 @@ goto :run_application
 
 
 :run_venv
-if not "%~2"=="" goto :invalid_option
 if not exist "%VENV_PYTHON%" goto :venv_not_ready
 
 set PYTHON_CMD="%VENV_PYTHON%"
@@ -44,29 +60,30 @@ if errorlevel 1 goto :venv_not_ready
 goto :run_application
 
 
-:setup
-if not "%~2"=="" goto :invalid_option
-
-rem Create a virtual environment only when setup is explicitly requested.
-if exist "%VENV_PYTHON%" goto :setup_existing
+:setup_venv
+rem Reuse an existing venv interpreter; otherwise create or repair .venv.
+if exist "%VENV_PYTHON%" goto :setup_existing_venv
 
 call :find_python
 if errorlevel 1 goto :error
 
 echo [INFO] Creating the virtual environment...
-if exist "%VENV_DIR%" (
+if exist "%VENV_DIR%\." (
     %PYTHON_CMD% -m venv --clear "%VENV_DIR%"
 ) else (
     %PYTHON_CMD% -m venv "%VENV_DIR%"
 )
 if errorlevel 1 goto :error
-set PYTHON_CMD="%VENV_PYTHON%"
-goto :setup_check
 
-:setup_existing
+set PYTHON_CMD="%VENV_PYTHON%"
+goto :setup_venv_check
+
+
+:setup_existing_venv
 set PYTHON_CMD="%VENV_PYTHON%"
 
-:setup_check
+
+:setup_venv_check
 %PYTHON_CMD% -c "import sys; print('[INFO] Python', sys.version.split()[0]); raise SystemExit(0 if sys.version_info >= (3, 13) else 1)"
 if errorlevel 1 goto :python_version_error
 
@@ -83,8 +100,35 @@ if errorlevel 1 goto :install_error
 
 echo.
 echo [INFO] Virtual environment setup completed.
-echo [INFO] Run "run.bat --venv" to use this environment.
-echo [INFO] Double-clicking run.bat continues to use the system Python.
+echo [INFO] Double-clicking run.bat will now use this .venv automatically.
+echo [INFO] You can also force it with "run.bat --venv".
+pause
+exit /b 0
+
+
+:setup_global
+rem Select a Python outside any currently activated virtual environment.
+call :find_python
+if errorlevel 1 goto :error
+
+%PYTHON_CMD% -c "import sys; print('[INFO] Global Python', sys.version.split()[0])"
+if errorlevel 1 goto :error
+
+rem This mode intentionally does not create or modify .venv.
+%PYTHON_CMD% -m ensurepip --upgrade
+if errorlevel 1 goto :install_error
+
+echo [INFO] Installing dependencies into the system Python environment...
+echo [INFO] Using prebuilt scikit-image wheels to avoid local compilation.
+%PYTHON_CMD% -m pip install --only-binary=scikit-image -e .
+if errorlevel 1 goto :install_error
+
+echo.
+echo [INFO] Global setup completed. The .venv directory was not changed.
+if exist "%VENV_DIR%\." (
+    echo [INFO] Normal run.bat startup will still prioritize the existing .venv.
+    echo [INFO] To use the global Python directly, run "python run.py" with the same system interpreter.
+)
 pause
 exit /b 0
 
@@ -97,8 +141,8 @@ set "EXIT_CODE=%ERRORLEVEL%"
 if not "%EXIT_CODE%"=="0" (
     echo.
     echo [ERROR] run.py exited with code %EXIT_CODE%.
-    echo [HINT] If you want to use the project virtual environment, run "run.bat --setup" first.
-    echo [HINT] Then launch it with "run.bat --venv".
+    echo [HINT] Run "run.bat --setup" to prepare or update .venv.
+    echo [HINT] Or run "run.bat --setup --global" to install dependencies in the system Python.
 ) else (
     echo.
     echo [INFO] Application finished.
@@ -109,7 +153,7 @@ exit /b %EXIT_CODE%
 
 
 :find_python
-rem Use the Python command available on PATH. Do not activate or select .venv here.
+rem Use a Python command available on PATH, excluding active virtual environments.
 where python >nul 2>nul
 if not errorlevel 1 (
     python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 13) and sys.prefix == sys.base_prefix else 1)" >nul 2>nul
@@ -129,16 +173,17 @@ if not errorlevel 1 (
     )
 )
 
-echo [ERROR] Python 3.13 or later was not found.
+echo [ERROR] Python 3.13 or later was not found outside a virtual environment.
 echo         Install Python 3.13+ and make sure python or py is available in PATH.
 exit /b 1
 
 
 :venv_not_ready
 echo.
-echo [ERROR] The virtual environment is missing or incomplete.
+echo [ERROR] The existing virtual environment is missing or incomplete.
 echo [HINT] No packages were installed or modified during this launch.
-echo [HINT] Run "run.bat --setup" to prepare or repair .venv, then retry "run.bat --venv".
+echo [HINT] Run "run.bat --setup" to prepare or repair .venv, then retry.
+echo [HINT] Normal startup will not fall back to the system Python while .venv exists.
 goto :error
 
 
@@ -157,16 +202,20 @@ goto :error
 
 
 :invalid_option
-echo [ERROR] Unknown option: %~1
-echo Usage: run.bat [--venv^|--setup^|--help]
+echo [ERROR] Invalid option or argument: %~1 %~2 %~3
+echo Usage: run.bat [--venv^|--setup [--global]^|--help]
 goto :error
 
 
 :help
 echo Usage:
-echo   run.bat          Run with the system Python (default).
-echo   run.bat --venv   Run with the prepared .venv environment.
-echo   run.bat --setup  Create or update .venv with project dependencies.
+echo   run.bat                  Run with .venv when it exists; otherwise use system Python.
+echo   run.bat --venv           Force the existing .venv environment.
+echo   run.bat --setup          Create or update .venv with project dependencies.
+echo   run.bat --setup --global Install project dependencies into system Python without creating .venv.
+echo   run.bat --help           Show this help.
+echo.
+echo The --global option is valid only together with --setup.
 exit /b 0
 
 

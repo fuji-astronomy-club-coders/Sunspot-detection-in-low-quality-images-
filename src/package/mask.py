@@ -819,8 +819,8 @@ def applyRadialMask(
     center: tuple[float, float],
     solar_radius: float,
     radius_ratio: float,
-    boundary_policy: Literal["overlap", "centroid"] = "overlap",
     return_details: Literal[True],
+    boundary_policy: Literal["overlap", "centroid"] = "overlap",
 ) -> tuple[int, np.ndarray, dict]: ...
 
 

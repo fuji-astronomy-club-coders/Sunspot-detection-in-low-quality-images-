@@ -99,11 +99,15 @@ class SolarTransform:
     ) -> list[list[float]]:
         """Convert an image-space rectangle to a common-coordinate quadrilateral."""
         x, y, width, height = rectangle
+        # Pixel coordinates identify pixel centers. Use half-pixel outer edges
+        # so a selected width-by-height ROI maps to exactly those pixel cells.
+        left, top = x - 0.5, y - 0.5
+        right, bottom = x + width - 0.5, y + height - 0.5
         corners = [
-            (x, y),
-            (x + width, y),
-            (x + width, y + height),
-            (x, y + height),
+            (left, top),
+            (right, top),
+            (right, bottom),
+            (left, bottom),
         ]
         return self.pixel_points_to_normalized(corners)
 

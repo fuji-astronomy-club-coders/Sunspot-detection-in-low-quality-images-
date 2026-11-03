@@ -11,6 +11,8 @@ from skimage.segmentation import watershed
 
 LOGGER = logging.getLogger("sunspot.watershed")
 
+version = "1.00"
+
 
 class MinAreaFilterDetails(TypedDict):
     """minArea フィルターで除外された watershed 領域の情報。"""

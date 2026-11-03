@@ -264,19 +264,28 @@ class RunLogger:
 
         self._logging_logger.info("Event: %s", event_name)
 
-    def finish(self, result: dict[str, Any]) -> None:
-        """Record successful completion and the processing result.
+    def finish(
+        self,
+        result: dict[str, Any],
+        status: str = "success",
+    ) -> None:
+        """Record completion status and the processing result.
 
         Parameters
         ----------
         result : dict[str, Any]
             Result values returned by the processing pipeline.
+        status : str, optional
+            Final status: success, partial_success, or failed.
         """
+        if status not in {"success", "partial_success", "failed"}:
+            raise ValueError(f"Unsupported run completion status: {status}")
+
         finished_at = datetime.now().astimezone()
         duration = round(time.perf_counter() - self.started_clock, 3)
         self.data.update(
             {
-                "status": "success",
+                "status": status,
                 "finished_at": finished_at.isoformat(),
                 "duration_seconds": duration,
                 "result": result,
@@ -286,7 +295,7 @@ class RunLogger:
         self._append_text(
             "\n".join(
                 [
-                    "=== PROCESSING RUN COMPLETED ===",
+                    f"=== PROCESSING RUN COMPLETED: {status.upper()} ===",
                     f"Finished at: {finished_at.isoformat()}",
                     f"Duration: {duration:.3f} seconds",
                     f"Result: {pformat(result, sort_dicts=False)}",
@@ -295,7 +304,11 @@ class RunLogger:
                 ]
             )
         )
-        self._logging_logger.info("Run completed successfully in %.3f seconds.", duration)
+        self._logging_logger.info(
+            "Run completed with status %s in %.3f seconds.",
+            status,
+            duration,
+        )
         self._close_logger()
 
     def fail(self, error: BaseException) -> None:

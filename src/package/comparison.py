@@ -155,7 +155,7 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         )
     if not selected_folder.is_dir():
         raise ComparisonInputError(f"日付フォルダーがありません: {selected_folder}")
-    if re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", selected_folder.name) is None:
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", selected_folder.name) is None:
         raise ComparisonInputError("日付フォルダー名は YYYY-MM-DD 形式にしてください。")
     try:
         comparison_date = date.fromisoformat(selected_folder.name).isoformat()

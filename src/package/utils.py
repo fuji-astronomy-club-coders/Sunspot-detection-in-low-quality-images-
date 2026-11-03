@@ -397,11 +397,24 @@ def save_sunspot_exclusion_csv(
     if label_image.ndim != 2:
         raise ValueError("黒点ラベル画像は2次元配列にしてください。")
 
-    mask_exclusions_by_label: dict[int, list[dict[str, int]]] = {}
+    mask_exclusions_by_label: dict[int, list[dict[str, Any]]] = {}
     for region in mask_regions:
         mask_id = int(region["index"])
         mask_info = {
             "mask_id": mask_id,
+            "selection_method": str(region.get("selection_method", "rectangle")),
+            "label": int(region["label"]) if region.get("label") is not None else "",
+            "area_px": int(region["area_pixels"]) if region.get("area_pixels") is not None else "",
+            "centroid_x_px": (
+                float(region["centroid_x_px"])
+                if region.get("centroid_x_px") is not None
+                else ""
+            ),
+            "centroid_y_px": (
+                float(region["centroid_y_px"])
+                if region.get("centroid_y_px") is not None
+                else ""
+            ),
             "x": int(region["x"]),
             "y": int(region["y"]),
             "width": int(region["width"]),
@@ -456,7 +469,7 @@ def save_sunspot_exclusion_csv(
         factor: str,
         stage: str,
         min_area_threshold: int | None = None,
-        masks_by_label: dict[int, list[dict[str, int]]] | None = None,
+        masks_by_label: dict[int, list[dict[str, Any]]] | None = None,
         factors_by_label: dict[int, list[str]] | None = None,
         radial_by_label: dict[int, dict[str, float]] | None = None,
     ) -> None:

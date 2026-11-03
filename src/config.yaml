@@ -47,7 +47,7 @@ Extraction:
 Mask:
   # overlap: 除外領域に1画素でも入った黒点を除外
   # centroid: 黒点の重心が除外領域内にある場合だけ除外
-  # contained: 黒点の全画素が一つの除外領域に収まる場合だけ除外
+  # contained: 黒点の全画素が複数を含む除外領域の和集合内にあれば除外
   # Rmaskと通常の矩形maskの両方に適用
   boundary_policy: overlap
   Rmask:

@@ -76,14 +76,15 @@ class MaskBoundaryPolicyTests(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(details["excluded_candidate_labels"], [])
 
-    def test_rectangular_contained_policy_excludes_only_fully_contained_spots(self) -> None:
+    def test_rectangular_contained_policy_uses_union_of_mask_regions(self) -> None:
+        """Exclude a spot fully covered by multiple adjacent mask regions."""
         labels = np.zeros((12, 12), dtype=np.int32)
-        labels[5, 5:8] = 1
-        labels[6, 7:10] = 2
+        labels[5, 5:9] = 1
+        labels[6, 5:9] = 2
 
         count, _image, details = mask.applyMask(
             labels,
-            [(5, 5, 3, 1)],
+            [(5, 5, 2, 1), (7, 5, 2, 1)],
             2,
             return_details=True,
             boundary_policy="contained",
@@ -91,6 +92,14 @@ class MaskBoundaryPolicyTests(unittest.TestCase):
 
         self.assertEqual(count, 1)
         self.assertEqual(details["excluded_candidate_labels"], [1])
+        self.assertEqual(
+            details["regions"][0]["excluded_candidate_labels"],
+            [1],
+        )
+        self.assertEqual(
+            details["regions"][1]["excluded_candidate_labels"],
+            [1],
+        )
 
     def test_radial_contained_policy_excludes_only_fully_outer_spots(self) -> None:
         labels = np.zeros((25, 25), dtype=np.int32)

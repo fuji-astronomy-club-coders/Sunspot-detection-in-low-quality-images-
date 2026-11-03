@@ -681,6 +681,7 @@ def applyMask(
 
     overlap は矩形内に1画素でも入った候補を除外する従来方式。
     centroid は候補の重心が矩形内にある場合だけ除外する方式。
+    contained はすべての矩形領域の和集合に全画素が含まれる候補を除外する方式。
     """
     if labels.ndim != 2:
         raise ValueError("ラベル画像は2次元配列にしてください。")
@@ -691,21 +692,31 @@ def applyMask(
     candidate_labels = np.unique(labels)
     candidate_labels = candidate_labels[candidate_labels > 0]
     candidate_centroids: dict[int, tuple[float, float]] = {}
-    candidate_bounds: dict[int, tuple[int, int, int, int]] = {}
     for label_value in candidate_labels:
         y_coordinates, x_coordinates = np.nonzero(labels == label_value)
         if x_coordinates.size:
-            label = int(label_value)
-            candidate_centroids[label] = (
+            candidate_centroids[int(label_value)] = (
                 float(x_coordinates.mean()),
                 float(y_coordinates.mean()),
             )
-            candidate_bounds[label] = (
-                int(x_coordinates.min()),
-                int(x_coordinates.max()),
-                int(y_coordinates.min()),
-                int(y_coordinates.max()),
-            )
+
+    # contained は全ROIの和集合を除外領域として扱う。
+    # そのため、黒点が複数ROIにまたがっていても、全画素が和集合内なら除外する。
+    mask_coverage = np.zeros(labels.shape, dtype=bool)
+    for x, y, roi_width, roi_height in regions:
+        x1 = max(0, int(x))
+        y1 = max(0, int(y))
+        x2 = min(width, int(x + roi_width))
+        y2 = min(height, int(y + roi_height))
+        if x1 < x2 and y1 < y2:
+            mask_coverage[y1:y2, x1:x2] = True
+
+    contained_labels: set[int] = set()
+    if boundary_policy == "contained":
+        for label_value in candidate_labels:
+            y_coordinates, x_coordinates = np.nonzero(labels == label_value)
+            if x_coordinates.size and np.all(mask_coverage[y_coordinates, x_coordinates]):
+                contained_labels.add(int(label_value))
 
     excluded_labels: set[int] = set()
     physically_overlapping_labels: set[int] = set()
@@ -751,12 +762,8 @@ def applyMask(
                 if x1 <= centroid_x < x2 and y1 <= centroid_y < y2
             }
         else:
-            # 外接矩形がROI内に収まれば、黒点の全画素がこのROI内にある。
-            selected_labels = {
-                label_value
-                for label_value, (min_x, max_x, min_y, max_y) in candidate_bounds.items()
-                if x1 <= min_x and max_x < x2 and y1 <= min_y and max_y < y2
-            }
+            # 複数ROIの和集合で全画素が覆われる黒点を、各重複ROIの詳細にも記録する。
+            selected_labels = contained_labels.intersection(overlapping_labels)
 
         excluded_labels.update(selected_labels)
         area_pixels = (x2 - x1) * (y2 - y1)

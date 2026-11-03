@@ -8,6 +8,7 @@ import json
 import logging
 import math
 import re
+import shutil
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -857,6 +858,54 @@ def run_comparison(
                 }
             )
 
+    preview_cache: dict[
+        str,
+        tuple[np.ndarray, tuple[tuple[float, float], float], SolarGeometry, SolarTransform],
+    ] = {}
+    preview_images: list[tuple[str, str, np.ndarray, SolarTransform]] = []
+    for candidate in plan.samples:
+        if (
+            candidate.error is not None
+            or candidate.source_id is None
+            or candidate.source_name is None
+            or candidate.image_path is None
+            or candidate.orientation is None
+        ):
+            continue
+        try:
+            preview_image = utils.loadImage(candidate.image_path)
+            if preview_image.ndim != 2:
+                continue
+            preview_geometry_tuple = ldr.find_solar_geometry(preview_image)
+            preview_geometry = SolarGeometry(
+                preview_geometry_tuple[0],
+                preview_geometry_tuple[1],
+            )
+            preview_transform = SolarTransform(
+                preview_geometry,
+                candidate.orientation,
+            )
+            preview_cache[candidate.source_id] = (
+                preview_image,
+                preview_geometry_tuple,
+                preview_geometry,
+                preview_transform,
+            )
+            preview_images.append(
+                (
+                    candidate.source_id,
+                    candidate.source_name,
+                    preview_image,
+                    preview_transform,
+                )
+            )
+        except Exception:
+            LOGGER.debug(
+                "マスク画面用プレビューを準備できませんでした: %s",
+                candidate.source_id,
+                exc_info=True,
+            )
+
     for sample_index, sample in enumerate(plan.samples, start=1):
         if sample.error is not None:
             result_rows.append(
@@ -884,12 +933,16 @@ def run_comparison(
         source_started_event_count = len(run_logger.data["events"])
 
         try:
-            image = utils.loadImage(sample.image_path)
-            if image.ndim != 2:
-                raise ValueError("比較モードでは2次元グレースケール画像のみ対応します。")
-            geometry_tuple = ldr.find_solar_geometry(image)
-            geometry = SolarGeometry(geometry_tuple[0], geometry_tuple[1])
-            transform = SolarTransform(geometry, sample.orientation)
+            cached_preview = preview_cache.get(sample.source_id)
+            if cached_preview is None:
+                image = utils.loadImage(sample.image_path)
+                if image.ndim != 2:
+                    raise ValueError("比較モードでは2次元グレースケール画像のみ対応します。")
+                geometry_tuple = ldr.find_solar_geometry(image)
+                geometry = SolarGeometry(geometry_tuple[0], geometry_tuple[1])
+                transform = SolarTransform(geometry, sample.orientation)
+            else:
+                image, geometry_tuple, geometry, transform = cached_preview
             angular_radius = geometry.radius * sample.pixel_scale
             angular_warning = not 900.0 <= angular_radius <= 1000.0
             if angular_warning:
@@ -926,12 +979,39 @@ def run_comparison(
                 },
             )
 
+            dialog_previews = None
+            if normalized_polygons is None:
+                dialog_previews = [
+                    (
+                        f"{sample.source_id} / {sample.source_name}",
+                        image,
+                        transform,
+                    )
+                ]
+                dialog_previews.extend(
+                    (
+                        f"{preview_source_id} / {preview_source_name}",
+                        preview_image,
+                        preview_transform,
+                    )
+                    for (
+                        preview_source_id,
+                        preview_source_name,
+                        preview_image,
+                        preview_transform,
+                    ) in preview_images
+                    if preview_source_id != sample.source_id
+                )
+
             spot_count = process_image(
                 config=sample_config,
                 run_logger=run_logger,
                 output_dir=source_output,
                 solar_geometry_override=geometry_tuple,
                 mask_polygons=pixel_polygons,
+                mask_preview_images=dialog_previews,
+                mask_editor_transform=transform if normalized_polygons is None else None,
+                export_comparison_stages=True,
             )
 
             if normalized_polygons is None:
@@ -1037,22 +1117,39 @@ def run_comparison(
     else:
         overall_status = "failed"
 
+    summary_images: list[str] = []
+    matching_summary: dict[str, Any] = {
+        "algorithm": "pairwise_hungarian_with_unique_source_clustering",
+        "tolerance_normalized": MATCH_TOLERANCE_NORMALIZED,
+        "matched_group_count": 0,
+        "matched_detection_count": 0,
+        "unmatched_detection_count": 0,
+    }
     if successful_sources:
+        summary_images = _save_comparison_stage_summaries(
+            run_logger.session_dir,
+            successful_sources,
+        )
+        _write_coordinate_outputs(run_logger.session_dir, successful_sources)
+        matching_summary = _auto_match_common_spots(
+            run_logger.session_dir,
+            successful_sources,
+        )
+        run_logger.record_event("comparison_sunspots_matched", matching_summary)
+        for coordinate_folder in ("image_coordinates", "common_coordinates"):
+            for csv_name in COMPARISON_CSV_NAMES:
+                _combine_coordinate_csv(
+                    run_logger.session_dir,
+                    coordinate_folder,
+                    csv_name,
+                    successful_sources,
+                )
         for source in successful_sources:
-            source_transform = source.pop("transform")
-            output_dir = Path(source["output_dir"])
-            for csv_name in ("sunspot_statistics.csv", "sunspot_exclusion_list.csv"):
-                _augment_csv(output_dir / csv_name, source_transform)
-        _combine_csv(
-            run_logger.session_dir,
-            "sunspot_statistics.csv",
-            successful_sources,
-        )
-        _combine_csv(
-            run_logger.session_dir,
-            "sunspot_exclusion_list.csv",
-            successful_sources,
-        )
+            shutil.rmtree(
+                Path(source["output_dir"]) / ".comparison_stages",
+                ignore_errors=True,
+            )
+            source.pop("transform", None)
 
     summary = {
         "comparison_date": plan.comparison_date,
@@ -1069,6 +1166,12 @@ def run_comparison(
         "mask_template": str(plan.mask_template_path or generated_mask_path)
         if plan.mask_template_path or generated_mask_path
         else None,
+        "matching": matching_summary,
+        "comparison_summary_images": summary_images,
+        "coordinate_csv_directories": {
+            "image_coordinates": str(run_logger.session_dir / "image_coordinates"),
+            "common_coordinates": str(run_logger.session_dir / "common_coordinates"),
+        },
         "overall_status": overall_status,
         "output_directory": str(run_logger.session_dir),
     }

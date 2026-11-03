@@ -807,8 +807,8 @@ def applyRadialMask(
     center: tuple[float, float],
     solar_radius: float,
     radius_ratio: float,
-    boundary_policy: Literal["overlap", "centroid"] = "overlap",
     return_details: Literal[False] = False,
+    boundary_policy: Literal["overlap", "centroid"] = "overlap",
 ) -> tuple[int, np.ndarray]: ...
 
 
@@ -830,8 +830,8 @@ def applyRadialMask(
     center: tuple[float, float],
     solar_radius: float,
     radius_ratio: float,
-    boundary_policy: Literal["overlap", "centroid"] = "overlap",
     return_details: bool = False,
+    boundary_policy: Literal["overlap", "centroid"] = "overlap",
 ) -> tuple[int, np.ndarray] | tuple[int, np.ndarray, dict]:
     """MIN2 の太陽中心・半径に基づき、半径比より外側の黒点候補を除外する。
 

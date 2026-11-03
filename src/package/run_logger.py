@@ -18,7 +18,12 @@ from pprint import pformat
 from typing import Any
 
 from src.package.config import CONFIG_PATH, resolve_path
-from src.package.version import APP_NAME, APP_VERSION
+from src.package.version_info import (
+    APPLICATION_NAME,
+    VERSION_PATH,
+    collect_git_metadata,
+    get_application_version,
+)
 
 
 PACKAGE_DISTRIBUTIONS = {
@@ -184,9 +189,16 @@ class RunLogger:
             self._logging_logger.addHandler(self._console_handler)
 
         safe_config = _redact_config(config)
+        self.application_metadata = {
+            "name": APPLICATION_NAME,
+            "version": get_application_version(),
+            "version_file": str(VERSION_PATH),
+        }
+        self.source_control_metadata = collect_git_metadata()
         self.data: dict[str, Any] = {
-            "application": {"name": APP_NAME, "version": APP_VERSION},
             "run_id": self.run_id,
+            "application": self.application_metadata,
+            "source_control": self.source_control_metadata,
             "status": "running",
             "started_at": self.started_at.isoformat(),
             "finished_at": None,
@@ -214,7 +226,6 @@ class RunLogger:
             "\n".join(
                 [
                     "=== PROCESSING RUN STARTED ===",
-                    f"Application: {APP_NAME} v{APP_VERSION}",
                     f"Run ID: {self.run_id}",
                     f"Started at: {self.started_at.isoformat()}",
                     f"Working directory: {Path.cwd()}",
@@ -222,6 +233,14 @@ class RunLogger:
                     f"Platform: {platform.platform()}",
                     f"Session directory: {self.session_dir}",
                     f"Log JSON: {self.json_path}",
+                    "",
+                    "=== APPLICATION ===",
+                    f"Name: {self.application_metadata['name']}",
+                    f"Version: {self.application_metadata['version']}",
+                    f"Version file: {self.application_metadata['version_file']}",
+                    "",
+                    "=== SOURCE CONTROL ===",
+                    pformat(self.source_control_metadata, sort_dicts=False),
                     "",
                     "=== CONFIGURATION ===",
                     pformat(safe_config, sort_dicts=False),
@@ -236,6 +255,26 @@ class RunLogger:
         self._logging_logger.info(
             "Run started: id=%s | session=%s", self.run_id, self.session_dir
         )
+
+        self._logging_logger.info(
+            "Application: %s | version=%s",
+            self.application_metadata["name"],
+            self.application_metadata["version"],
+        )
+        if self.source_control_metadata["available"]:
+            commit = self.source_control_metadata["commit"]
+            self._logging_logger.info(
+                "Git HEAD: branch=%s | commit=%s | date=%s | working_tree=%s",
+                self.source_control_metadata["branch"],
+                commit["sha"],
+                commit["date"],
+                self.source_control_metadata["working_tree"],
+            )
+        else:
+            self._logging_logger.info(
+                "Git metadata unavailable: %s",
+                self.source_control_metadata["reason"],
+            )
 
     def record_event(self, event_name: str, details: dict[str, Any]) -> None:
         """Append a processing event and its details to both log files.

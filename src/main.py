@@ -34,7 +34,7 @@ from src.package import (
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
 from src.package.run_logger import RunLogger
-from src.package.version import APP_VERSION
+from src.package.version_info import get_application_version
 from src.package.qt_preview import (
     build_invalid_sunspot_mask,
     show_final_preview,
@@ -159,7 +159,7 @@ def main(config: dict, run_logger: RunLogger | None = None) -> int:
         )
         LOGGER.debug("画像メタデータ取得時の詳細:", exc_info=True)
 
-    moduleVersions = {"Application": APP_VERSION}
+    moduleVersions = {"Application": get_application_version()}
     raw_image = image
     solar_geometry: tuple[tuple[float, float], float] | None = None
     min_area_exclusions: list[tuple[np.ndarray, list[int], str, int]] = []

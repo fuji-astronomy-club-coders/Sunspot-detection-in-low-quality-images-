@@ -105,9 +105,15 @@ push する前に、CI と同じチェックをローカルで実行しておく
 
 ### 3-1. 開発用パッケージのインストール(初回のみ)
 
-```bash
-python -m pip install -e ".[dev]"
+このリポジトリでは、アプリケーションの実行時依存関係を `pyproject.toml` の `[project].dependencies` に、Ruff・basedpyright などを `[project.optional-dependencies].dev` に定義しています。通常のアプリケーション利用では `run.bat --setup` が実行時依存関係だけを `.venv` に導入します。
+
+開発用チェックも同じ `.venv` で実行する場合は、次のコマンドで開発用 extras を追加します。
+
+```bat
+.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
+
+このコマンドは `[project].dependencies` と `[project.optional-dependencies].dev` の両方を導入します。仮想環境を使わない開発環境の場合は、使用するPythonで同じコマンドを実行してください。
 
 ### 3-2. CI と同じ 4 つのチェック
 

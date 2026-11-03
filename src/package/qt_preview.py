@@ -19,6 +19,7 @@ from PyQt6.QtGui import (
     QPaintEvent,
     QPainter,
     QPen,
+    QPolygonF,
     QWheelEvent,
 )
 from PyQt6.QtWidgets import (
@@ -86,6 +87,7 @@ class _FinalPreviewCanvas(QWidget):
         invalid_sunspot_mask: np.ndarray | None = None,
         solar_geometry: tuple[tuple[float, float], float] | None = None,
         rmask_radius_ratio: float = 0.85,
+        mask_polygons: list[np.ndarray] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """表示画像、マスク領域オーバーレイ、初期表示範囲を構築する。
@@ -115,6 +117,13 @@ class _FinalPreviewCanvas(QWidget):
         self._mask_regions = [
             (int(x), int(y), int(width), int(height))
             for x, y, width, height in (mask_regions or [])
+        ]
+        self._mask_polygons = [
+            np.asarray(polygon, dtype=np.float64)
+            for polygon in (mask_polygons or [])
+            if np.asarray(polygon).ndim == 2
+            and np.asarray(polygon).shape[1] == 2
+            and np.asarray(polygon).shape[0] >= 3
         ]
         self._show_mask_fill = bool(options.get("show_mask_fill", False))
         raw_color = options.get("mask_fill_color", [0, 255, 0])
@@ -539,6 +548,26 @@ class _FinalPreviewCanvas(QWidget):
                 painter.drawRect(rectangle)
             painter.setBrush(Qt.BrushStyle.NoBrush)
 
+        if self._show_mask_fill and self._mask_polygons:
+            polygon_color = QColor(*self._mask_fill_color)
+            polygon_color.setAlpha(self._mask_fill_alpha)
+            polygon_pen = QPen(polygon_color, 1)
+            polygon_pen.setCosmetic(True)
+            painter.setPen(polygon_pen)
+            painter.setBrush(polygon_color)
+            for points in self._mask_polygons:
+                polygon = QPolygonF(
+                    [
+                        QPointF(
+                            image_rect.left() + (float(point[0]) - self._view_x_min) * scale,
+                            image_rect.top() + (float(point[1]) - self._view_y_min) * scale,
+                        )
+                        for point in points
+                    ]
+                )
+                painter.drawPolygon(polygon)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+
         if self._show_rmask_fill and self._solar_geometry is not None:
             center_x, center_y, solar_radius = self._solar_geometry
             radial_radius = solar_radius * self._rmask_radius_ratio
@@ -814,6 +843,7 @@ class _FinalPreviewDialog(QDialog):
         invalid_sunspot_mask: np.ndarray | None = None,
         solar_geometry: tuple[tuple[float, float], float] | None = None,
         rmask_radius_ratio: float = 0.85,
+        mask_polygons: list[np.ndarray] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         """ツールバー、画像キャンバス、マスク表示、座標 HUD を構築する。
@@ -841,6 +871,7 @@ class _FinalPreviewDialog(QDialog):
             invalid_sunspot_mask,
             solar_geometry,
             rmask_radius_ratio,
+            mask_polygons,
         )
         self.histogram = BrightnessHistogramWidget(image, self)
         toolbar = QToolBar(self)
@@ -969,6 +1000,7 @@ def show_final_preview(
     invalid_sunspot_mask: np.ndarray | None = None,
     solar_geometry: tuple[tuple[float, float], float] | None = None,
     rmask_radius_ratio: float = 0.85,
+    mask_polygons: list[np.ndarray] | None = None,
 ) -> None:
     """PyQt ダイアログで最終解析画像とマスク領域を操作・確認する。
 
@@ -1000,6 +1032,7 @@ def show_final_preview(
         invalid_sunspot_mask,
         solar_geometry,
         rmask_radius_ratio,
+        mask_polygons,
     )
     dialog.exec()
     LOGGER.info("Final result preview closed.")

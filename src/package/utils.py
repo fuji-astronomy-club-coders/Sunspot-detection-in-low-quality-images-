@@ -391,29 +391,13 @@ def save_sunspot_exclusion_csv(
     mask_regions: list[dict[str, Any]],
     output_path: str | Path,
     min_area_exclusions: list[tuple[np.ndarray, list[int], str, int]] | None = None,
+    radial_mask_details: dict[str, Any] | None = None,
 ) -> int:
-    """マスクと minArea で除外された黒点を、要因別に CSV へ保存する。
-
-    Parameters
-    ----------
-    label_image : numpy.ndarray
-        minArea 適用後、マスク適用前の黒点ラベル画像。
-    mask_regions : list[dict[str, Any]]
-        マスク領域ごとの座標と重複黒点ラベルを含む詳細情報。
-    output_path : str | pathlib.Path
-        CSV の保存先。
-    min_area_exclusions : list[tuple[numpy.ndarray, list[int], str, int]] | None
-        (フィルター前ラベル画像, 除外ラベル, 除外段階, 最小面積) の一覧。
-
-    Returns
-    -------
-    int
-        除外一覧 CSV に出力した黒点数。
-    """
+    """mask、Rmask、minArea で除外された黒点を、要因別に CSV へ保存する。"""
     if label_image.ndim != 2:
         raise ValueError("黒点ラベル画像は2次元配列にしてください。")
 
-    exclusions_by_label: dict[int, list[dict[str, int]]] = {}
+    mask_exclusions_by_label: dict[int, list[dict[str, int]]] = {}
     for region in mask_regions:
         mask_id = int(region["index"])
         mask_info = {
@@ -423,8 +407,23 @@ def save_sunspot_exclusion_csv(
             "width": int(region["width"]),
             "height": int(region["height"]),
         }
-        for label in region["overlapping_candidate_labels"]:
-            exclusions_by_label.setdefault(int(label), []).append(mask_info)
+        excluded_labels = region.get(
+            "excluded_candidate_labels",
+            region.get("overlapping_candidate_labels", []),
+        )
+        for label in excluded_labels:
+            mask_exclusions_by_label.setdefault(int(label), []).append(mask_info)
+
+    radial_exclusions_by_label: dict[int, dict[str, float]] = {}
+    if radial_mask_details and radial_mask_details.get("enabled", False):
+        for candidate in radial_mask_details.get("excluded_candidates", []):
+            radial_exclusions_by_label[int(candidate["label"])] = {
+                "centroid_distance_px": float(candidate["centroid_distance_px"]),
+            }
+
+    mask_and_radial_labels = sorted(
+        set(mask_exclusions_by_label) | set(radial_exclusions_by_label)
+    )
 
     csv_path = Path(output_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -443,6 +442,11 @@ def save_sunspot_exclusion_csv(
         "min_area_threshold_px",
         "excluded_by_mask_ids",
         "excluded_by_mask_regions",
+        "radial_distance_px",
+        "radial_limit_px",
+        "radial_ratio",
+        "radial_center_x_px",
+        "radial_center_y_px",
     ]
     rows: list[dict[str, Any]] = []
 
@@ -453,6 +457,8 @@ def save_sunspot_exclusion_csv(
         stage: str,
         min_area_threshold: int | None = None,
         masks_by_label: dict[int, list[dict[str, int]]] | None = None,
+        factors_by_label: dict[int, list[str]] | None = None,
+        radial_by_label: dict[int, dict[str, float]] | None = None,
     ) -> None:
         """指定されたラベル画像から除外候補の統計行を追加する。"""
         if source_labels.ndim != 2:
@@ -475,6 +481,9 @@ def save_sunspot_exclusion_csv(
             max_y = int(y_coordinates.max())
             excluded_by_masks = (masks_by_label or {}).get(spot_label, [])
             mask_ids = [mask["mask_id"] for mask in excluded_by_masks]
+            candidate_factors = (factors_by_label or {}).get(spot_label, [factor])
+            radial_info = (radial_by_label or {}).get(spot_label, {})
+            has_radial_factor = "Rmask" in candidate_factors
             rows.append(
                 {
                     "label": int(spot_label),
@@ -485,7 +494,7 @@ def save_sunspot_exclusion_csv(
                     "bbox_width_px": max_x - min_x + 1,
                     "bbox_height_px": max_y - min_y + 1,
                     "area_px": int(x_coordinates.size),
-                    "excluded_by_factor": factor,
+                    "excluded_by_factor": ";".join(candidate_factors),
                     "exclusion_stage": stage,
                     "min_area_threshold_px": (
                         min_area_threshold if min_area_threshold is not None else ""
@@ -498,16 +507,51 @@ def save_sunspot_exclusion_csv(
                         if excluded_by_masks
                         else ""
                     ),
+                    "radial_distance_px": (
+                        round(radial_info["centroid_distance_px"], 6)
+                        if has_radial_factor
+                        else ""
+                    ),
+                    "radial_limit_px": (
+                        round(float(radial_mask_details["threshold_radius_px"]), 6)
+                        if has_radial_factor and radial_mask_details
+                        else ""
+                    ),
+                    "radial_ratio": (
+                        float(radial_mask_details["radius_ratio"])
+                        if has_radial_factor and radial_mask_details
+                        else ""
+                    ),
+                    "radial_center_x_px": (
+                        float(radial_mask_details["center_x_px"])
+                        if has_radial_factor and radial_mask_details
+                        else ""
+                    ),
+                    "radial_center_y_px": (
+                        float(radial_mask_details["center_y_px"])
+                        if has_radial_factor and radial_mask_details
+                        else ""
+                    ),
                 }
             )
 
-    append_exclusions(
-        label_image,
-        sorted(exclusions_by_label),
-        "mask",
-        "mask",
-        masks_by_label=exclusions_by_label,
-    )
+    factors_by_label: dict[int, list[str]] = {}
+    for label in sorted(mask_exclusions_by_label):
+        factors_by_label.setdefault(label, []).append("mask")
+    for label in sorted(radial_exclusions_by_label):
+        factors_by_label.setdefault(label, []).append("Rmask")
+
+    if mask_and_radial_labels:
+        append_exclusions(
+            label_image,
+            mask_and_radial_labels,
+            "mask",
+            "mask",
+            masks_by_label=mask_exclusions_by_label,
+            factors_by_label=factors_by_label,
+            radial_by_label=radial_exclusions_by_label,
+        )
+
     for source_labels, excluded_labels, stage, min_area_threshold in (
         min_area_exclusions or []
     ):
@@ -525,7 +569,8 @@ def save_sunspot_exclusion_csv(
         for sunspot_id, row in enumerate(rows, start=1):
             writer.writerow({"sunspot_id": sunspot_id, **row})
 
-    mask_excluded_count = len(exclusions_by_label)
+    mask_excluded_count = len(mask_exclusions_by_label)
+    radial_excluded_count = len(radial_exclusions_by_label)
     min_area_excluded_count = sum(
         len(excluded_labels)
         for _source_labels, excluded_labels, _stage, _min_area in (
@@ -533,20 +578,26 @@ def save_sunspot_exclusion_csv(
         )
     )
     LOGGER.info(
-        "黒点除外一覧 CSV を保存しました: %s (合計: %d、mask: %d、minArea: %d)",
+        "黒点除外一覧 CSV を保存しました: %s (合計: %d、mask: %d、Rmask: %d、minArea: %d)",
         csv_path,
         len(rows),
         mask_excluded_count,
+        radial_excluded_count,
         min_area_excluded_count,
     )
-    for label, masks in exclusions_by_label.items():
+    for label, masks in mask_exclusions_by_label.items():
         LOGGER.debug(
             "除外黒点 label=%d: factor=mask, mask_ids=%s",
             label,
             [mask["mask_id"] for mask in masks],
         )
+    for label, radial_info in radial_exclusions_by_label.items():
+        LOGGER.debug(
+            "除外黒点 label=%d: factor=Rmask, centroid_distance_px=%.3f",
+            label,
+            radial_info["centroid_distance_px"],
+        )
     return len(rows)
-
 
 def closingCircle(image: np.ndarray, kernel: np.ndarray | int) -> np.ndarray:
     """

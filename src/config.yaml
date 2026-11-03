@@ -43,6 +43,17 @@ Extraction:
     min_distance: 5
 
 
+# 黒点のマスク除外設定
+Mask:
+  # overlap: 除外領域に1画素でも入った黒点を除外
+  # centroid: 黒点の重心が除外領域内にある場合だけ除外
+  # contained: 黒点の全画素が複数を含む除外領域の和集合内にあれば除外
+  # Rmaskと通常の矩形maskの両方に適用
+  boundary_policy: overlap
+  Rmask:
+    enabled: false # trueにするとMIN2の太陽中心・半径から外周側の黒点を除外
+    radius_ratio: 0.85 # 太陽半径に対する除外境界の割合（正の有限値。1を超える値も指定可能）
+
 # マスク選択ダイアログ
 MaskDialog:
   display:
@@ -63,5 +74,11 @@ Display:
   show_final_image: true # trueにするとPyQtで最終解析画像を表示
   show_mask_fill: true # 最終確認画面で選択したマスク範囲を塗りつぶす
   show_invalid_sunspots: true # 最終確認画面でマスクにより除外された黒点を表示する
-  mask_fill_color: [0, 255, 0] # 塗りつぶし色（RGB）
-  mask_fill_alpha: 72 # 不透明度（0: 透明 ～ 255: 不透明）
+  show_rmask_fill: false # 最終確認画面でRmask境界円より外側を塗りつぶす
+  show_solar_circle: false # 最終確認画面でMIN2の太陽近似円と中心を表示する
+  mask_fill_color: [0, 255, 0] # 通常maskの塗りつぶし色（RGB）
+  mask_fill_alpha: 72 # 通常maskの不透明度（0: 透明 ～ 255: 不透明）
+  rmask_fill_color: [255, 165, 0] # Rmaskの塗りつぶし色（RGB）
+  rmask_fill_alpha: 64 # Rmaskの不透明度（0: 透明 ～ 255: 不透明）
+  solar_circle_color: [0, 220, 255] # 太陽近似円・中心マーカーの色（RGB）
+  solar_circle_thickness: 2 # 太陽近似円の線幅

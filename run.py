@@ -60,7 +60,8 @@ def main() -> int:
                 "successful_source_count": len(summary["successful_sources"]),
                 "comparison_date": plan.comparison_date,
                 "summary_path": str(run_logger.session_dir / "comparison_summary.json"),
-            }
+            },
+            status=summary["overall_status"],
         )
         return 1 if summary["overall_status"] == "failed" else 0
 

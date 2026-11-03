@@ -28,7 +28,6 @@ from src.package.run_logger import RunLogger
 from src.package.solar_coordinates import Orientation, SolarGeometry, SolarTransform
 
 LOGGER = logging.getLogger("sunspot.comparison")
-SOURCE_INPUT_ROOT = PROJECT_ROOT / "source_input"
 IMAGE_SUFFIXES = {".tif", ".tiff", ".fits", ".fit", ".fts"}
 MATCH_TOLERANCE_NORMALIZED = 0.025
 COMPARISON_CSV_NAMES = (

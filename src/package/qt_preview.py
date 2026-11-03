@@ -6,7 +6,7 @@ import math
 
 import cv2
 import numpy as np
-from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import (
     QAction,
     QActionGroup,
@@ -37,6 +37,27 @@ from src.package.qt_histogram import BrightnessHistogramWidget
 from src.package.qt_image import colorize_intensity
 
 LOGGER = logging.getLogger("sunspot.qt_preview")
+
+
+def _format_cursor_readout(image: np.ndarray, pixel_x: int, pixel_y: int) -> str:
+    """元画像の指定画素からカーソル位置と輝度値を整形する。
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        カラーマップ適用前の2次元元画像。
+    pixel_x : int
+        画素の X 座標。
+    pixel_y : int
+        画素の Y 座標。
+
+    Returns
+    -------
+    str
+        画素座標と元画像の輝度値を含むステータス文字列。
+    """
+    brightness = image[pixel_y, pixel_x]
+    return f"Cursor: x={pixel_x}, y={pixel_y}, brightness={brightness}"
 
 
 def build_invalid_sunspot_mask(
@@ -182,6 +203,7 @@ class _FinalPreviewCanvas(QWidget):
             ).copy()
 
         options = display_options or {}
+        self._intensity_image = image
         colormap = str(options.get("colormap", "GRAY"))
         display_bgr, self._minimum, self._maximum = colorize_intensity(
             image,
@@ -226,7 +248,7 @@ class _FinalPreviewCanvas(QWidget):
         self.setMinimumSize(480, 360)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.cursorChanged.emit("Cursor: x=—, y=—")
+        self.cursorChanged.emit("Cursor: x=—, y=—, brightness=—")
         self._emit_view_range()
 
     def set_mask_fill_visible(self, visible: bool) -> None:
@@ -722,11 +744,13 @@ class _FinalPreviewCanvas(QWidget):
         position = event.position()
         point = self._map_to_data(position)
         if point is None:
-            self.cursorChanged.emit("Cursor: x=—, y=—")
+            self.cursorChanged.emit("Cursor: x=—, y=—, brightness=—")
         else:
             pixel_x = min(max(int(point[0]), 0), self._image_width - 1)
             pixel_y = min(max(int(point[1]), 0), self._image_height - 1)
-            self.cursorChanged.emit(f"Cursor: x={pixel_x}, y={pixel_y}")
+            self.cursorChanged.emit(
+                _format_cursor_readout(self._intensity_image, pixel_x, pixel_y)
+            )
 
         if self._drag_mode == "pan":
             x_min, x_max, y_min, y_max = self._drag_start_view
@@ -744,6 +768,17 @@ class _FinalPreviewCanvas(QWidget):
             self.update()
         else:
             super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event: QEvent | None) -> None:
+        """キャンバスからカーソルが離れたときにステータス表示を初期化する。
+
+        Parameters
+        ----------
+        event : QEvent | None
+            Qt のマウス離脱イベント。
+        """
+        self.cursorChanged.emit("Cursor: x=—, y=—, brightness=—")
+        super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
         """ドラッグ終了時にパン状態を解除、または選択矩形へズームする。
@@ -935,9 +970,9 @@ class _FinalPreviewDialog(QDialog):
         help_label = QLabel(" | Ctrl + wheel: Zoom   |   Shift + right drag: Pan")
         toolbar.addWidget(help_label)
 
-        cursor_label = QLabel("Cursor: x=—, y=—")
+        cursor_label = QLabel("Cursor: x=—, y=—, brightness=—")
         range_label = QLabel()
-        cursor_label.setMinimumWidth(180)
+        cursor_label.setMinimumWidth(320)
         range_label.setMinimumWidth(300)
         self.canvas.cursorChanged.connect(cursor_label.setText)
         self.canvas.viewChanged.connect(range_label.setText)

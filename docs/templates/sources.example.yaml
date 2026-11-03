@@ -5,19 +5,19 @@ sources:
   - source_id: source_01
     display_name: "観測所A（仮）"
     orientation_policy: fixed
-    north_vector: {x: 0.0, y: -1.0}
+    north_vector: {x: 0.0, y: 1.0}
     flip_x: false
 
   - source_id: source_02
     display_name: "観測所B（仮）"
     orientation_policy: fixed
-    north_vector: {x: 0.0, y: -1.0}
+    north_vector: {x: 0.0, y: 1.0}
     flip_x: false
 
   - source_id: source_03
     display_name: "観測所C（仮）"
     orientation_policy: fixed
-    north_vector: {x: 0.0, y: -1.0}
+    north_vector: {x: 0.0, y: 1.0}
     flip_x: false
 
   - source_id: source_04

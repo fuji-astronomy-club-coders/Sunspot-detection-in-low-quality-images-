@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
@@ -45,19 +44,21 @@ def build_batch_arguments(
     raise ValueError(f"Unknown launcher action: {action}")
 
 
+def _quote_cmd_argument(argument: str) -> str:
+    """Quote one argument for cmd.exe while preserving spaces and metacharacters."""
+    return '"' + argument.replace('"', '""') + '"'
+
+
 def _run_batch(arguments: list[str]) -> int:
     """Run run.bat in the current console with the GUI bypass marker."""
-    command = subprocess.list2cmdline(
-        [str(BATCH_FILE), "--_from-gui", *arguments]
+    command_arguments = ["--_from-gui", *arguments]
+    command = (
+        f'call "{BATCH_FILE}" '
+        + " ".join(_quote_cmd_argument(argument) for argument in command_arguments)
     )
     completed = subprocess.run(
-        [
-            os.environ.get("COMSPEC", "cmd.exe"),
-            "/d",
-            "/s",
-            "/c",
-            f'"{command}"',
-        ],
+        command,
+        shell=True,
         cwd=PROJECT_ROOT,
         check=False,
     )

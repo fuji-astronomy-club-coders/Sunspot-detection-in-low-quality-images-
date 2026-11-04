@@ -64,5 +64,42 @@ class LauncherArgumentTests(unittest.TestCase):
             build_batch_arguments("unknown")
 
 
+class LauncherBatchInvocationTests(unittest.TestCase):
+    """Verify Windows command-shell invocation of the selected batch command."""
+
+    def test_batch_is_called_with_separate_quoted_arguments(self) -> None:
+        from pathlib import Path
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        import launcher_gui
+
+        batch_path = Path(r"C:\\Projects With Spaces\\run.bat")
+        project_root = Path(r"C:\\Projects With Spaces")
+        selected_folder = r"E:\\Solar Data & Archive\\2026-11-02"
+
+        with (
+            patch.object(launcher_gui, "BATCH_FILE", batch_path),
+            patch.object(launcher_gui, "PROJECT_ROOT", project_root),
+            patch.object(
+                launcher_gui.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=7),
+            ) as run_command,
+        ):
+            exit_code = launcher_gui._run_batch(
+                ["--compare", selected_folder]
+            )
+
+        self.assertEqual(exit_code, 7)
+        run_command.assert_called_once_with(
+            'call "C:\\Projects With Spaces\\run.bat" '
+            '"--_from-gui" "--compare" "E:\\Solar Data & Archive\\2026-11-02"',
+            shell=True,
+            cwd=project_root,
+            check=False,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,15 @@ set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
 set "PYTHON_CMD="
 set "APP_ARGS="
 
+rem The GUI re-enters this batch file with a private marker so the selected
+rem command is parsed without opening the GUI a second time.
+set "FROM_GUI="
+if /i "%~1"=="--_from-gui" (
+    set "FROM_GUI=1"
+    shift
+)
+if "%~1"=="" if not defined FROM_GUI goto :launch_gui
+
 rem Parse supported options.
 if /i "%~1"=="--help" (
     if not "%~2"=="" goto :invalid_option
@@ -45,6 +54,33 @@ rem If the directory exists but is incomplete, report it instead of silently
 rem falling back to the system Python.
 if exist "%VENV_DIR%\." goto :run_venv
 goto :run_system
+
+
+:launch_gui
+rem Prefer the existing venv for the GUI when it has Tkinter. If it does not,
+rem use a system Python so an incomplete venv can still be repaired from GUI.
+set "GUI_PYTHON_CMD="
+if exist "%VENV_PYTHON%" (
+    "%VENV_PYTHON%" -c "import sys, tkinter; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)" >nul 2>nul
+    if not errorlevel 1 set "GUI_PYTHON_CMD="%VENV_PYTHON%""
+)
+
+if not defined GUI_PYTHON_CMD (
+    call :find_python
+    if errorlevel 1 goto :error
+    set "GUI_PYTHON_CMD=%PYTHON_CMD%"
+)
+
+echo [INFO] Starting launcher GUI...
+%GUI_PYTHON_CMD% "%~dp0launcher_gui.py"
+set "EXIT_CODE=%ERRORLEVEL%"
+if not "%EXIT_CODE%"=="0" (
+    echo.
+    echo [ERROR] The launcher GUI could not be started or exited with an error.
+    echo [HINT] Use Python 3.13+ with Tkinter (Tcl/Tk) installed.
+    pause
+)
+exit /b %EXIT_CODE%
 
 
 :run_system
@@ -221,7 +257,7 @@ goto :error
 
 :help
 echo Usage:
-echo   run.bat                  Run with .venv when it exists; otherwise use system Python.
+echo   run.bat                  Open the startup GUI to select an operation and options.
 echo   run.bat --venv           Force the existing .venv environment.
 echo   run.bat --compare        Start comparison mode using a folder-selection dialog.
 echo   run.bat --compare PATH   Start comparison mode for the specified date folder.
@@ -231,6 +267,8 @@ echo   run.bat --setup --global Install project dependencies into system Python 
 echo   run.bat --help           Show this help.
 echo.
 echo The --global option is valid only together with --setup.
+echo The startup GUI requires Python 3.13+ with Tkinter available.
+if defined FROM_GUI pause
 exit /b 0
 
 

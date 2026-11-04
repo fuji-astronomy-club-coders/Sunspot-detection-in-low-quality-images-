@@ -3,7 +3,7 @@
 Pythonのプロジェクトで `venv` を作成し、`pyproject.toml` に記載された依存関係（モジュール）をインストールして開発環境を構築する手順です。
 
 > [!NOTE]
-> このリポジトリでは、`run.bat` の通常起動時に `.venv` が存在すればその環境を優先し、存在しなければシステムPythonを使用します。仮想環境の作成・更新は `run.bat --setup`、システムPythonへの依存関係のインストールは `run.bat --setup --global` で行います。`--setup --global` は `.venv` を作成・変更しません。`.venv` が存在するのに不完全な場合はシステムPythonへ自動で切り替えず、`--setup` を案内します。
+> このリポジトリでは、`run.bat` を引数なしで起動すると Tkinter の選択GUIを表示します。GUIから単一画像／比較モード、比較フォルダー、既存 `.venv` の強制使用、仮想環境のセットアップ、システムPythonへのインストールを選択できます。通常のアプリ起動時は `.venv` が存在すればその環境を優先し、存在しなければシステムPythonを使用します。仮想環境の作成・更新は `run.bat --setup`、システムPythonへの依存関係のインストールは `run.bat --setup --global` で行います。`--setup --global` は `.venv` を作成・変更しません。`.venv` が存在するのに不完全な場合はシステムPythonへ自動で切り替えず、`--setup` を案内します。GUIを使うPython 3.13以上の環境では Tkinter が利用可能である必要があります。
 
 このリポジトリの実行時依存関係は `pyproject.toml` の `[project].dependencies` に、Ruff・basedpyright などの開発用依存関係は `[project.optional-dependencies].dev` に分けて記載します。アプリケーションだけを実行する環境では `dev` extras は不要です。
 

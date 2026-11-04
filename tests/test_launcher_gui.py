@@ -90,9 +90,12 @@ class LauncherBatchInvocationTests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 7)
+        expected_command = (
+            f'call "{batch_path}" '
+            f'"--_from-gui" "--compare" "{selected_folder}"'
+        )
         run_command.assert_called_once_with(
-            'call "C:\Projects With Spaces\run.bat" '
-            '"--_from-gui" "--compare" "E:\Solar Data & Archive\2026-11-02"',
+            expected_command,
             shell=True,
             cwd=project_root,
             check=False,

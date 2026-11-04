@@ -683,7 +683,7 @@ def process_image(
             "rmask_radius_ratio": float(
                 config.get("Mask", {}).get("Rmask", {}).get("radius_ratio", 0.85)
             ),
-            mask_polygons=(
+            "mask_polygons": (
                 mask_polygons
                 if mask_polygons is not None
                 else selected_component_polygons

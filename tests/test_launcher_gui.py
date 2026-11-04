@@ -1,5 +1,7 @@
 """Tests for launcher argument selection."""
 
+import os
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -102,10 +104,8 @@ class LauncherBatchInvocationTests(unittest.TestCase):
         )
 
 
-    @unittest.skipUnless(__import__("os").name == "nt", "Windows batch execution test")
+    @unittest.skipUnless(os.name == "nt", "Windows batch execution test")
     def test_batch_command_forwards_arguments_through_real_cmd(self) -> None:
-        import tempfile
-
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary_root = Path(temporary_directory)
             batch_path = temporary_root / "run with spaces.bat"

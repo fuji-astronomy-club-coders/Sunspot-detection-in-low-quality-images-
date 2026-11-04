@@ -102,6 +102,44 @@ class LauncherBatchInvocationTests(unittest.TestCase):
         )
 
 
+    @unittest.skipUnless(__import__("os").name == "nt", "Windows batch execution test")
+    def test_batch_command_forwards_arguments_through_real_cmd(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_root = Path(temporary_directory)
+            batch_path = temporary_root / "run with spaces.bat"
+            output_path = temporary_root / "arguments.txt"
+            selected_folder = temporary_root / "Solar Data & Archive" / "2026-11-02"
+            selected_folder.mkdir(parents=True)
+            batch_path.write_text(
+                '@echo off\r\n'
+                '> "%~dp0arguments.txt" echo %~1\r\n'
+                '>> "%~dp0arguments.txt" echo %~2\r\n'
+                '>> "%~dp0arguments.txt" echo "%~3"\r\n'
+                'exit /b 23\r\n',
+                encoding="ascii",
+            )
+
+            with (
+                patch.object(launcher_gui, "BATCH_FILE", batch_path),
+                patch.object(launcher_gui, "PROJECT_ROOT", temporary_root),
+            ):
+                exit_code = launcher_gui._run_batch(
+                    ["--compare", str(selected_folder)]
+                )
+
+            self.assertEqual(exit_code, 23)
+            self.assertEqual(
+                output_path.read_text(encoding="ascii").splitlines(),
+                [
+                    "--_from-gui",
+                    "--compare",
+                    f'"{selected_folder}"',
+                ],
+            )
+
+
 class BatchArgumentParserRegressionTests(unittest.TestCase):
     """Ensure the GUI-only marker is not forwarded as an application argument."""
 

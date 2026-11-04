@@ -1,7 +1,11 @@
 """Tests for launcher argument selection."""
 
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
+import launcher_gui
 from launcher_gui import build_batch_arguments
 
 
@@ -68,12 +72,6 @@ class LauncherBatchInvocationTests(unittest.TestCase):
     """Verify Windows command-shell invocation of the selected batch command."""
 
     def test_batch_is_called_with_separate_quoted_arguments(self) -> None:
-        from pathlib import Path
-        from types import SimpleNamespace
-        from unittest.mock import patch
-
-        import launcher_gui
-
         batch_path = Path(r"C:\\Projects With Spaces\\run.bat")
         project_root = Path(r"C:\\Projects With Spaces")
         selected_folder = r"E:\\Solar Data & Archive\\2026-11-02"
@@ -99,6 +97,21 @@ class LauncherBatchInvocationTests(unittest.TestCase):
             cwd=project_root,
             check=False,
         )
+
+
+class BatchArgumentParserRegressionTests(unittest.TestCase):
+    """Ensure the GUI-only marker is not forwarded as an application argument."""
+
+    def test_non_venv_compare_does_not_use_shift_unsafe_percent_star(self) -> None:
+        repository_root = Path(__file__).resolve().parents[1]
+        batch_source = (repository_root / "run.bat").read_text(encoding="utf-8")
+        compare_branch = batch_source.split(
+            'if /i "%~1"=="--compare" (', maxsplit=1
+        )[1].split(")", maxsplit=1)[0]
+
+        self.assertIn('set "APP_ARGS=--compare"', compare_branch)
+        self.assertIn('set "APP_ARGS=--compare %2"', compare_branch)
+        self.assertNotIn("%*", compare_branch)
 
 
 if __name__ == "__main__":

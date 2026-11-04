@@ -72,9 +72,9 @@ class LauncherBatchInvocationTests(unittest.TestCase):
     """Verify Windows command-shell invocation of the selected batch command."""
 
     def test_batch_is_called_with_separate_quoted_arguments(self) -> None:
-        batch_path = Path(r"C:\\Projects With Spaces\\run.bat")
-        project_root = Path(r"C:\\Projects With Spaces")
-        selected_folder = r"E:\\Solar Data & Archive\\2026-11-02"
+        batch_path = Path(r"C:\Projects With Spaces\run.bat")
+        project_root = Path(r"C:\Projects With Spaces")
+        selected_folder = r"E:\Solar Data & Archive\2026-11-02"
 
         with (
             patch.object(launcher_gui, "BATCH_FILE", batch_path),
@@ -91,8 +91,8 @@ class LauncherBatchInvocationTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 7)
         run_command.assert_called_once_with(
-            'call "C:\\Projects With Spaces\\run.bat" '
-            '"--_from-gui" "--compare" "E:\\Solar Data & Archive\\2026-11-02"',
+            'call "C:\Projects With Spaces\run.bat" '
+            '"--_from-gui" "--compare" "E:\Solar Data & Archive\2026-11-02"',
             shell=True,
             cwd=project_root,
             check=False,

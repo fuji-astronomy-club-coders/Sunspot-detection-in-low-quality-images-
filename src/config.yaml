@@ -45,6 +45,11 @@ Extraction:
 
 # 黒点のマスク除外設定
 Mask:
+  # 手動マスクの選択方式
+  # rectangle: 従来の矩形領域をドラッグして選択
+  # connected_component: カーソルで連結成分を強調し、クリックして選択／解除
+  selection_method: rectangle
+
   # overlap: 除外領域に1画素でも入った黒点を除外
   # centroid: 黒点の重心が除外領域内にある場合だけ除外
   # contained: 黒点の全画素が複数を含む除外領域の和集合内にあれば除外

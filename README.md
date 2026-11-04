@@ -21,7 +21,7 @@ Windowsでは、プロジェクトルートの `run.bat` をダブルクリッ�
 run.bat --setup
 ```
 
-このコマンドは `.venv` を作成または再利用し、`pyproject.toml` の `[project].dependencies` に定義された実行時依存パッケージをインストールします。開発用の `[project.optional-dependencies].dev` はインストールしません。セットアップ後は、引数なしの `run.bat` で自動的に `.venv` が使用されます。
+このコマンドは `.venv` を作成または再利用し、`pyproject.toml` の `[project].dependencies` に定義された実行時依存パッケージをインストールします。開発用の `[project.optional-dependencies].dev` はインストールしません。セットアップ後は、`run.bat` のGUIでアプリケーション起動を選択すると `.venv` が自動的に優先使用されます。
 
 プロジェクト配布名（`pyproject.toml` の `[project].name`）を変更した後は、既存の仮想環境に登録された配布メタデータも更新するため、`run.bat --setup` を再実行してください。ランチャーはこの名前を使ってインストール状態を確認します。
 

@@ -337,23 +337,45 @@ def process_image(
         mask_display_image = (
             raw_image if mask_preview_images is not None else limb_corrected_image
         )
-        regions = (
-            mask.selectMaskRegions(
-                mask_display_image,
-                config.get("MaskDialog", {}).get("display"),
-                preview_images=mask_preview_images,
-                editor_transform=mask_editor_transform,
-                preview_editor_index=mask_editor_index,
+        mask_settings = config.get("Mask", {})
+        selection_method = str(mask_settings.get("selection_method", "rectangle"))
+        if selection_method not in ("rectangle", "connected_component"):
+            raise ValueError(
+                "Mask.selection_method は rectangle または connected_component を指定してください。"
             )
-            if mask_polygons is None
-            else []
-        )
+
+        regions: list[tuple[int, int, int, int]] = []
+        component_selection: dict[str, Any] | None = None
+        selected_component_labels: list[int] = []
+        selected_component_polygons: list[np.ndarray] = []
+        if mask_polygons is None:
+            if selection_method == "connected_component":
+                component_selection = mask.selectMaskComponents(
+                    mask_display_image,
+                    binary_image,
+                    config.get("MaskDialog", {}).get("display"),
+                    preview_images=mask_preview_images,
+                    editor_transform=mask_editor_transform,
+                    preview_editor_index=mask_editor_index,
+                )
+                selected_component_labels = component_selection["selected_labels"]
+                selected_component_polygons = [
+                    np.asarray(polygon, dtype=np.float64)
+                    for polygon in component_selection["polygons"]
+                ]
+            else:
+                regions = mask.selectMaskRegions(
+                    mask_display_image,
+                    config.get("MaskDialog", {}).get("display"),
+                    preview_images=mask_preview_images,
+                    editor_transform=mask_editor_transform,
+                    preview_editor_index=mask_editor_index,
+                )
 
         # 選択した除外領域を0で埋め、強調画像のマスク適用版も保存する。
         # 0は Black Top-Hat / Sobel の応答を抑制し、Gaussian 高域通過画像でも
         # 中立値として扱える。元の強調画像は変更せず、別ファイルに出力する。
         masked_emphasized_image = emphasized_image.copy()
-        mask_settings = config.get("Mask", {})
         radial_settings = mask_settings.get("Rmask", {})
         radial_mask_output = None
         if radial_settings.get("enabled", False):
@@ -395,6 +417,9 @@ def process_image(
                     "height": y2 - y1,
                 }
             )
+        if selected_component_labels:
+            selected_pixels = np.isin(binary_image, selected_component_labels)
+            masked_emphasized_image[selected_pixels] = 0
         if mask_polygons is not None:
             polygon_coverage = mask.polygon_coverage_mask(
                 masked_emphasized_image.shape[:2], mask_polygons
@@ -414,10 +439,15 @@ def process_image(
                     "fill_value": 0,
                     "coordinate_origin": "top-left",
                     "regions": mask_output_regions,
+                    "components": (
+                        component_selection["components"]
+                        if component_selection is not None
+                        else []
+                    ),
                     "polygons": (
                         [polygon.tolist() for polygon in mask_polygons]
                         if mask_polygons is not None
-                        else []
+                        else [polygon.tolist() for polygon in selected_component_polygons]
                     ),
                     "radial_mask": radial_mask_output,
                 },
@@ -431,7 +461,12 @@ def process_image(
                 {
                     "image_width": int(binary_image.shape[1]),
                     "image_height": int(binary_image.shape[0]),
-                    "selected_region_count": len(regions),
+                    "selection_method": selection_method,
+                    "selected_region_count": (
+                        len(regions)
+                        if component_selection is None
+                        else len(selected_component_labels)
+                    ),
                     "regions": [
                         {
                             "index": index,
@@ -442,25 +477,27 @@ def process_image(
                         }
                         for index, (x, y, width, height) in enumerate(regions, start=1)
                     ],
+                    "components": (
+                        component_selection["components"]
+                        if component_selection is not None
+                        else []
+                    ),
+                    "selected_component_labels": selected_component_labels,
                     "polygons": (
                         [polygon.tolist() for polygon in mask_polygons]
                         if mask_polygons is not None
-                        else None
+                        else (
+                            [polygon.tolist() for polygon in selected_component_polygons]
+                            if component_selection is not None
+                            else None
+                        )
                     ),
                 },
             )
 
         sunspot_labels = binary_image.copy()
         boundary_policy = mask_settings.get("boundary_policy", "overlap")
-        if mask_polygons is None:
-            _, _, mask_details = mask.applyMask(
-                sunspot_labels,
-                regions,
-                count,
-                return_details=True,
-                boundary_policy=boundary_policy,
-            )
-        else:
+        if mask_polygons is not None:
             _, _, mask_details = mask.applyPolygonMask(
                 sunspot_labels,
                 mask_polygons,
@@ -468,6 +505,25 @@ def process_image(
                 return_details=True,
                 boundary_policy=boundary_policy,
             )
+        elif component_selection is not None:
+            _, _, mask_details = mask.applyComponentMask(
+                sunspot_labels,
+                selected_component_labels,
+                count,
+                return_details=True,
+            )
+        else:
+            _, _, mask_details = mask.applyMask(
+                sunspot_labels,
+                regions,
+                count,
+                return_details=True,
+                boundary_policy=boundary_policy,
+            )
+            mask_details["selection_method"] = selection_method
+        if mask_polygons is not None:
+            for region in mask_details["regions"]:
+                region["selection_method"] = selection_method
         normal_mask_exclusions = list(mask_details["excluded_candidate_labels"])
 
         radial_details: dict[str, Any] = {
@@ -502,7 +558,8 @@ def process_image(
 
         mask_details.update(
             {
-                "boundary_policy": boundary_policy,
+                "boundary_policy": mask_details.get("boundary_policy", boundary_policy),
+                "selection_method": selection_method,
                 "excluded_by_factor": {
                     "mask": normal_mask_exclusions,
                     "Rmask": radial_exclusions,
@@ -625,6 +682,11 @@ def process_image(
             "solar_geometry": solar_geometry,
             "rmask_radius_ratio": float(
                 config.get("Mask", {}).get("Rmask", {}).get("radius_ratio", 0.85)
+            ),
+            "mask_polygons": (
+                mask_polygons
+                if mask_polygons is not None
+                else selected_component_polygons
             ),
         }
         if final_preview_collector is None:

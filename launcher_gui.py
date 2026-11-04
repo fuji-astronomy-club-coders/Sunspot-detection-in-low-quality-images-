@@ -200,14 +200,18 @@ def main() -> int:
         nonlocal exit_code
         action = action_var.get()
         date_folder = folder_var.get().strip()
-        if action == "app" and compare_var.get() and date_folder:
-            if not Path(date_folder).expanduser().is_dir():
-                messagebox.showerror(
-                    "フォルダーが見つかりません",
-                    "指定した日付フォルダーが存在しません。",
-                    parent=root,
-                )
-                return
+        if (
+            action == "app"
+            and compare_var.get()
+            and date_folder
+            and not Path(date_folder).expanduser().is_dir()
+        ):
+            messagebox.showerror(
+                "フォルダーが見つかりません",
+                "指定した日付フォルダーが存在しません。",
+                parent=root,
+            )
+            return
 
         arguments = build_batch_arguments(
             action,

@@ -74,6 +74,12 @@ if not defined GUI_PYTHON_CMD (
 echo [INFO] Starting launcher GUI...
 %GUI_PYTHON_CMD% "%~dp0launcher_gui.py"
 set "EXIT_CODE=%ERRORLEVEL%"
+if not "%EXIT_CODE%"=="0" (
+    echo.
+    echo [ERROR] The launcher GUI could not be started or exited with an error.
+    echo [HINT] Use Python 3.13+ with Tkinter (Tcl/Tk) installed.
+    pause
+)
 exit /b %EXIT_CODE%
 
 
@@ -252,7 +258,6 @@ goto :error
 :help
 echo Usage:
 echo   run.bat                  Open the startup GUI to select an operation and options.
-echo   run.bat                  Run with .venv when it exists; otherwise use system Python.
 echo   run.bat --venv           Force the existing .venv environment.
 echo   run.bat --compare        Start comparison mode using a folder-selection dialog.
 echo   run.bat --compare PATH   Start comparison mode for the specified date folder.

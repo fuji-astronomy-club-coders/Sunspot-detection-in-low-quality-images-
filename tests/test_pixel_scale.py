@@ -17,8 +17,8 @@ class PixelScaleTests(unittest.TestCase):
         self.assertEqual(resolve_pixel_length("3/500", 1000, "kernel"), 6)
 
     def test_odd_kernel_rounding(self) -> None:
-        self.assertEqual(resolve_pixel_length("3/500", 1000, "kernel", odd=True), 3)
-        self.assertEqual(resolve_pixel_length("15/500", 1000, "kernel", odd=True), 15)
+        self.assertEqual(resolve_pixel_length("3/500", 500, "kernel", odd=True), 3)
+        self.assertEqual(resolve_pixel_length("15/500", 500, "kernel", odd=True), 15)
 
     def test_integer_remains_a_fixed_pixel_value(self) -> None:
         self.assertEqual(resolve_pixel_length(5, 1000, "distance"), 5)

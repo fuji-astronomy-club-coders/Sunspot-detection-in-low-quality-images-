@@ -16,6 +16,8 @@
 - `comparison.yaml` の追加項目（トップレベル・サンプル内）を許容。解析には使わず無視し、項目名を警告ログに表示（`sources.yaml` は従来どおり未対応キーをエラーとする）
 
 ### 変更
+- 比較サマリー画像: 各タイルの見出しに検出数を表示し、空スロットに理由（未提供・スキップ・失敗）を表示
+- 起動GUI: 日付フォルダー指定時に、フォルダー名・`sources.yaml`・`comparison.yaml` の有無を実行前に確認してメッセージ表示
 - `pyproject.toml` の配布パッケージ名を `pyproject-template` から `sunspot-detection-in-low-quality-images` へ変更
 - `pyproject.toml` の `version` を `VERSION` と同じ `1.0.0` に統一
 

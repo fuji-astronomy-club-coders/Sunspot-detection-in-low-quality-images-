@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
+from datetime import date
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -42,6 +44,34 @@ def build_batch_arguments(
     if action == "help":
         return ["--help"]
     raise ValueError(f"Unknown launcher action: {action}")
+
+
+def validate_compare_folder(folder: str) -> str | None:
+    """Return a user-facing problem with a comparison date folder, or None if it looks usable.
+
+    Only cheap existence and naming checks are done here so the launcher can warn
+    before run.bat starts; run.py still performs the authoritative validation.
+    """
+    path = Path(folder).expanduser()
+    if not path.is_dir():
+        return "指定した日付フォルダーが存在しません。"
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", path.name) is None:
+            raise ValueError
+        date.fromisoformat(path.name)
+    except ValueError:
+        return (
+            "日付フォルダーの名前は実在する YYYY-MM-DD 形式にしてください。\n"
+            f"（選択されたフォルダー: {path.name}）"
+        )
+    if not (path.parent / "sources.yaml").is_file():
+        return (
+            "日付フォルダーの親フォルダーに sources.yaml がありません。\n"
+            f"（確認した場所: {path.parent}）"
+        )
+    if not (path / "comparison.yaml").is_file():
+        return "日付フォルダーに comparison.yaml がありません。"
+    return None
 
 
 def _quote_cmd_argument(argument: str) -> str:
@@ -201,18 +231,15 @@ def main() -> int:
         nonlocal exit_code
         action = action_var.get()
         date_folder = folder_var.get().strip()
-        if (
-            action == "app"
-            and compare_var.get()
-            and date_folder
-            and not Path(date_folder).expanduser().is_dir()
-        ):
-            messagebox.showerror(
-                "フォルダーが見つかりません",
-                "指定した日付フォルダーが存在しません。",
-                parent=root,
-            )
-            return
+        if action == "app" and compare_var.get() and date_folder:
+            problem = validate_compare_folder(date_folder)
+            if problem is not None:
+                messagebox.showerror(
+                    "日付フォルダーを確認してください",
+                    problem,
+                    parent=root,
+                )
+                return
 
         arguments = build_batch_arguments(
             action,

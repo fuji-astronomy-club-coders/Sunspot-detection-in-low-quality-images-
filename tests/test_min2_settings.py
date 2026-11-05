@@ -1,7 +1,7 @@
 """Tests for configurable MIN2 solar geometry estimation."""
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -12,10 +12,11 @@ class Min2ConfigurationTests(unittest.TestCase):
     """Verify MIN2 config validation and forwarding to the legacy function."""
 
     def setUp(self) -> None:
+        """Prepare a small image for the MIN2 wrapper tests."""
         self.image = np.zeros((32, 32), dtype=np.uint8)
 
     @patch("src.package.limb_darking_resolution.min2")
-    def test_configured_values_are_forwarded(self, min2_mock) -> None:
+    def test_configured_values_are_forwarded(self, min2_mock: MagicMock) -> None:
         """All public settings are passed to MIN2 using its legacy width name."""
         min2_mock.return_value = ((15.5, 16.5), 12.0)
         settings = {
@@ -43,7 +44,7 @@ class Min2ConfigurationTests(unittest.TestCase):
         )
 
     @patch("src.package.limb_darking_resolution.min2")
-    def test_missing_settings_keep_existing_defaults(self, min2_mock) -> None:
+    def test_missing_settings_keep_existing_defaults(self, min2_mock: MagicMock) -> None:
         """Omitting MIN2 config preserves the function's existing defaults."""
         min2_mock.return_value = ((15.0, 16.0), 12.0)
 

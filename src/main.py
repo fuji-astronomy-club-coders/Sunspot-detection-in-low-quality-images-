@@ -60,6 +60,15 @@ def _format_analysis_parameters(config: dict[str, Any]) -> str:
     """
     sections: list[str] = []
 
+    sections.append(
+        "\n".join(
+            [
+                "[MIN2 太陽円推定]",
+                pformat(config.get("MIN2", {}), sort_dicts=False),
+            ]
+        )
+    )
+
     limb_config = config["LimbDarkingResolution"]
     limb_method = limb_config["chosen_method"]
     sections.append(
@@ -194,8 +203,12 @@ def process_image(
 
         if darkingMethod == "polynomialFit":
             moduleVersions["LimbDarkingResolution"] = ldr.version
+            moduleVersions["MIN2"] = ldr.min2_version
             if solar_geometry is None:
-                solar_geometry = ldr.find_solar_geometry(image)
+                solar_geometry = ldr.find_solar_geometry(
+                    image,
+                    min2_config=config.get("MIN2"),
+                )
             image: ndarray[_AnyShape, dtype[Any]] = ldr.polynomialFit(
                 image=image,
                 solar_geometry=solar_geometry,

@@ -1047,7 +1047,10 @@ def run_comparison(
             preview_image = utils.loadImage(candidate.image_path)
             if preview_image.ndim != 2:
                 continue
-            preview_geometry_tuple = ldr.find_solar_geometry(preview_image)
+            preview_geometry_tuple = ldr.find_solar_geometry(
+                preview_image,
+                min2_config=base_config.get("MIN2"),
+            )
             preview_geometry = SolarGeometry(
                 preview_geometry_tuple[0],
                 preview_geometry_tuple[1],
@@ -1106,7 +1109,10 @@ def run_comparison(
                 image = utils.loadImage(sample.image_path)
                 if image.ndim != 2:
                     raise ValueError("比較モードでは2次元グレースケール画像のみ対応します。")
-                geometry_tuple = ldr.find_solar_geometry(image)
+                geometry_tuple = ldr.find_solar_geometry(
+                    image,
+                    min2_config=base_config.get("MIN2"),
+                )
                 geometry = SolarGeometry(geometry_tuple[0], geometry_tuple[1])
                 transform = SolarTransform(geometry, sample.orientation)
             else:

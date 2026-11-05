@@ -576,6 +576,7 @@ Comparison:
 | `Mask.Rmask.enabled` / `radius_ratio` | 外周側の黒点除外（既定で有効・0.85） |
 | `Display.show_final_image` | 最終確認画面を表示するか |
 | `Paths.output_folder` | 出力先フォルダー（既定 `results`） |
+| `MIN2` | 太陽中心・半径の推定パラメーター。全観測所に同じ値が使われます |
 | `LimbDarkingResolution` / 強調・抽出の各設定 | 画像処理のパラメーター。全観測所に同じ値が使われます |
 
 ---

@@ -60,6 +60,26 @@ def _parse_limb_width_ratio(value: str) -> float:
         )
     return numerator / denominator
 
+
+def _diameter_fraction_to_pixels(value: str, solar_radius_px: float) -> float:
+    """太陽直径に対する分数を、推定太陽半径に対応するpx幅へ変換する。
+
+    Parameters
+    ----------
+    value : str
+        太陽直径に対する分子/分母形式の割合。
+    solar_radius_px : float
+        推定された太陽半径（px）。
+
+    Returns
+    -------
+    float
+        太陽直径比から換算した幅（px）。
+    """
+    if not np.isfinite(solar_radius_px) or solar_radius_px <= 0:
+        raise ValueError("solar_radius_px は正の有限値にしてください。")
+    return (2.0 * solar_radius_px) * _parse_limb_width_ratio(value)
+
 # ---------------------------------------------------------------------------
 # 設定(YAML は任意。無くても、PyYAML が未インストールでも動く)
 # ---------------------------------------------------------------------------
@@ -755,7 +775,8 @@ def MIN2_ignore_sunspots(
 
     for cycle in range(1, iter_cycles + 1):
         if limb_width_ratio is not None:
-            current_limb_width = (2 * r) * limb_width_ratio
+            assert isinstance(limb_wigth, str)
+            current_limb_width = _diameter_fraction_to_pixels(limb_wigth, r)
         else:
             assert absolute_limb_width is not None
             current_limb_width = absolute_limb_width

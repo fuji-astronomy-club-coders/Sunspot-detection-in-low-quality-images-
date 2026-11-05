@@ -34,7 +34,7 @@ class _Min2Kwargs(TypedDict):
 _MIN2_DEFAULTS: dict[str, int | str | bool] = {
     "n": 10,
     "light_threshold": 50,
-    "limb_width": "1/60",
+    "limb_width": "1/30",
     "iter_cycles": 2,
     "show": False,
     "debug": False,

@@ -83,6 +83,7 @@ def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
         "show_simple": boolean_values["show_simple"],
     }
 
+
 def find_solar_geometry(
     image: np.ndarray,
     min2_config: Mapping[str, Any] | None = None,

@@ -5,7 +5,12 @@ from unittest.mock import patch
 
 import numpy as np
 
-from src.module.MIN2ver2 import MIN2Config, MIN2_ignore_sunspots, load_config
+from src.module.MIN2ver2 import (
+    MIN2Config,
+    MIN2_ignore_sunspots,
+    _diameter_fraction_to_pixels,
+    load_config,
+)
 
 
 class TestLimbWidthConfiguration(unittest.TestCase):
@@ -24,6 +29,10 @@ class TestLimbWidthConfiguration(unittest.TestCase):
         for value in ("1", "1/0", "0/0", "-1/2", "1/-2", "abc/2", "1/2/3"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 MIN2Config(limb_wigth=value)
+
+    def test_diameter_fraction_converts_against_solar_diameter(self) -> None:
+        self.assertAlmostEqual(_diameter_fraction_to_pixels("1/60", 500.0), 1000 / 60)
+        self.assertAlmostEqual(_diameter_fraction_to_pixels("1/30", 250.0), 500 / 30)
 
     def test_fraction_uses_current_solar_diameter(self) -> None:
         image = np.zeros((32, 32), dtype=np.uint8)

@@ -16,6 +16,8 @@ class TestLimbWidthConfiguration(unittest.TestCase):
 
     def test_fraction_string_is_supported(self) -> None:
         self.assertEqual(MIN2Config(limb_wigth="1/20").limb_wigth, "1/20")
+        self.assertEqual(MIN2Config().limb_wigth, "1/60")
+        self.assertEqual(MIN2Config().dir_mode_limb_wigth, "3/50")
         self.assertEqual(load_config({"limb_wigth": "1/20"}).limb_wigth, "1/20")
 
     def test_invalid_fraction_strings_are_rejected(self) -> None:
@@ -23,7 +25,7 @@ class TestLimbWidthConfiguration(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 MIN2Config(limb_wigth=value)
 
-    def test_fraction_uses_current_solar_radius(self) -> None:
+    def test_fraction_uses_current_solar_diameter(self) -> None:
         image = np.zeros((32, 32), dtype=np.uint8)
         spots = [
             [20.0, 0.0, 0, 0],

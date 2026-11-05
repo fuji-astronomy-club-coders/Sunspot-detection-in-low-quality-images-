@@ -157,8 +157,8 @@ class BatchArgumentParserRegressionTests(unittest.TestCase):
     def test_gui_launch_invokes_python_interpreter_explicitly(self) -> None:
         repository_root = Path(__file__).resolve().parents[1]
         batch_source = (repository_root / "run.bat").read_text(encoding="utf-8")
-        gui_branch = batch_source.split(":launch_gui", maxsplit=1)[1].split(
-            ":run_system", maxsplit=1
+        gui_branch = batch_source.split("\n:launch_gui\n", maxsplit=1)[1].split(
+            "\n:run_system\n", maxsplit=1
         )[0]
 
         self.assertIn(

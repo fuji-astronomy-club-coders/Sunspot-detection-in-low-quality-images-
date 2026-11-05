@@ -43,6 +43,7 @@ COMPARISON_STAGES = {
     "emphasized": "Emphasized image",
     "binary": "Binary extraction",
 }
+COMPARISON_KEYS = {"mask_template", "samples"}
 SOURCE_KEYS = {
     "source_id",
     "display_name",
@@ -333,11 +334,12 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
     comparison_document = _load_yaml(comparison_path)
     if not isinstance(comparison_document, dict):
         raise ComparisonInputError("comparison.yaml のルートは YAML mapping にしてください。")
-    unknown_top_level = set(comparison_document) - {"mask_template", "samples"}
+    # 追加項目（メモ・撮影条件など）は許容し、無視する。綴り間違いに気付けるよう警告だけ出す。
+    unknown_top_level = set(comparison_document) - COMPARISON_KEYS
     if unknown_top_level:
-        raise ComparisonInputError(
-            "comparison.yaml に未対応のトップレベルキーがあります: "
-            + ", ".join(sorted(unknown_top_level))
+        LOGGER.warning(
+            "comparison.yaml の追加トップレベル項目は使用されず無視します: %s",
+            ", ".join(sorted(str(key) for key in unknown_top_level)),
         )
     raw_samples = comparison_document.get("samples")
     if not isinstance(raw_samples, list) or not 1 <= len(raw_samples) <= len(sources):
@@ -404,9 +406,14 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         source_name = source["display_name"] if source else None
         error: str | None = None
 
-        if set(raw_sample) - SAMPLE_KEYS:
-            error = "未対応のサンプルキーがあります。"
-        elif not isinstance(source_id, str) or source is None:
+        unknown_sample_keys = set(raw_sample) - SAMPLE_KEYS
+        if unknown_sample_keys:
+            LOGGER.warning(
+                "comparison.yaml の samples %d 番目の追加項目は使用されず無視します: %s",
+                index,
+                ", ".join(sorted(str(key) for key in unknown_sample_keys)),
+            )
+        if not isinstance(source_id, str) or source is None:
             error = f"未登録の source_id です: {source_id}"
         elif source_id in duplicate_ids:
             error = f"source_id が同じ日付内で重複しています: {source_id}"

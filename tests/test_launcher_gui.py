@@ -154,6 +154,27 @@ class BatchArgumentParserRegressionTests(unittest.TestCase):
         self.assertIn('set "APP_ARGS=--compare %2"', compare_branch)
         self.assertNotIn("%*", compare_branch)
 
+    def test_gui_launch_invokes_python_interpreter_explicitly(self) -> None:
+        repository_root = Path(__file__).resolve().parents[1]
+        batch_source = (repository_root / "run.bat").read_text(encoding="utf-8")
+        gui_branch = batch_source.split("\n:launch_gui\n", maxsplit=1)[1].split(
+            "\n:run_system\n", maxsplit=1
+        )[0]
+
+        self.assertIn(
+            'if defined GUI_USE_VENV goto :launch_gui_venv',
+            gui_branch,
+        )
+        self.assertIn(
+            '"%VENV_PYTHON%" "%~dp0launcher_gui.py"',
+            gui_branch,
+        )
+        self.assertIn(
+            '%PYTHON_CMD% "%~dp0launcher_gui.py"',
+            gui_branch,
+        )
+        self.assertNotIn("GUI_PYTHON_CMD", gui_branch)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@
 # samples の件数は日付フォルダー内の対応画像ファイル数と一致させます。
 # source_id は sources.yaml に登録済みのものを指定してください。
 # mask_template は任意です。省略すると最初に処理する画像で共通マスクを選択します。
+# 上記以外の追加項目（メモ・露光時間など）は書いても構いません。解析には使われず、無視されます（警告ログに項目名が表示されます）。
 # mask_template: "../mask_templates/default.json"
 
 samples:

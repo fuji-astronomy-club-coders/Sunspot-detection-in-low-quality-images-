@@ -61,20 +61,26 @@ goto :run_system
 :launch_gui
 rem Prefer the existing venv for the GUI when it has Tkinter. If it does not,
 rem use a system Python so an incomplete venv can still be repaired from GUI.
-set "GUI_PYTHON_CMD="
+set "GUI_USE_VENV="
 if exist "%VENV_PYTHON%" (
     "%VENV_PYTHON%" -c "import sys, tkinter; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)" >nul 2>nul
-    if not errorlevel 1 set "GUI_PYTHON_CMD="%VENV_PYTHON%""
-)
-
-if not defined GUI_PYTHON_CMD (
-    call :find_python
-    if errorlevel 1 goto :error
-    set "GUI_PYTHON_CMD=%PYTHON_CMD%"
+    if not errorlevel 1 set "GUI_USE_VENV=1"
 )
 
 echo [INFO] Starting launcher GUI...
-%GUI_PYTHON_CMD% "%~dp0launcher_gui.py"
+if defined GUI_USE_VENV goto :launch_gui_venv
+
+rem Invoke the system interpreter directly; do not store a quoted executable
+rem path in another variable, because nested cmd.exe quoting is error-prone.
+call :find_python
+if errorlevel 1 goto :error
+%PYTHON_CMD% "%~dp0launcher_gui.py"
+goto :gui_finished
+
+:launch_gui_venv
+"%VENV_PYTHON%" "%~dp0launcher_gui.py"
+
+:gui_finished
 set "EXIT_CODE=%ERRORLEVEL%"
 if not "%EXIT_CODE%"=="0" (
     echo.

@@ -31,10 +31,10 @@ class _Min2Kwargs(TypedDict):
     show_simple: bool
 
 
-_MIN2_DEFAULTS: dict[str, int | bool] = {
+_MIN2_DEFAULTS: dict[str, int | str | bool] = {
     "n": 10,
     "light_threshold": 50,
-    "limb_width": 24,
+    "limb_width": "1/60",
     "iter_cycles": 2,
     "show": False,
     "debug": False,

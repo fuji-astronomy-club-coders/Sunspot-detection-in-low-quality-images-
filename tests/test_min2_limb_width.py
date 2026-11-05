@@ -58,7 +58,7 @@ class TestLimbWidthConfiguration(unittest.TestCase):
                 img_inst=image,
                 n=2,
                 light_threshold=0,
-                limb_wigth="1/4",
+                limb_wigth="1/8",
                 iter_cycles=1,
             )
         retry.assert_called_once()

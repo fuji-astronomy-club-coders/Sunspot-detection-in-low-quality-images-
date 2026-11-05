@@ -43,7 +43,9 @@ if /i "%~1"=="--venv" (
     goto :run_venv
 )
 if /i "%~1"=="--compare" (
-    set "APP_ARGS=%*"
+    if not "%~3"=="" goto :invalid_option
+    set "APP_ARGS=--compare"
+    if not "%~2"=="" set "APP_ARGS=--compare %2"
     if exist "%VENV_DIR%\." goto :run_venv
     goto :run_system
 )

@@ -22,7 +22,7 @@ from matplotlib.patches import Circle
 
 from src.package.qt_dialogs import select_directory, select_file
 
-version = "MIN2 v2.4.3"  # limb_wigthの割合指定を修正
+version = "MIN2 v2.5.0"  # ピクセル幅の太陽直径比指定に対応
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
@@ -42,7 +42,7 @@ _NO_IMAGE_MSG = (
 
 
 def _parse_limb_width_ratio(value: str) -> float:
-    """太陽半径に対する縁幅の割合を分子/分母から取得する。"""
+    """太陽直径に対する縁幅の割合を分子/分母から取得する。"""
     parts = value.split("/")
     if len(parts) != 2:
         raise ValueError(
@@ -74,18 +74,18 @@ class MIN2Config:
 
     n: int = 10  # 画像格子の分割数(2以上)
     light_threshold: int = 50  # 太陽像とみなす輝度のしきい値
-    limb_wigth: int | str = 24  # ピクセル値、または太陽半径に対する割合
+    limb_wigth: int | str = "1/60"  # 太陽直径に対する割合（整数は互換用px値）
     iter_cycles: int = 2  # 黒点排除の最大反復回数(0なら排除なし)
     show: bool = False  # 結果を描画するか
     debug: bool = False  # ログ/途中経過を出すか
     show_simple: bool = False  # 描画をシンプル表示にするか
-    dir_mode_limb_wigth: int = 60  # CLI の --dir(フォルダ一括)時に使う limb_wigth
+    dir_mode_limb_wigth: int | str = "3/50"  # --dir時の縁幅（R=500pxで60px）
 
     def __post_init__(self) -> None:
         """Validate configuration values after dataclass initialization."""
         for f in fields(self):
             value = getattr(self, f.name)
-            if f.name == "limb_wigth" and isinstance(value, str):
+            if f.name in {"limb_wigth", "dir_mode_limb_wigth"} and isinstance(value, str):
                 _parse_limb_width_ratio(value)
                 continue
             if f.type in (bool, "bool"):
@@ -96,8 +96,10 @@ class MIN2Config:
                 raise ValueError(
                     f"設定 '{f.name}' の型が不正です: {value!r} ({f.type} が必要)"
                 )
-        if isinstance(self.limb_wigth, int) and self.limb_wigth < 0:
-            raise ValueError("設定 'limb_wigth' は 0 以上にしてください。")
+        for name in ("limb_wigth", "dir_mode_limb_wigth"):
+            value = getattr(self, name)
+            if isinstance(value, int) and value < 0:
+                raise ValueError(f"設定 '{name}' は 0 以上にしてください。")
         if self.n < 2:
             raise ValueError("設定 'n'(分割数)は 2 以上にしてください。")
         if self.iter_cycles < 0:
@@ -666,7 +668,7 @@ def MIN2_ignore_sunspots(
         img_inst: 入力画像（グレースケール/カラー）または読み込み指示("PATH"ならimg_pathを読み込む)。
         n (int | None): 画像格子の分割数(2以上)。既定は 10 です。
         light_threshold (int | None): 太陽の明るさの基準しきい値(既定50)。16bit画像では自動で256倍されます。
-        limb_wigth (int | str | None): 太陽の縁の幅。整数はピクセル値、文字列は太陽半径に対する割合("1/20"など)。既定は 24 です。
+        limb_wigth (int | str | None): 太陽の縁幅。整数はpx値、文字列は太陽直径に対する割合（例: "1/60"）。既定は "1/60" です。
         iter_cycles (int | None): 黒点排除の最大反復回数。複数の黒点に対応できます。0なら排除なし。既定は2。
             黒点が見つからなくなった時点で早期終了します。
         show (bool | None): 最終的な検出結果の画像を表示するかどうか。
@@ -753,7 +755,7 @@ def MIN2_ignore_sunspots(
 
     for cycle in range(1, iter_cycles + 1):
         if limb_width_ratio is not None:
-            current_limb_width = r * limb_width_ratio
+            current_limb_width = (2 * r) * limb_width_ratio
         else:
             assert absolute_limb_width is not None
             current_limb_width = absolute_limb_width

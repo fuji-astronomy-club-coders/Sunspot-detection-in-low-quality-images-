@@ -54,7 +54,7 @@ class Min2ConfigurationTests(unittest.TestCase):
             self.image,
             n=10,
             light_threshold=50,
-            limb_wigth="1/60",
+            limb_wigth="1/30",
             iter_cycles=2,
             show=False,
             debug=False,

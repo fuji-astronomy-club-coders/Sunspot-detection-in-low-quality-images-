@@ -9,14 +9,14 @@
 # ============================================================
 
 Paths: # 相対パスはプロジェクトルートを基準とする
-  input_image: '?Dialog?' # You can use "?Dialog?" to select a file interactively
+  input_image: "?Dialog?" # You can use "?Dialog?" to select a file interactively
   output_folder: '.\results'
 
 # MIN2による太陽円推定
 MIN2:
   n: 10 # 画像を縦横に分割する数（2以上）
   light_threshold: 50 # 太陽像とみなす輝度しきい値（16 bit画像では内部で256倍）
-  limb_width: 24 # 太陽縁から黒点候補を判定する幅の基準値
+  limb_width: "1/30" # 整数はpx単位。文字列なら "1/20" のように太陽半径に対する割合を指定
   iter_cycles: 2 # 黒点を除外して円を再推定する最大反復回数（0で反復なし）
   show: false # 最終的なMIN2検出結果をMatplotlibで表示
   debug: false # MIN2の各反復の診断ログ・描画を有効化
@@ -24,7 +24,7 @@ MIN2:
 
 #周縁減光補正
 LimbDarkingResolution:
-  chosen_method: 'polynomialFit' # 'polynomialFit'のいずれかを選択
+  chosen_method: "polynomialFit" # 'polynomialFit'のいずれかを選択
   # ---各methodのパラメータ---
   polynomialFit:
     alpha: 0.85
@@ -32,7 +32,7 @@ LimbDarkingResolution:
 
 #強調処理
 Emphasis:
-  chosen_method: 'BlackTopHat' # 'SobelFilter', 'BlackTopHat', 'GaussianFilter'のいずれかを選択
+  chosen_method: "BlackTopHat" # 'SobelFilter', 'BlackTopHat', 'GaussianFilter'のいずれかを選択
   # ---各methodのパラメータ---
   SobelFilter:
     kernelSize: 3
@@ -43,7 +43,7 @@ Emphasis:
 
 #抽出処理
 Extraction:
-  chosen_method: 'watershed' # 'countComponents', 'watershed'のいずれかを選択
+  chosen_method: "watershed" # 'countComponents', 'watershed'のいずれかを選択
   # ---各methodのパラメータ---
   countComponents: # ここのパラメータはwatershedと共用です
     c: 1
@@ -51,7 +51,6 @@ Extraction:
     min_area: 2
   watershed:
     min_distance: 5
-
 
 # 黒点のマスク除外設定
 Mask:

@@ -34,6 +34,7 @@ from src.package import (
 )
 from src.package import config as configMOD
 from src.package import limb_darking_resolution as ldr
+from src.package.pixel_scale import resolve_pixel_parameters
 from src.package.run_logger import RunLogger
 from src.package.solar_coordinates import SolarTransform
 from src.package.version_info import get_application_version
@@ -192,6 +193,8 @@ def process_image(
     moduleVersions: dict[str, Any] = {"Application": get_application_version()}
     raw_image = image
     solar_geometry = solar_geometry_override
+    resolved_config: dict[str, Any] = config
+    effective_pixel_parameters: dict[str, Any] = {}
     min_area_exclusions: list[tuple[np.ndarray, list[int], str, int]] = []
 
     try:
@@ -209,6 +212,15 @@ def process_image(
                     image,
                     min2_config=config.get("MIN2"),
                 )
+            solar_diameter_px = 2.0 * solar_geometry[1]
+            resolved_config, effective_pixel_parameters = resolve_pixel_parameters(
+                config, solar_diameter_px
+            )
+            LOGGER.info(
+                "太陽直径 %.3f px を基準に画素パラメーターを解決しました: %s",
+                solar_diameter_px,
+                pformat(effective_pixel_parameters, sort_dicts=False),
+            )
             image: ndarray[_AnyShape, dtype[Any]] = ldr.polynomialFit(
                 image=image,
                 solar_geometry=solar_geometry,
@@ -227,11 +239,11 @@ def process_image(
     except Exception as e:
         raise RuntimeError(f"[Fatal]: 周縁減光補正に失敗しました。:{e}") from e
 
-    utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
+    utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions, "effectivePixelParameters": effective_pixel_parameters},svFolder / imgName, )
     limb_corrected_image = image
 
     try:
-        emphasisConfig = config["Emphasis"]
+        emphasisConfig = resolved_config["Emphasis"]
         emphasisMethod = emphasisConfig["chosen_method"]
         LOGGER.info("Emphasis method: %s", emphasisMethod)
 
@@ -270,14 +282,14 @@ def process_image(
     except Exception as e:
         raise RuntimeError(f"[Fatal]: 強調処理に失敗しました。:{e}") from e
     
-    utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions},svFolder / imgName, )
+    utils.svImage_withInfo(image,{"config": config, "moduleVersions": moduleVersions, "effectivePixelParameters": effective_pixel_parameters},svFolder / imgName, )
 
     # マスク適用前の強調画像も従来どおり保存し、後からマスク適用版と区別できるようにする。
     emphasis_img_name = imgName
     emphasized_image = image
 
     try:
-        extractionConfig = config["Extraction"]
+        extractionConfig = resolved_config["Extraction"]
         extractionMethod = extractionConfig["chosen_method"]
         LOGGER.info("Extraction method: %s", extractionMethod)
 

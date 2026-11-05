@@ -1,21 +1,28 @@
-"""Regression tests for MIN2 limb-width settings and radius-relative thresholds."""
+"""Regression tests for MIN2 limb-width settings and diameter-relative thresholds."""
 
 import unittest
 from unittest.mock import patch
 
 import numpy as np
 
-from src.module.MIN2ver2 import MIN2Config, MIN2_ignore_sunspots, load_config
+from src.module.MIN2ver2 import (
+    MIN2Config,
+    MIN2_ignore_sunspots,
+    _diameter_fraction_to_pixels,
+    load_config,
+)
 
 
 class TestLimbWidthConfiguration(unittest.TestCase):
-    """Validate absolute and radius-relative limb width settings."""
+    """Validate absolute and diameter-relative limb width settings."""
 
     def test_integer_pixel_width_is_supported(self) -> None:
         self.assertEqual(MIN2Config(limb_wigth=24).limb_wigth, 24)
 
     def test_fraction_string_is_supported(self) -> None:
         self.assertEqual(MIN2Config(limb_wigth="1/20").limb_wigth, "1/20")
+        self.assertEqual(MIN2Config().limb_wigth, "1/30")
+        self.assertEqual(MIN2Config().dir_mode_limb_wigth, "3/25")
         self.assertEqual(load_config({"limb_wigth": "1/20"}).limb_wigth, "1/20")
 
     def test_invalid_fraction_strings_are_rejected(self) -> None:
@@ -23,7 +30,11 @@ class TestLimbWidthConfiguration(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 MIN2Config(limb_wigth=value)
 
-    def test_fraction_uses_current_solar_radius(self) -> None:
+    def test_diameter_fraction_converts_against_solar_diameter(self) -> None:
+        self.assertAlmostEqual(_diameter_fraction_to_pixels("1/30", 250.0), 500 / 30)
+        self.assertAlmostEqual(_diameter_fraction_to_pixels("1/30", 250.0), 500 / 30)
+
+    def test_fraction_uses_current_solar_diameter(self) -> None:
         image = np.zeros((32, 32), dtype=np.uint8)
         spots = [
             [20.0, 0.0, 0, 0],
@@ -47,7 +58,7 @@ class TestLimbWidthConfiguration(unittest.TestCase):
                 img_inst=image,
                 n=2,
                 light_threshold=0,
-                limb_wigth="1/4",
+                limb_wigth="1/8",
                 iter_cycles=1,
             )
         retry.assert_called_once()

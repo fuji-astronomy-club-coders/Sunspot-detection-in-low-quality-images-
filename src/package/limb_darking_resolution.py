@@ -1,8 +1,9 @@
 """周縁減光を補正するプログラム"""
 
 import logging
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import cv2
 import numpy as np
@@ -10,16 +11,93 @@ from numpy import dtype, floating, ndarray
 
 # 先輩が作った関数をインポート
 from src.module.MIN2ver2 import MIN2_ignore_sunspots as min2
+from src.module.MIN2ver2 import version as min2_version
 
 LOGGER = logging.getLogger("sunspot.limb_darkening")
 
 version = "0.0.1"
 
 
-def find_solar_geometry(image: np.ndarray) -> tuple[tuple[float, float], float]:
-    """MIN2 を使用して画像内の太陽中心と半径を取得する。"""
+class _Min2Kwargs(TypedDict):
+    """Keyword arguments accepted by the MIN2 implementation."""
+
+    n: int
+    light_threshold: int
+    limb_wigth: int
+    iter_cycles: int
+    show: bool
+    debug: bool
+    show_simple: bool
+
+
+_MIN2_DEFAULTS: dict[str, int | bool] = {
+    "n": 10,
+    "light_threshold": 50,
+    "limb_width": 24,
+    "iter_cycles": 2,
+    "show": False,
+    "debug": False,
+    "show_simple": False,
+}
+
+
+def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
+    """Validate MIN2 config and map it to the legacy function API.
+
+    Public configuration uses the correctly spelled limb_width key. The
+    original MIN2 function retains its historical limb_wigth parameter name.
+    """
+    if settings is None:
+        settings = {}
+    if not isinstance(settings, Mapping):
+        raise ValueError("MIN2 は YAML mapping にしてください。")
+
+    unknown_keys = sorted(str(key) for key in settings if key not in _MIN2_DEFAULTS)
+    if unknown_keys:
+        raise ValueError(f"MIN2 に未対応の設定項目があります: {', '.join(unknown_keys)}")
+
+    integer_values: dict[str, int] = {}
+    for key in ("n", "light_threshold", "limb_width", "iter_cycles"):
+        value = settings.get(key, _MIN2_DEFAULTS[key])
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"MIN2.{key} は整数にしてください。")
+        minimum = 2 if key == "n" else 0
+        if value < minimum:
+            raise ValueError(f"MIN2.{key} は {minimum} 以上にしてください。")
+        integer_values[key] = value
+
+    boolean_values: dict[str, bool] = {}
+    for key in ("show", "debug", "show_simple"):
+        value = settings.get(key, _MIN2_DEFAULTS[key])
+        if not isinstance(value, bool):
+            raise ValueError(f"MIN2.{key} は true または false にしてください。")
+        boolean_values[key] = value
+
+    return {
+        "n": integer_values["n"],
+        "light_threshold": integer_values["light_threshold"],
+        "limb_wigth": integer_values["limb_width"],
+        "iter_cycles": integer_values["iter_cycles"],
+        "show": boolean_values["show"],
+        "debug": boolean_values["debug"],
+        "show_simple": boolean_values["show_simple"],
+    }
+
+def find_solar_geometry(
+    image: np.ndarray,
+    min2_config: Mapping[str, Any] | None = None,
+) -> tuple[tuple[float, float], float]:
+    """MIN2 の設定を適用して画像内の太陽中心と半径を取得する。
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        太陽画像。
+    min2_config : Mapping[str, Any] | None, optional
+        config.yaml の MIN2 セクション。省略した場合は既定値を使用する。
+    """
     try:
-        (center_x, center_y), radius = min2(image)
+        (center_x, center_y), radius = min2(image, **_resolve_min2_kwargs(min2_config))
     except Exception as error:
         raise ValueError(f"MIN2 による太陽円の推定に失敗しました: {error}") from error
 

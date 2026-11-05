@@ -22,7 +22,7 @@ class TestLimbWidthConfiguration(unittest.TestCase):
     def test_fraction_string_is_supported(self) -> None:
         self.assertEqual(MIN2Config(limb_wigth="1/20").limb_wigth, "1/20")
         self.assertEqual(MIN2Config().limb_wigth, "1/30")
-        self.assertEqual(MIN2Config().dir_mode_limb_wigth, "3/50")
+        self.assertEqual(MIN2Config().dir_mode_limb_wigth, "3/25")
         self.assertEqual(load_config({"limb_wigth": "1/20"}).limb_wigth, "1/20")
 
     def test_invalid_fraction_strings_are_rejected(self) -> None:

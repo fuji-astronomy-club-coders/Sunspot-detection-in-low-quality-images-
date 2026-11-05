@@ -1,4 +1,4 @@
-"""Regression tests for MIN2 limb-width settings and radius-relative thresholds."""
+"""Regression tests for MIN2 limb-width settings and diameter-relative thresholds."""
 
 import unittest
 from unittest.mock import patch
@@ -14,7 +14,7 @@ from src.module.MIN2ver2 import (
 
 
 class TestLimbWidthConfiguration(unittest.TestCase):
-    """Validate absolute and radius-relative limb width settings."""
+    """Validate absolute and diameter-relative limb width settings."""
 
     def test_integer_pixel_width_is_supported(self) -> None:
         self.assertEqual(MIN2Config(limb_wigth=24).limb_wigth, 24)

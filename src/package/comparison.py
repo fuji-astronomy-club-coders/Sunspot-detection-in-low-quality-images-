@@ -43,6 +43,7 @@ COMPARISON_STAGES = {
     "emphasized": "Emphasized image",
     "binary": "Binary extraction",
 }
+COMPARISON_KEYS = {"mask_template", "samples"}
 SOURCE_KEYS = {
     "source_id",
     "display_name",
@@ -333,11 +334,12 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
     comparison_document = _load_yaml(comparison_path)
     if not isinstance(comparison_document, dict):
         raise ComparisonInputError("comparison.yaml のルートは YAML mapping にしてください。")
-    unknown_top_level = set(comparison_document) - {"mask_template", "samples"}
+    # 追加項目（メモ・撮影条件など）は許容し、無視する。綴り間違いに気付けるよう警告だけ出す。
+    unknown_top_level = set(comparison_document) - COMPARISON_KEYS
     if unknown_top_level:
-        raise ComparisonInputError(
-            "comparison.yaml に未対応のトップレベルキーがあります: "
-            + ", ".join(sorted(unknown_top_level))
+        LOGGER.warning(
+            "comparison.yaml の追加トップレベル項目は使用されず無視します: %s",
+            ", ".join(sorted(str(key) for key in unknown_top_level)),
         )
     raw_samples = comparison_document.get("samples")
     if not isinstance(raw_samples, list) or not 1 <= len(raw_samples) <= len(sources):
@@ -404,9 +406,14 @@ def prepare_comparison(date_folder: str | Path) -> ComparisonPlan:
         source_name = source["display_name"] if source else None
         error: str | None = None
 
-        if set(raw_sample) - SAMPLE_KEYS:
-            error = "未対応のサンプルキーがあります。"
-        elif not isinstance(source_id, str) or source is None:
+        unknown_sample_keys = set(raw_sample) - SAMPLE_KEYS
+        if unknown_sample_keys:
+            LOGGER.warning(
+                "comparison.yaml の samples %d 番目の追加項目は使用されず無視します: %s",
+                index,
+                ", ".join(sorted(str(key) for key in unknown_sample_keys)),
+            )
+        if not isinstance(source_id, str) or source is None:
             error = f"未登録の source_id です: {source_id}"
         elif source_id in duplicate_ids:
             error = f"source_id が同じ日付内で重複しています: {source_id}"
@@ -912,8 +919,13 @@ def _save_comparison_stage_summaries(
     session_dir: Path,
     sources: list[dict[str, Any]],
     registered_sources: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+    slot_notes: dict[str, str] | None = None,
 ) -> list[str]:
-    """Create four fixed registration-order tiles for every comparison stage."""
+    """Create four fixed registration-order tiles for every comparison stage.
+
+    ``slot_notes`` maps a source_id to the short ASCII reason shown in an empty
+    slot (for example "Not provided"); the default font cannot draw Japanese.
+    """
     source_slots = (
         _registered_source_slots(sources, registered_sources)
         if registered_sources is not None
@@ -942,7 +954,10 @@ def _save_comparison_stage_summaries(
                 if registered_sources is not None and index < len(registered_sources):
                     missing_id = str(registered_sources[index]["source_id"])
                     draw.text((left + 12, 72), missing_id, fill=(245, 245, 245))
-                draw.text((left + 16, 100), "Not processed", fill=(150, 150, 150))
+                    note = (slot_notes or {}).get(missing_id, "Not processed")
+                else:
+                    note = "Not processed"
+                draw.text((left + 16, 100), note, fill=(150, 150, 150))
                 continue
             source_id = str(source["source_id"])
             stage_path = (
@@ -964,7 +979,7 @@ def _save_comparison_stage_summaries(
             tile_image.thumbnail((tile_size - 24, tile_size - 24))
             draw.text(
                 (left + 12, 72),
-                f"{source_id}",
+                f"{source_id}  |  {source.get('sunspot_count', '?')} spots",
                 fill=(245, 245, 245),
             )
             paste_x = left + (tile_size - tile_image.width) // 2
@@ -1284,10 +1299,21 @@ def run_comparison(
         "unmatched_detection_count": 0,
     }
     if successful_sources:
+        status_notes = {
+            "not_provided": "Not provided",
+            "skipped_invalid_input": "Skipped (invalid input)",
+            "failed_processing": "Failed (see log)",
+        }
+        slot_notes = {
+            str(row["source_id"]): status_notes[row["status"]]
+            for row in result_rows
+            if row.get("source_id") and row["status"] in status_notes
+        }
         summary_images = _save_comparison_stage_summaries(
             run_logger.session_dir,
             successful_sources,
             plan.sources,
+            slot_notes,
         )
         _write_coordinate_outputs(run_logger.session_dir, successful_sources)
         matching_summary = _auto_match_common_spots(

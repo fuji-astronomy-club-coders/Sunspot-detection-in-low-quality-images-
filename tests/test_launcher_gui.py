@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import launcher_gui
-from launcher_gui import build_batch_arguments
+from launcher_gui import build_batch_arguments, validate_compare_folder
 
 
 class LauncherArgumentTests(unittest.TestCase):
@@ -178,3 +178,30 @@ class BatchArgumentParserRegressionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompareFolderValidationTests(unittest.TestCase):
+    """Verify the launcher's early date-folder checks."""
+
+    def test_reports_each_missing_prerequisite_then_accepts_a_complete_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assertIn("存在しません", validate_compare_folder(str(root / "missing")) or "")
+
+            bad_name = root / "not-a-date"
+            bad_name.mkdir()
+            self.assertIn("YYYY-MM-DD", validate_compare_folder(str(bad_name)) or "")
+
+            impossible = root / "2026-02-30"
+            impossible.mkdir()
+            self.assertIn("YYYY-MM-DD", validate_compare_folder(str(impossible)) or "")
+
+            day = root / "2026-11-02"
+            day.mkdir()
+            self.assertIn("sources.yaml", validate_compare_folder(str(day)) or "")
+
+            (root / "sources.yaml").write_text("sources: []\n", encoding="utf-8")
+            self.assertIn("comparison.yaml", validate_compare_folder(str(day)) or "")
+
+            (day / "comparison.yaml").write_text("samples: []\n", encoding="utf-8")
+            self.assertIsNone(validate_compare_folder(str(day)))

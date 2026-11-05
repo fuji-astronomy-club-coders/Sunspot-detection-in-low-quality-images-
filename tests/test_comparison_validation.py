@@ -257,22 +257,74 @@ class ComparisonValidationTests(unittest.TestCase):
         self.assertIn("north_vector", self._sample_error(plan))
         self.assertIsNone(plan.samples[0].orientation)
 
-    def test_unknown_top_level_key_is_a_set_error(self) -> None:
+    def test_additional_top_level_and_sample_keys_are_tolerated(self) -> None:
         self._write_comparison(
             {
                 "date": "2026-11-02",
+                "note": "extra",
                 "samples": [
                     {
                         "source_id": "source_01",
                         "image": "source_01.tif",
                         "pixel_scale_arcsec_per_pixel": 0.6,
-                    }
+                        "exposure_s": 0.01,
+                    },
+                    {
+                        "source_id": "source_04",
+                        "image": "source_04.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.8,
+                        "north_angle_deg": 90.0,
+                        "flip_x": False,
+                        "memo": "extra",
+                    },
                 ],
             }
         )
 
-        with self.assertRaises(comparison.ComparisonInputError):
-            comparison.prepare_comparison(self.date_folder)
+        with (
+            patch.object(
+                comparison.utils,
+                "loadImage",
+                side_effect=self._load_valid_image,
+            ),
+            self.assertLogs("sunspot.comparison", level="WARNING") as logs,
+        ):
+            plan = comparison.prepare_comparison(self.date_folder)
+
+        self.assertEqual([sample.error for sample in plan.samples], [None, None])
+        log_text = "\n".join(logs.output)
+        for ignored in ("date", "note", "exposure_s", "memo"):
+            self.assertIn(ignored, log_text)
+
+    def test_additional_keys_do_not_bypass_required_keys(self) -> None:
+        self._write_comparison(
+            {
+                "samples": [
+                    {
+                        "source_id": "source_01",
+                        "image": "source_01.tif",
+                        "memo": "pixel scale is missing",
+                    },
+                    {
+                        "source_id": "source_04",
+                        "image": "source_04.tif",
+                        "pixel_scale_arcsec_per_pixel": 0.8,
+                        "north_angle_deg": 90.0,
+                        "flip_x": False,
+                    },
+                ]
+            }
+        )
+
+        with patch.object(
+            comparison.utils,
+            "loadImage",
+            side_effect=self._load_valid_image,
+        ):
+            plan = comparison.prepare_comparison(self.date_folder)
+
+        self.assertIn("pixel_scale_arcsec_per_pixel", self._sample_error(plan, 0))
+        self.assertIsNone(plan.samples[1].error)
 
     def test_comparison_accepts_one_entry_per_available_image(self) -> None:
         self._write_comparison(

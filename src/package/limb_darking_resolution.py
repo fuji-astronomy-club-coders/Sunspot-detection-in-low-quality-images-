@@ -24,7 +24,7 @@ class _Min2Kwargs(TypedDict):
 
     n: int
     light_threshold: int
-    limb_wigth: int
+    limb_wigth: int | str
     iter_cycles: int
     show: bool
     debug: bool
@@ -58,7 +58,7 @@ def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
         raise ValueError(f"MIN2 に未対応の設定項目があります: {', '.join(unknown_keys)}")
 
     integer_values: dict[str, int] = {}
-    for key in ("n", "light_threshold", "limb_width", "iter_cycles"):
+    for key in ("n", "light_threshold", "iter_cycles"):
         value = settings.get(key, _MIN2_DEFAULTS[key])
         if isinstance(value, bool) or not isinstance(value, int):
             raise ValueError(f"MIN2.{key} は整数にしてください。")
@@ -66,6 +66,25 @@ def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
         if value < minimum:
             raise ValueError(f"MIN2.{key} は {minimum} 以上にしてください。")
         integer_values[key] = value
+
+    limb_width = settings.get("limb_width", _MIN2_DEFAULTS["limb_width"])
+    if isinstance(limb_width, bool):
+        raise ValueError("MIN2.limb_width は0以上の整数、または分子/分母形式の文字列にしてください。")
+    if isinstance(limb_width, int):
+        if limb_width < 0:
+            raise ValueError("MIN2.limb_width は0以上にしてください。")
+    elif isinstance(limb_width, str):
+        parts = limb_width.split("/")
+        if len(parts) != 2:
+            raise ValueError("MIN2.limb_width は \"1/20\" のような分子/分母形式にしてください。")
+        try:
+            numerator, denominator = (int(part.strip()) for part in parts)
+        except ValueError as error:
+            raise ValueError("MIN2.limb_width の分子と分母は整数にしてください。") from error
+        if numerator < 0 or denominator <= 0:
+            raise ValueError("MIN2.limb_width は分子0以上、分母1以上にしてください。")
+    else:
+        raise ValueError("MIN2.limb_width は0以上の整数、または分子/分母形式の文字列にしてください。")
 
     boolean_values: dict[str, bool] = {}
     for key in ("show", "debug", "show_simple"):
@@ -77,7 +96,7 @@ def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
     return {
         "n": integer_values["n"],
         "light_threshold": integer_values["light_threshold"],
-        "limb_wigth": integer_values["limb_width"],
+        "limb_wigth": limb_width,
         "iter_cycles": integer_values["iter_cycles"],
         "show": boolean_values["show"],
         "debug": boolean_values["debug"],

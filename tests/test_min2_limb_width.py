@@ -21,7 +21,7 @@ class TestLimbWidthConfiguration(unittest.TestCase):
 
     def test_fraction_string_is_supported(self) -> None:
         self.assertEqual(MIN2Config(limb_wigth="1/20").limb_wigth, "1/20")
-        self.assertEqual(MIN2Config().limb_wigth, "1/60")
+        self.assertEqual(MIN2Config().limb_wigth, "1/30")
         self.assertEqual(MIN2Config().dir_mode_limb_wigth, "3/50")
         self.assertEqual(load_config({"limb_wigth": "1/20"}).limb_wigth, "1/20")
 
@@ -31,7 +31,7 @@ class TestLimbWidthConfiguration(unittest.TestCase):
                 MIN2Config(limb_wigth=value)
 
     def test_diameter_fraction_converts_against_solar_diameter(self) -> None:
-        self.assertAlmostEqual(_diameter_fraction_to_pixels("1/60", 500.0), 1000 / 60)
+        self.assertAlmostEqual(_diameter_fraction_to_pixels("1/30", 500.0), 1000 / 60)
         self.assertAlmostEqual(_diameter_fraction_to_pixels("1/30", 250.0), 500 / 30)
 
     def test_fraction_uses_current_solar_diameter(self) -> None:

@@ -7,9 +7,12 @@ main: MIN2_ignore_sunspots()
 limb_wigth*(2/3) の範囲にないものは黒点とみなします。
 """
 
-import logging
+import os
 import pathlib
-from pprint import pformat
+import warnings
+from dataclasses import dataclass, fields, replace
+from pprint import pformat, pprint
+from typing import Any
 
 import cv2
 import matplotlib.pyplot as plt
@@ -19,9 +22,7 @@ from matplotlib.patches import Circle
 
 from src.package.qt_dialogs import select_directory, select_file
 
-LOGGER = logging.getLogger("sunspot.min2")
-
-version = "MIN2 v2.4.0"  # 黒点リトライ座標・iter_cycles=0・グローバル依存・描画まわりの修正
+version = "MIN2 v2.4.3"  # limb_wigthの割合指定を修正
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
@@ -40,27 +41,163 @@ _NO_IMAGE_MSG = (
 )
 
 
+def _parse_limb_width_ratio(value: str) -> float:
+    """太陽半径に対する縁幅の割合を分子/分母から取得する。"""
+    parts = value.split("/")
+    if len(parts) != 2:
+        raise ValueError(
+            f"設定 'limb_wigth' の割合が不正です: {value!r}。分子/分母形式で指定してください。"
+        )
+    try:
+        numerator, denominator = (int(part.strip()) for part in parts)
+    except ValueError as exc:
+        raise ValueError(
+            f"設定 'limb_wigth' の割合が不正です: {value!r}。整数の分子と分母が必要です。"
+        ) from exc
+    if numerator < 0 or denominator <= 0:
+        raise ValueError(
+            f"設定 'limb_wigth' の割合が不正です: {value!r}。分子は0以上、分母は1以上にしてください。"
+        )
+    return numerator / denominator
+
+# ---------------------------------------------------------------------------
+# 設定(YAML は任意。無くても、PyYAML が未インストールでも動く)
+# ---------------------------------------------------------------------------
+# 優先順位: 関数/CLI の明示引数 > YAML(または dict / MIN2Config) > コード内の既定値
+CONFIG_ENV_VAR = "MIN2_CONFIG"  # 設定ファイルのパスを指す環境変数
+CONFIG_FILENAME = "min2_config.yaml"  # CLI が自動探索するファイル名
+
+
+@dataclass(frozen=True)
+class MIN2Config:
+    """MIN2 の設定。既定値はこのクラスが唯一の定義元(YAMLが無くてもこの値で動く)。"""
+
+    n: int = 10  # 画像格子の分割数(2以上)
+    light_threshold: int = 50  # 太陽像とみなす輝度のしきい値
+    limb_wigth: int | str = 24  # ピクセル値、または太陽半径に対する割合
+    iter_cycles: int = 2  # 黒点排除の最大反復回数(0なら排除なし)
+    show: bool = False  # 結果を描画するか
+    debug: bool = False  # ログ/途中経過を出すか
+    show_simple: bool = False  # 描画をシンプル表示にするか
+    dir_mode_limb_wigth: int = 60  # CLI の --dir(フォルダ一括)時に使う limb_wigth
+
+    def __post_init__(self) -> None:
+        """Validate configuration values after dataclass initialization."""
+        for f in fields(self):
+            value = getattr(self, f.name)
+            if f.name == "limb_wigth" and isinstance(value, str):
+                _parse_limb_width_ratio(value)
+                continue
+            if f.type in (bool, "bool"):
+                ok = isinstance(value, bool)
+            else:  # int。bool は int のサブクラスなので除外する
+                ok = isinstance(value, int) and not isinstance(value, bool)
+            if not ok:
+                raise ValueError(
+                    f"設定 '{f.name}' の型が不正です: {value!r} ({f.type} が必要)"
+                )
+        if isinstance(self.limb_wigth, int) and self.limb_wigth < 0:
+            raise ValueError("設定 'limb_wigth' は 0 以上にしてください。")
+        if self.n < 2:
+            raise ValueError("設定 'n'(分割数)は 2 以上にしてください。")
+        if self.iter_cycles < 0:
+            raise ValueError("設定 'iter_cycles' は 0 以上にしてください。")
+
+
+_CONFIG_KEYS = {f.name for f in fields(MIN2Config)}
+
+
+def _read_yaml(path: pathlib.Path) -> dict[str, Any]:
+    try:
+        import yaml  # 遅延import: 設定を使わない単体利用ではPyYAML不要
+    except ImportError as e:
+        raise ImportError(
+            f"YAML設定({path})を読むには PyYAML が必要です: pip install PyYAML"
+        ) from e
+    with path.open(encoding="utf-8") as fp:
+        data = yaml.safe_load(fp)
+    if data is None:  # 空ファイル
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(f"設定ファイルはキーと値のマッピングで書いてください: {path}")
+    return data
+
+
+def find_config_file() -> pathlib.Path | None:
+    """設定ファイルを探す。環境変数 MIN2_CONFIG > カレントディレクトリ > このファイルの隣。"""
+    env = os.environ.get(CONFIG_ENV_VAR)
+    if env:
+        path = pathlib.Path(env)
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"{CONFIG_ENV_VAR} が指すファイルがありません: {env}"
+            )
+        return path
+    for base in (pathlib.Path.cwd(), pathlib.Path(__file__).resolve().parent):
+        path = base / CONFIG_FILENAME
+        if path.is_file():
+            return path
+    return None
+
+
+def load_config(
+    source: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
+    *,
+    search: bool = False,
+    defaults: dict[str, Any] | None = None,
+) -> MIN2Config:
+    """設定を MIN2Config にまとめる。YAMLは必須ではない。
+
+    Args:
+        source: YAMLファイルのパス / dict / MIN2Config / None(すべて既定値)。
+        search: True かつ source が None のとき、設定ファイルを自動探索する(CLI向け)。
+            見つからない、または PyYAML が無い場合は黙って既定値で続行する。
+        defaults: コード既定値の上書き(CLI が show=True などを既定にするため)。
+            YAMLの値はこれよりも優先される。
+
+    Raises
+    ------
+        FileNotFoundError: 明示指定したパスが存在しない。
+        ValueError: 未知のキー、型や範囲の不正。
+    """
+    if isinstance(source, MIN2Config):
+        return source
+
+    data: dict[str, Any] = dict(defaults or {})
+    if isinstance(source, dict):
+        data.update(source)
+    else:
+        path: pathlib.Path | None
+        if source is None:
+            path = find_config_file() if search else None
+        else:
+            path = pathlib.Path(source)
+            if not path.is_file():
+                raise FileNotFoundError(f"設定ファイルがありません: {path}")
+        if path is not None:
+            try:
+                data.update(_read_yaml(path))
+            except ImportError:
+                if source is not None:
+                    raise
+                warnings.warn(
+                    f"PyYAML が無いため {path} を読み込めません。既定値で続行します。",
+                    stacklevel=2,
+                )
+
+    unknown = sorted(set(data) - _CONFIG_KEYS)
+    if unknown:
+        raise ValueError(
+            f"未知の設定キー: {unknown}(有効なキー: {sorted(_CONFIG_KEYS)})"
+        )
+    return replace(MIN2Config(), **data)
+
+
 # ---------------------------------------------------------------------------
 # 内部ヘルパー
 # ---------------------------------------------------------------------------
 def _to_gray(image: np.ndarray) -> np.ndarray:
-    """入力画像を2次元のグレースケール画像へ変換する。
-
-    Parameters
-    ----------
-    image : numpy.ndarray
-        2次元グレースケール、3チャンネル BGR、または4チャンネル BGRA 画像。
-
-    Returns
-    -------
-    numpy.ndarray
-        2次元のグレースケール画像。
-
-    Raises
-    ------
-    ValueError
-        対応していない画像形状の場合。
-    """
+    """2次元のグレースケール画像に揃える(カラー/BGRA画像が来ても動くように)。"""
     image = np.asarray(image)
     if image.ndim == 2:
         return image
@@ -78,25 +215,7 @@ def _to_gray(image: np.ndarray) -> np.ndarray:
 def _resolve_image(
     img_inst: str | np.ndarray, img_path: pathlib.Path | str | None = None
 ) -> np.ndarray:
-    """画像の指定方法に応じて2次元グレースケール画像を取得する。
-
-    Parameters
-    ----------
-    img_inst : str | numpy.ndarray
-        ``GLOBAL``、``PATH``、または画像配列。
-    img_path : pathlib.Path | str | None, optional
-        ``img_inst="PATH"`` の場合に読み込む画像ファイル。
-
-    Returns
-    -------
-    numpy.ndarray
-        2次元のグレースケール画像。
-
-    Raises
-    ------
-    ValueError
-        画像が指定されていない場合、読み込みに失敗した場合、または不明な指定の場合。
-    """
+    """img_inst("GLOBAL" / "PATH" / 画像配列)から2次元グレースケール画像を得る。"""
     if isinstance(img_inst, str):
         if img_inst == "GLOBAL":
             image = globals().get("img")
@@ -118,23 +237,6 @@ def _resolve_image(
 
 
 def _resolve_divnum(n: int | None) -> int:
-    """画像の分割数を引数または互換用グローバル変数から取得する。
-
-    Parameters
-    ----------
-    n : int | None
-        指定する分割数。``None`` の場合はグローバル変数 ``divnum`` を参照する。
-
-    Returns
-    -------
-    int
-        使用する分割数。
-
-    Raises
-    ------
-    ValueError
-        分割数が指定されていない場合。
-    """
     if n is None:
         n = globals().get("divnum")
     if n is None:
@@ -147,21 +249,6 @@ def _draw_circle(
     cir_stat: tuple[float, ...] | list[float] | np.ndarray | bool | None,
     color: str,
 ) -> None:
-    """Matplotlib の Axes に近似円を追加する。
-
-    Parameters
-    ----------
-    ax : matplotlib.axes.Axes
-        円を追加する Axes。
-    cir_stat : tuple | list | numpy.ndarray | bool | None
-        円の中心座標と半径 ``(cx, cy, radius)``。``None`` または ``False`` の場合は描画しない。
-    color : str
-        円の線色。
-
-    Returns
-    -------
-    None
-    """
     if cir_stat is None or isinstance(cir_stat, bool):
         return
     cx, cy, R = cir_stat[:3]
@@ -175,25 +262,7 @@ def _draw_division_lines(
     n: int,
     alpha: float,  # pyright: ignore[reportPrivateImportUsage]
 ) -> None:
-    """画像走査に使用する位置へ縦横の分割線を描画する。
-
-    Parameters
-    ----------
-    ax : matplotlib.axes.Axes
-        分割線を描画する Axes。
-    width : int
-        画像幅。
-    height : int
-        画像高さ。
-    n : int
-        縦横それぞれの分割数。
-    alpha : float
-        分割線の透明度。
-
-    Returns
-    -------
-    None
-    """
+    """cut_and_sampling が実際に走査する位置(i=1..n-1)にだけ分割線を引く。"""
     for i in range(1, n):
         ax.axvline(width * i // n, color="white", linestyle="--", alpha=alpha)
         ax.axhline(height * i // n, color="white", linestyle="--", alpha=alpha)
@@ -205,22 +274,17 @@ def _draw_division_lines(
 def cut_and_sampling(
     img_inst: str | np.ndarray, sun_threshold: float, n: int | None = None
 ) -> list[list[float]]:
-    """画像を走査し、輝度変化から太陽の縁に相当する点をサンプリングする。
+    """画像を分割線で走査し、輝度の変化（微分値）から太陽の縁（エッジ）に相当する点の座標をサンプリングする。
 
-    Parameters
-    ----------
-    img_inst : str | numpy.ndarray
-        ``GLOBAL``、``PATH``、または読み込み済み画像。
-    sun_threshold : float
-        太陽像とみなす明るさのしきい値。この値以下の走査線はスキップする。
-    n : int | None, optional
-        縦横それぞれの分割数。``None`` の場合はグローバル変数 ``divnum`` を使用する。
+    Args:
+        img_inst (Union[str, np.ndarray]): 画像の指示。"GLOBAL"ならglobal変数のimgを取得する。もしくは読み込んだ画像。
+        sun_threshold (Union[int, float]): 太陽像とみなす明るさのしきい値。これ以下の直線は処理をスキップする。
+        n (int | None): 分割数。Noneならglobal変数divnumを使う。
 
     Returns
     -------
-    list[list[float]]
-        サンプリングした点 ``[x, y, grad_val, direction]`` のリスト。
-        direction は ``DIR_X_LINE``（横線走査）または ``DIR_Y_LINE``（縦線走査）。
+        list[list[float]]: サンプリングされた縁の点 [x, y, grad_val, direc] のリスト。
+            direc は DIR_X_LINE(0:横線走査) / DIR_Y_LINE(1:縦線走査)。
     """
     image = _resolve_image(img_inst)
     n = _resolve_divnum(n)
@@ -255,31 +319,24 @@ def fit_circle(
     img_inst: str | np.ndarray = "GLOBAL",
     n: int | None = None,
 ) -> list[float]:
-    """縁の点群へ最小二乗法を適用し、近似円の中心と半径を求める。
+    """与えられた縁の点の座標群から、最小二乗法を用いて近似円の中心座標と半径を計算する。
 
-    Parameters
-    ----------
-    spots : list[list[float]] | numpy.ndarray
-        縁の点の座標 ``[x, y, ...]`` を格納した配列。
-    show : bool, optional
-        円を確定できない場合に診断画像を表示するかどうか。
-    img_inst : str | numpy.ndarray, optional
-        診断画像に使用する画像。既定値は ``GLOBAL``。
-    n : int | None, optional
-        診断画像に使用する分割数。
-
-    Returns
-    -------
-    list[float]
-        近似円の ``[cx, cy, radius]``。
+    Args:
+        spots: 縁の点の座標 [x, y, ...] を格納した二次元配列、またはNumPy配列。
+        show (bool): 例外発生時にshow_circleによる描画を行うか
+        img_inst: 例外時の描画に使う画像(既定は"GLOBAL")。
+        n (int | None): 例外時の描画に使う分割数。
 
     Raises
     ------
-    ValueError
-        点が3点未満の場合、または円を確定できない場合。
+        ValueError: 3点未満、または円を確定できない場合。
+
+    Returns
+    -------
+        list[float]: [cx, cy, R]
     """
     if len(spots) < 3:
-        LOGGER.error("点が3点未満のため、円を作成できません。too little spots")
+        print("[ERROR]:点が3点未満のため、円を作成できません。too little spots")
         if show:
             show_circle(img_inst=img_inst, spots=spots, cir_stat=False, n=n)
         raise ValueError("点不足")
@@ -303,30 +360,10 @@ def retry_edge_on_spot(
     img_inst: np.ndarray | str = "GLOBAL",
     sun_threshold: int = 50,
 ) -> None | list:
-    """黒点を誤検知した場合に、近似円の外側で縁を再探索する。
+    """黒点を誤検知したときに、近似円の外側で縁を探し直す関数。
 
-    ``spot`` と同じ走査線上で、近似円の縁より外側の範囲だけを再走査する。
-
-    Parameters
-    ----------
-    spot : list[float]
-        再探索する点 ``[x, y, gradient, direction]``。
-    cir_stat : tuple[tuple[float, float], float]
-        近似円の中心座標と半径。
-    img_inst : numpy.ndarray | str, optional
-        再探索に使用する画像。
-    sun_threshold : int, optional
-        太陽像とみなす明るさのしきい値。
-
-    Returns
-    -------
-    list[float] | None
-        再探索で見つかった点。見つからない場合は ``None``。
-
-    Raises
-    ------
-    ValueError
-        走査方向が不正な場合。
+    spot と同じ走査線上で、近似円の縁より外側の範囲だけを再走査する。
+    見つからなければ None。
     """
     image = _resolve_image(img_inst)
     spot_x, spot_y, grad_val, direc = spot
@@ -395,32 +432,18 @@ def show_circle(
     simple: bool = False,
     n: int | None = None,
 ) -> None:
-    """画像に近似円や走査結果を描画し、各エッジ点周辺の輝度グラフを表示する。
+    """画像上に分割線、サンプリングされた縁の点、近似円を描画し、各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示する。
 
-    Parameters
-    ----------
-    img_inst : str | numpy.ndarray
-        ``GLOBAL``、``PATH``（``img_path`` から読み込み）、または画像配列。
-    spots : list[list[float]] | numpy.ndarray | None, optional
-        描画する点 ``[x, y, gradient, direction]`` のリスト。
-    cir_stat : tuple | list | bool, optional
-        近似円 ``[cx, cy, radius]``。``False`` の場合は円を描画しない。
-    img_path : pathlib.Path | str | None, optional
-        画像ファイルのパス。
-    fig_info : dict[str, str] | None, optional
-        画像内に表示するメタデータ。
-    iteration_count : int | str, optional
-        現在の反復回数。
-    is_last : bool, optional
-        True の場合、反復回数の代わりに ``Last`` と表示する。
-    simple : bool, optional
-        True の場合、簡易表示のみを行う。
-    n : int | None, optional
-        画像の分割数。``None`` の場合はグローバル変数 ``divnum`` を使用する。
-
-    Returns
-    -------
-    None
+    Args:
+        img_inst: "GLOBAL" / "PATH"(img_pathから読み込み) / 読み込んだ画像。
+        spots: 描画する縁の点 [x, y, grad, direc] のリスト。
+        cir_stat: 近似円 [cx, cy, R]。描画しない場合は False。
+        img_path: 画像のファイルパス。
+        fig_info: 画像内にテキスト表示するメタデータ。
+        iteration_count: 現在の反復回数。
+        is_last: Trueなら反復回数の代わりに "Last" と表示。
+        simple: Trueならシンプルな表示(ポスター図用)のみを行う。
+        n: 分割数。Noneならglobal変数divnumを使う。
     """
     if simple:
         show_circle_simple(
@@ -458,7 +481,9 @@ def show_circle(
 
     iter_text = "Last" if is_last else str(iteration_count)
     img_name = pathlib.Path(img_path).name if img_path else "Unknown"
-    fig.suptitle(f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold")
+    fig.suptitle(
+        f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold"
+    )
 
     # メイン画像の描画
     ax_main = fig.add_subplot(gs[:, :3])
@@ -504,7 +529,9 @@ def show_circle(
         )
 
     _draw_division_lines(ax_main, w, h, n, alpha=0.3)
-    ax_main.text(0.05, 0.9, f"n={n}", color="cyan", fontsize=10, transform=ax_main.transAxes)
+    ax_main.text(
+        0.05, 0.9, f"n={n}", color="cyan", fontsize=10, transform=ax_main.transAxes
+    )
     ax_main.legend()
     ax_main.axis("equal")
 
@@ -546,7 +573,9 @@ def show_circle(
 
         ax_sub_twin = ax_sub.twinx()
         color_diff = "tab:cyan"
-        ax_sub_twin.plot(x_coords, grad_vals, color=color_diff, linewidth=1.5, linestyle="--")
+        ax_sub_twin.plot(
+            x_coords, grad_vals, color=color_diff, linewidth=1.5, linestyle="--"
+        )
         ax_sub_twin.tick_params(axis="y", labelcolor=color_diff, labelsize=7)
 
         ax_sub.axvline(0, color="red", linestyle="-", linewidth=1, alpha=0.5)
@@ -565,30 +594,17 @@ def show_circle_simple(
     markersize: int = 400,
     n: int | None = None,
 ) -> None:
-    """画像上に走査線、縁の点、近似円を簡易表示する。
+    """画像上に分割線、サンプリングされた縁の点、近似円をシンプルに描画して表示する。
 
-    Parameters
-    ----------
-    img_inst : str | numpy.ndarray
-        ``GLOBAL``、``PATH``（``img_path`` から読み込み）、または画像配列。
-    spots : list[list[float]] | numpy.ndarray | None, optional
-        描画する縁の点のリスト。
-    cir_stat : tuple | list | bool, optional
-        近似円 ``[cx, cy, radius]``。``False`` の場合は円を描画しない。
-    img_path : pathlib.Path | str | None, optional
-        画像ファイルのパス。
-    iteration_count : int | str, optional
-        現在の反復回数。
-    is_last : bool, optional
-        True の場合、``Last`` と表示する。
-    markersize : int, optional
-        縁の点のマーカーサイズ。
-    n : int | None, optional
-        画像の分割数。``None`` の場合はグローバル変数 ``divnum`` を使用する。
-
-    Returns
-    -------
-    None
+    Args:
+        img_inst: "GLOBAL" / "PATH"(img_pathから読み込み) / 読み込んだ画像。
+        spots: 描画する縁の点の座標リスト。
+        cir_stat: 近似円のステータス [cx, cy, R]。描画しない場合は False。
+        img_path: 画像のファイルパス。
+        iteration_count: 現在の反復回数。
+        is_last: Trueなら "Last" と表示。
+        markersize: 縁の点のマーカーサイズ。
+        n: 分割数。Noneならglobal変数divnumを使う。
     """
     image = _resolve_image(img_inst, img_path)
     n = _resolve_divnum(n)
@@ -614,7 +630,9 @@ def show_circle_simple(
 
     img_name = pathlib.Path(img_path).name if img_path else "Unknown"
     iter_text = "Last" if is_last else str(iteration_count)
-    fig.suptitle(f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold")
+    fig.suptitle(
+        f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold"
+    )
 
     _draw_division_lines(ax, w, h, n, alpha=0.5)
     ax.text(0.05, 0.9, f"n={n}", color="cyan", fontsize=10, transform=ax.transAxes)
@@ -629,52 +647,65 @@ def show_circle_simple(
 # ---------------------------------------------------------------------------
 def MIN2_ignore_sunspots(
     img_inst: np.ndarray | str = "PATH",
-    n: int = 10,
-    light_threshold: int = 50,
-    limb_wigth: int = 24,
-    iter_cycles: int = 2,
-    show: bool = False,
-    debug: bool = False,
+    n: int | None = None,
+    light_threshold: int | None = None,
+    limb_wigth: int | str | None = None,
+    iter_cycles: int | None = None,
+    show: bool | None = None,
+    debug: bool | None = None,
     img_path: pathlib.Path | str | None = "",
-    show_simple: bool = False,
+    show_simple: bool | None = None,
+    config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
 ) -> tuple[tuple[float, float], float]:
-    """黒点の影響を除外し、最小二乗法で太陽の近似円を検出する。
+    """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
-    初期近似円の外側にある点から円を再推定し、推定した円の縁から
-    ``limb_wigth * (2 / 3)`` より内側に離れた点を黒点として除外する。
+    一度検出した近似円の外側にある点から再度円を近似し、その円の縁から limb_wigth*(2/3) より
+    内側に離れている内側の点を黒点とみなして除外します。
 
-    Parameters
-    ----------
-    img_inst : numpy.ndarray | str, optional
-        入力画像、または ``PATH`` を指定する文字列。
-    n : int, optional
-        画像格子の分割数。2以上を指定する。
-    light_threshold : int, optional
-        太陽の明るさの基準しきい値。16 bit 画像では256倍する。
-    limb_wigth : int, optional
-        太陽の縁の幅の基準値。
-    iter_cycles : int, optional
-        黒点排除の最大反復回数。0 の場合は排除しない。
-    show : bool, optional
-        最終的な検出結果を表示するかどうか。
-    debug : bool, optional
-        各ステップの描画やログを出力するかどうか。
-    img_path : pathlib.Path | str | None, optional
-        ``img_inst="PATH"`` の場合に読み込む画像ファイルのパス。
-    show_simple : bool, optional
-        詳細グラフを省略した簡易表示を使用するかどうか。
+    Args:
+        img_inst: 入力画像（グレースケール/カラー）または読み込み指示("PATH"ならimg_pathを読み込む)。
+        n (int | None): 画像格子の分割数(2以上)。既定は 10 です。
+        light_threshold (int | None): 太陽の明るさの基準しきい値(既定50)。16bit画像では自動で256倍されます。
+        limb_wigth (int | str | None): 太陽の縁の幅。整数はピクセル値、文字列は太陽半径に対する割合("1/20"など)。既定は 24 です。
+        iter_cycles (int | None): 黒点排除の最大反復回数。複数の黒点に対応できます。0なら排除なし。既定は2。
+            黒点が見つからなくなった時点で早期終了します。
+        show (bool | None): 最終的な検出結果の画像を表示するかどうか。
+        debug (bool | None): 各ステップの描画(showもTrueのとき)やログを出力するかどうか。
+        img_path: 処理する画像のファイルパス("PATH"指定時は必須。配列を渡した場合は表示用の名前として使うだけ)。
+        show_simple (bool | None): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。
+        config: 設定。YAMLのパス / dict / MIN2Config / None。None なら既定値(自動探索はしない)。
+
+    上記の n〜show_simple は None のとき config の値、config にも無ければ既定値を使います。
+    明示的に渡した引数が常に最優先です。
 
     Returns
     -------
-    tuple[tuple[float, float], float]
-        近似円の中心座標と半径 ``((cx, cy), radius)``。
-
-    Raises
-    ------
-    ValueError
-        分割数が2未満の場合、画像が指定されていない場合、または円を推定できない場合。
+        tuple[tuple[float, float], float]: ((cx, cy), r)
     """
     global divnum, img, height, width  # 外部コード互換のため値を残す(内部では使わない)
+
+    cfg = load_config(config)
+    n = cfg.n if n is None else n
+    light_threshold = (
+        cfg.light_threshold if light_threshold is None else light_threshold
+    )
+    limb_wigth = cfg.limb_wigth if limb_wigth is None else limb_wigth
+    if isinstance(limb_wigth, str):
+        limb_width_ratio = _parse_limb_width_ratio(limb_wigth)
+        absolute_limb_width = None
+    elif isinstance(limb_wigth, int) and not isinstance(limb_wigth, bool):
+        if limb_wigth < 0:
+            raise ValueError("limb_wigth は 0 以上にしてください。")
+        limb_width_ratio = None
+        absolute_limb_width = limb_wigth
+    else:
+        raise ValueError(
+            "limb_wigth は 0 以上の整数、または分子/分母形式の文字列で指定してください。"
+        )
+    iter_cycles = cfg.iter_cycles if iter_cycles is None else iter_cycles
+    show = cfg.show if show is None else show
+    debug = cfg.debug if debug is None else debug
+    show_simple = cfg.show_simple if show_simple is None else show_simple
 
     if n < 2:
         raise ValueError("分割数 n は 2 以上にしてください。")
@@ -701,10 +732,10 @@ def MIN2_ignore_sunspots(
 
     spots = cut_and_sampling(image, light_threshold, n)
     if debug:
-        LOGGER.debug("%s", pformat(spots))
+        pprint(spots)
     cx, cy, r = fit_circle(spots, show, image, n)  # 一回目の円情報
     if debug:
-        LOGGER.debug("初回試行円 (cx, cy, r)=%s", (cx, cy, r))
+        print(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
         if show:
             show_circle(
                 img_inst=image,
@@ -721,8 +752,13 @@ def MIN2_ignore_sunspots(
     safe_points = list(spots)
 
     for cycle in range(1, iter_cycles + 1):
+        if limb_width_ratio is not None:
+            current_limb_width = r * limb_width_ratio
+        else:
+            assert absolute_limb_width is not None
+            current_limb_width = absolute_limb_width
         if debug:
-            LOGGER.debug("反復回数: %d", cycle)
+            print(f"iter: {cycle}")
 
         outside_spots = []
         inside_spots = []
@@ -738,15 +774,17 @@ def MIN2_ignore_sunspots(
         safe_points = inside_spots + outside_spots
 
         if len(outside_spots) < 3:
-            LOGGER.warning("外側の点が3点未満のため、黒点排除を打ち切ります。")
+            print("[WARN]:外側の点が3点未満のため、黒点排除を打ち切ります。")
             break
         try:
-            cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show, image, n)
+            cxo, cyo, ro = fit_circle(
+                np.array(outside_spots, dtype=float), show, image, n
+            )
         except ValueError as e:
-            LOGGER.warning("外側の点から円を作れないため、黒点排除を打ち切ります。(%s)", e)
+            print(f"[WARN]:外側の点から円を作れないため、黒点排除を打ち切ります。({e})")
             break
         if debug:
-            LOGGER.debug("外側点から求めた円 (cx, cy, r)=%s", (cxo, cyo, ro))
+            print(f"[INFO]:outside circle (cx,cy,r)={cxo, cyo, ro}")
             if show:
                 show_circle(
                     img_inst=image,
@@ -758,7 +796,9 @@ def MIN2_ignore_sunspots(
                     simple=show_simple,
                     n=n,
                 )
-            LOGGER.debug("外側の点の数: %d / 全体の点の数: %d", len(outside_spots), len(spots))
+            print(
+                f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}"
+            )
 
         sunspots: list[int] = []
         retry_points: list[list] = []
@@ -774,9 +814,9 @@ def MIN2_ignore_sunspots(
                 gap = min2far - np.abs(cyo - y)
                 tag = "TB"
             if debug:
-                LOGGER.debug("候補 %d: x,y=%s min2far=%s gap=%s", i, (x, y), min2far, gap)
+                print(f"    {i} x,y:{x, y} min2far:{min2far},gap:{gap}")
 
-            if gap > limb_wigth * (2 / 3):
+            if gap > current_limb_width * (2 / 3):
                 sunspots.append(i)
                 retry = retry_edge_on_spot(
                     spot=point,
@@ -785,7 +825,7 @@ def MIN2_ignore_sunspots(
                     sun_threshold=light_threshold,
                 )
                 if debug:
-                    LOGGER.debug(
+                    print(
                         f"    黒点を検出しました({tag})。再検討します。\n    {point}\n    → {retry}"
                     )
                 if retry is not None:
@@ -798,7 +838,7 @@ def MIN2_ignore_sunspots(
         if not sunspots:
             break
         if len(safe_points) < 3:
-            LOGGER.warning("黒点除外後の点が3点未満のため、直前の円を採用します。")
+            print("[WARN]:黒点除外後の点が3点未満のため、直前の円を採用します。")
             break
         # 黒点とみなされない点だけで円を作成
         cx, cy, r = fit_circle(np.array(safe_points, dtype=float), show, image, n)
@@ -817,40 +857,35 @@ def MIN2_ignore_sunspots(
 
 
 def _collect_images(dirpath: str) -> list[pathlib.Path]:
-    """指定ディレクトリ内の対応画像を名前順に取得する。
-
-    Parameters
-    ----------
-    dirpath : str
-        画像を検索するディレクトリ。
-
-    Returns
-    -------
-    list[pathlib.Path]
-        拡張子が対応形式に一致する画像ファイル。
-    """
     exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
-    return sorted(p for p in pathlib.Path(dirpath).iterdir() if p.suffix.lower() in exts)
+    return sorted(
+        p for p in pathlib.Path(dirpath).iterdir() if p.suffix.lower() in exts
+    )
 
 
 def main() -> None:
-    """コマンドライン引数または PyQt ダイアログで指定された画像を処理する。
-
-    Returns
-    -------
-    None
-    """
+    """Run the main command-line process."""
     import argparse
     from time import perf_counter
-
-    DIR_MODE_LIMB_WIDTH = 60
 
     parser = argparse.ArgumentParser(description="太陽像の近似円を検出する")
     parser.add_argument(
         "path", nargs="?", help="画像ファイルまたはフォルダ。省略時はダイアログで選択"
     )
-    parser.add_argument("--dir", action="store_true", help="フォルダ内の全画像を処理する")
+    parser.add_argument(
+        "--dir", action="store_true", help="フォルダ内の全画像を処理する"
+    )
+    parser.add_argument(
+        "--config",
+        help=f"YAML設定ファイル。省略時は ${CONFIG_ENV_VAR}、./{CONFIG_FILENAME}、"
+        "このファイルの隣の順に探し、無ければ既定値",
+    )
     args = parser.parse_args()
+
+    # CLI は従来どおり show/debug を既定で有効にする(YAMLで上書き可)
+    cfg = load_config(
+        args.config, search=args.config is None, defaults={"show": True, "debug": True}
+    )
 
     path = args.path
     if path is None:
@@ -865,33 +900,29 @@ def main() -> None:
                 ),
             )
         if not path:
-            LOGGER.info("[INFO]:選択がキャンセルされました。")
+            print("[INFO]:選択がキャンセルされました。")
             return
 
     if args.dir or pathlib.Path(path).is_dir():
-        LOGGER.info(f"[INFO]:dir={path}")
+        print(f"[INFO]:dir={path}")
         for file in _collect_images(path):
             try:
                 (cx, cy), r = MIN2_ignore_sunspots(
                     "PATH",
-                    show=True,
-                    debug=True,
-                    limb_wigth=DIR_MODE_LIMB_WIDTH,
+                    limb_wigth=cfg.dir_mode_limb_wigth,
                     img_path=file,
+                    config=cfg,
                 )
             except ValueError as e:
-                # 旧コードは読み込み失敗で break して残りを全部スキップしていた
-                LOGGER.error("%s: %s", file, e)
+                print(f"[ERROR]:{file}: {e}")
                 continue
-            LOGGER.info((float(cx), float(cy), float(r)))
+            print((float(cx), float(cy), float(r)))
     else:
-        LOGGER.info(f"[INFO]:image={path}")
+        print(f"[INFO]:image={path}")
         start = perf_counter()
-        result = MIN2_ignore_sunspots(
-            "PATH", show=True, debug=True, img_path=path, show_simple=False
-        )
-        LOGGER.info(f"[INFO]:result{result}")
-        LOGGER.info(f"[INFO]:process time :{perf_counter() - start} s")
+        result = MIN2_ignore_sunspots("PATH", img_path=path, config=cfg)
+        print(f"[INFO]:result{result}")
+        print(f"[INFO]:process time :{perf_counter() - start} s")
 
 
 if __name__ == "__main__":

@@ -12,6 +12,9 @@ class Min2LimbWidthWrapperTests(unittest.TestCase):
         kwargs = _resolve_min2_kwargs({"limb_width": "1/20"})
         self.assertEqual(kwargs["limb_wigth"], "1/20")
 
+    def test_default_uses_solar_diameter_fraction(self) -> None:
+        self.assertEqual(_resolve_min2_kwargs(None)["limb_wigth"], "1/60")
+
     def test_integer_pixel_width_remains_supported(self) -> None:
         kwargs = _resolve_min2_kwargs({"limb_width": 24})
         self.assertEqual(kwargs["limb_wigth"], 24)

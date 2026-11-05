@@ -104,7 +104,7 @@ def resolve_pixel_length(
     if not odd:
         return max(minimum, int(math.floor(target + 0.5)))
 
-    lower = max(1, int(target // 2) * 2 + 1)
+    lower = max(1, int(math.floor((target - 1) / 2)) * 2 + 1)
     upper = lower + 2
     return min(
         (lower, upper),

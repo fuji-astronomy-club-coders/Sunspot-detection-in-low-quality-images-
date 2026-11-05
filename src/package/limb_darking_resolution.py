@@ -10,12 +10,13 @@ import numpy as np
 from numpy import dtype, floating, ndarray
 
 # 先輩が作った関数をインポート
+from src.module import MIN2ver2 as min2_module
 from src.module.MIN2ver2 import MIN2_ignore_sunspots as min2
-from src.module.MIN2ver2 import version as min2_version
 
 LOGGER = logging.getLogger("sunspot.limb_darkening")
 
 version = "0.0.1"
+min2_version = min2_module.version
 
 
 class _Min2Kwargs(TypedDict):

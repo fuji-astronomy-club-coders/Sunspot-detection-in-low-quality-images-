@@ -1,61 +1,121 @@
-"""Tests for the labeled sunspot bounding-box diagnostic PNG."""
+"""Tests for transparent, collision-aware sunspot bounding-box overlays."""
 
 import json
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-from src.package.utils import save_sunspot_bounding_box_png
+from src.package.utils import save_sunspot_bounding_box_files
 
 
-class SunspotBoundingBoxPngTests(unittest.TestCase):
-    """Check that the PNG uses the retained CSV labels and component bounds."""
+class SunspotBoundingBoxOverlayTests(unittest.TestCase):
+    """Check transparent PNG output, SVG vectors, and label collision handling."""
 
-    def test_exports_component_boxes_and_original_label_values(self) -> None:
-        background = np.arange(64 * 64, dtype=np.uint16).reshape(64, 64)
-        labels = np.zeros((64, 64), dtype=np.int32)
+    def test_saves_transparent_png_and_vector_svg_with_csv_labels(self) -> None:
+        reference = np.arange(96 * 96, dtype=np.uint16).reshape(96, 96)
+        labels = np.zeros((96, 96), dtype=np.int32)
         labels[10:20, 5:15] = 3
         labels[30:42, 34:49] = 7
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             output_path = Path(temporary_directory) / "sunspot_bounding_boxes.png"
-            count = save_sunspot_bounding_box_png(
-                background,
-                labels,
-                output_path,
-                metadata={"extraction_method": "test"},
-            )
+            count = save_sunspot_bounding_box_files(reference, labels, output_path)
 
             self.assertEqual(count, 2)
+            svg_path = output_path.with_suffix(".svg")
             self.assertTrue(output_path.is_file())
+            self.assertTrue(svg_path.is_file())
+
             with Image.open(output_path) as png:
-                rendered = np.asarray(png.convert("RGB"))
-                self.assertEqual(png.size, (64, 64))
-                self.assertEqual(png.info["extraction_method"], "test")
+                rgba = np.asarray(png.convert("RGBA"))
+                self.assertEqual(png.size, (96, 96))
                 label_mapping = json.loads(png.info["label_mapping"])
+                layout = json.loads(png.info["label_layout"])
 
             self.assertEqual(label_mapping["csv_file"], "sunspot_statistics.csv")
             self.assertEqual(label_mapping["csv_column"], "label")
             self.assertEqual(label_mapping["labels"], [3, 7])
-            for y, x in ((10, 8), (30, 40)):
-                green_pixel = rendered[y, x]
-                self.assertGreater(int(green_pixel[1]), 200)
-                self.assertGreater(int(green_pixel[1]), int(green_pixel[0]) * 2)
-                self.assertGreater(int(green_pixel[1]), int(green_pixel[2]) * 2)
-            yellow_pixels = (rendered[:, :, 0] > 200) & (rendered[:, :, 1] > 200) & (rendered[:, :, 2] < 50)
+            self.assertEqual(rgba[0, 0, 3], 0, "PNG background must be transparent")
+            self.assertEqual(rgba[10, 8, 3], 255)
+            self.assertGreater(int(rgba[10, 8, 1]), 200)
+            self.assertGreater(int(rgba[10, 8, 1]), int(rgba[10, 8, 0]) * 2)
+            yellow_pixels = (
+                (rgba[:, :, 0] > 150)
+                & (rgba[:, :, 1] > 150)
+                & (rgba[:, :, 2] < 80)
+                & (rgba[:, :, 3] > 0)
+            )
             self.assertTrue(np.any(yellow_pixels))
+            self.assertEqual(len(layout), 2)
+
+            root = ET.parse(svg_path).getroot()
+            namespace = {"svg": "http://www.w3.org/2000/svg"}
+            self.assertEqual(root.tag, "{http://www.w3.org/2000/svg}svg")
+            self.assertEqual(len(root.findall(".//svg:rect", namespace)), 2)
+            self.assertEqual(len(root.findall(".//svg:text", namespace)), 2)
+            self.assertEqual(root.findall(".//svg:image", namespace), [])
+
+    def test_dense_labels_are_placed_without_overlap(self) -> None:
+        reference = np.zeros((220, 260), dtype=np.uint16)
+        labels = np.zeros(reference.shape, dtype=np.int32)
+        positions = [
+            (100, 112), (106, 112), (112, 112), (118, 112), (124, 112),
+            (100, 118), (106, 118), (112, 118), (118, 118), (124, 118),
+            (100, 124), (106, 124), (112, 124), (118, 124), (124, 124),
+        ]
+        for label_value, (x, y) in enumerate(positions, start=41):
+            labels[y : y + 2, x : x + 2] = label_value
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "dense.png"
+            save_sunspot_bounding_box_files(reference, labels, output_path)
+            with Image.open(output_path) as png:
+                layout = json.loads(png.info["label_layout"])
+
+        self.assertEqual(len(layout), len(positions))
+        rectangles = [
+            (item["x"], item["y"], item["x"] + item["width"], item["y"] + item["height"])
+            for item in layout
+        ]
+        for index, first in enumerate(rectangles):
+            for second in rectangles[index + 1 :]:
+                self.assertFalse(
+                    first[0] < second[2]
+                    and second[0] < first[2]
+                    and first[1] < second[3]
+                    and second[1] < first[3],
+                    "Label layout rectangles must not overlap.",
+                )
+
+    def test_can_disable_png_or_svg_independently(self) -> None:
+        reference = np.zeros((24, 24), dtype=np.uint8)
+        labels = np.zeros(reference.shape, dtype=np.int32)
+        labels[8:12, 8:12] = 5
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "overlay.png"
+            count = save_sunspot_bounding_box_files(
+                reference,
+                labels,
+                output_path,
+                options={"save_png": False, "save_svg": True},
+            )
+            self.assertEqual(count, 1)
+            self.assertFalse(output_path.exists())
+            self.assertTrue(output_path.with_suffix(".svg").exists())
 
     def test_rejects_mismatched_image_sizes(self) -> None:
-        background = np.zeros((10, 10), dtype=np.uint8)
+        reference = np.zeros((10, 10), dtype=np.uint8)
         labels = np.zeros((9, 10), dtype=np.int32)
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             output_path = Path(temporary_directory) / "invalid.png"
             with self.assertRaises(ValueError):
-                save_sunspot_bounding_box_png(background, labels, output_path)
+                save_sunspot_bounding_box_files(reference, labels, output_path)
 
 
 if __name__ == "__main__":

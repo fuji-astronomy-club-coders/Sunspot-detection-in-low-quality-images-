@@ -1,7 +1,7 @@
 """Tests for rectangular and radial mask boundary policies."""
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -15,8 +15,8 @@ class MaskBoundaryPolicyTests(unittest.TestCase):
     @patch("src.package.mask.ensure_qapplication")
     def test_disabled_mask_dialog_skips_qt_dialog(
         self,
-        ensure_qapplication_mock,
-        dialog_mock,
+        ensure_qapplication_mock: MagicMock,
+        dialog_mock: MagicMock,
     ) -> None:
         regions = mask.selectMaskRegions(
             np.zeros((8, 8), dtype=np.uint8),

@@ -45,6 +45,7 @@ Python 3.13以上が必要です。システムPythonで通常起動する場合
 
 - 保存先: `Paths.output_folder/session_YYYYMMDD_HHMMSS_xxxxxx/`
 - セッションフォルダー直下に、周縁減光補正・強調・抽出の各画像を保存
+- `sunspot_bounding_boxes.png` に、残った黒点候補の外接矩形と `sunspot_statistics.csv` の `label` 値を表示
 - 強調画像はマスク適用前の画像（従来のファイル名）と、選択したマスク領域を0で除外した画像（ファイル名末尾が `_masked.png`）の両方を保存
 - サマリー画像と `.log`・`.json` の実行ログも同じ階層に保存
 - セッション内に用途別のサブフォルダーは作成しません
@@ -57,6 +58,8 @@ Python 3.13以上が必要です。システムPythonで通常起動する場合
 ### 黒点統計 CSV と最終確認画面
 
 各セッションフォルダーに `sunspot_statistics.csv` と `sunspot_exclusion_list.csv` を出力します。`sunspot_statistics.csv` にはマスク適用後に残った黒点のラベル、重心座標、外接矩形の左上座標・幅・高さ、画素面積を記録します。`sunspot_exclusion_list.csv` にはマスクで除外された黒点について同じ幾何情報に加え、除外元のマスク番号と各マスクの座標・大きさを記録します。複数のマスクに重なった黒点は、該当するすべてのマスクを記録します。座標は画像左上を原点とした0始まりのピクセル座標です。
+
+外接矩形確認PNGでは、残った黒点候補を緑の矩形で囲み、矩形の近くに `sunspot_statistics.csv` の `label` 値を表示します。PNGのラベルとCSVを照合する際は、通し番号の `sunspot_id` ではなく `label` を使用してください。
 
 CSV の列名・値の意味・座標系・複数マスクに重なった場合の見方は [`docs/csv_output_guide.md`](docs/csv_output_guide.md) を参照してください。
 

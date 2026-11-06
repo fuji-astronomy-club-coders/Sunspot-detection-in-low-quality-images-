@@ -553,32 +553,48 @@ def process_image(
             statistics_path,
             exported_count,
         )
-        bounding_box_path = output_root / "sunspot_bounding_boxes.png"
-        bounding_box_count = utils.save_sunspot_bounding_box_png(
-            emphasized_image,
-            masked_labels,
-            bounding_box_path,
-            metadata={
-                "source_image": emphasis_img_name,
-                "extraction_method": extractionMethod,
-            },
-        )
-        if bounding_box_count != exported_count:
-            raise RuntimeError(
-                "外接矩形PNGと黒点統計CSVの黒点数が一致しません: "
-                f"PNG={bounding_box_count}, CSV={exported_count}"
-            )
-        if run_logger is not None:
-            run_logger.record_event(
-                "sunspot_bounding_box_png_exported",
-                {
-                    "png_path": str(bounding_box_path),
-                    "csv_path": str(statistics_path),
-                    "csv_label_column": "label",
-                    "spot_count": bounding_box_count,
+        bounding_box_options = config.get("BoundingBox", {})
+        if not isinstance(bounding_box_options, dict):
+            raise ValueError("BoundingBox 設定は YAML mapping にしてください。")
+        if bounding_box_options.get("enabled", True):
+            bounding_box_path = output_root / "sunspot_bounding_boxes.png"
+            bounding_box_count = utils.save_sunspot_bounding_box_files(
+                emphasized_image,
+                masked_labels,
+                bounding_box_path,
+                options=bounding_box_options,
+                metadata={
                     "source_image": emphasis_img_name,
+                    "extraction_method": extractionMethod,
                 },
             )
+            if bounding_box_count != exported_count:
+                raise RuntimeError(
+                    "外接矩形オーバーレイと黒点統計CSVの黒点数が一致しません: "
+                    f"overlay={bounding_box_count}, CSV={exported_count}"
+                )
+            if run_logger is not None:
+                run_logger.record_event(
+                    "sunspot_bounding_box_exported",
+                    {
+                        "png_path": (
+                            str(bounding_box_path)
+                            if bounding_box_options.get("save_png", True)
+                            else None
+                        ),
+                        "svg_path": (
+                            str(bounding_box_path.with_suffix(".svg"))
+                            if bounding_box_options.get("save_svg", True)
+                            else None
+                        ),
+                        "csv_path": str(statistics_path),
+                        "csv_label_column": "label",
+                        "spot_count": bounding_box_count,
+                        "source_image": emphasis_img_name,
+                        "background": "transparent",
+                        "options": bounding_box_options,
+                    },
+                )
         exclusion_list_path = output_root / "sunspot_exclusion_list.csv"
         excluded_count = utils.save_sunspot_exclusion_csv(
             sunspot_labels,

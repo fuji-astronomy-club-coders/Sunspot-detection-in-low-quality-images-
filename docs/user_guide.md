@@ -224,6 +224,7 @@ results/
    ├─ watershed_c1_threshold1000_minArea2_minDistance5.png
    ├─ sunspot_statistics.csv
    ├─ sunspot_exclusion_list.csv
+   ├─ sunspot_bounding_boxes.png
    ├─ img00000001_summary.png
    ├─ run_YYYYMMDD_HHMMSS_xxxxxx.log
    └─ run_YYYYMMDD_HHMMSS_xxxxxx.json
@@ -239,6 +240,7 @@ results/
 | **BlackTopHat_kernel15.png** | 選択した方式による特徴強調後の画像です。Black Top-Hat方式の場合はカーネルサイズがファイル名に含まれます。 |
 | **BlackTopHat_kernel15_masked.png** | マスク領域内の画素値を0にした強調画像です。マスク適用前の強調画像とは別ファイルとして保存されます。 |
 | **watershed_c1_threshold1000_minArea2_minDistance5.png** | 黒点候補の抽出結果画像です。抽出方式と、その方式で使用した主な設定値がファイル名に含まれます。 |
+| **sunspot_bounding_boxes.png** | 最終的に残った黒点候補を強調画像上で緑の外接矩形で囲み、矩形付近に sunspot_statistics.csv の label 値を表示します。 |
 | **img00000001_summary.png** | 入力画像、周縁減光補正後、特徴強調後、二値画像の4段階をまとめた処理結果レポートです。入力ファイル名を基に作成されます。 |
 
 強調処理のファイル名は、選択方式に応じて次のように変わります。
@@ -268,6 +270,8 @@ results/
 | **bbox_width_px** | 候補領域を囲む矩形の幅です。 |
 | **bbox_height_px** | 候補領域を囲む矩形の高さです。 |
 | **area_px** | 黒点候補を構成する画素数です。 |
+
+PNGに表示される番号は sunspot_statistics.csv の label 列と一致します。CSV内の通し番号である sunspot_id とは異なるため、画像とCSVを照合するときは label を使用してください。座標は画像左上を原点とする0始まりのピクセル座標です。
 
 ### 4.4 黒点除外一覧CSV（sunspot_exclusion_list.csv）
 

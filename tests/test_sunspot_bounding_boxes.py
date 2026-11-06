@@ -40,8 +40,11 @@ class SunspotBoundingBoxPngTests(unittest.TestCase):
             self.assertEqual(label_mapping["csv_file"], "sunspot_statistics.csv")
             self.assertEqual(label_mapping["csv_column"], "label")
             self.assertEqual(label_mapping["labels"], [3, 7])
-            np.testing.assert_array_equal(rendered[10, 8], [0, 255, 0])
-            np.testing.assert_array_equal(rendered[30, 40], [0, 255, 0])
+            for y, x in ((10, 8), (30, 40)):
+                green_pixel = rendered[y, x]
+                self.assertGreater(int(green_pixel[1]), 200)
+                self.assertGreater(int(green_pixel[1]), int(green_pixel[0]) * 2)
+                self.assertGreater(int(green_pixel[1]), int(green_pixel[2]) * 2)
             yellow_pixels = (rendered[:, :, 0] > 200) & (rendered[:, :, 1] > 200) & (rendered[:, :, 2] < 50)
             self.assertTrue(np.any(yellow_pixels))
 

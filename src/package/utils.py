@@ -441,7 +441,7 @@ def save_sunspot_bounding_box_files(
             )
         ):
             raise ValueError(f"BoundingBox.{name} は0〜255のRGB値3個で指定してください。")
-        return tuple(int(channel) for channel in value)
+        return (int(value[0]), int(value[1]), int(value[2]))
 
     def read_positive_int(name: str, default: int) -> int:
         value = settings.get(name, default)
@@ -547,7 +547,7 @@ def save_sunspot_bounding_box_files(
     occupied_label_rectangles: list[tuple[int, int, int, int]] = []
     label_layout: list[dict[str, int]] = []
     max_dimension = max(width, height)
-    for component_index, component in enumerate(components):
+    for component in components:
         x1, y1, x2, y2 = component["bbox"]
         center_x, center_y = component["center"]
         label_width = component["label_width"]
@@ -587,13 +587,14 @@ def save_sunspot_bounding_box_files(
                             or candidate[3] > height
                         ):
                             continue
-                        if any(intersects(candidate, occupied) for occupied in occupied_label_rectangles):
+                        if collision_avoidance and any(
+                            intersects(candidate, occupied)
+                            for occupied in occupied_label_rectangles
+                        ):
                             continue
                         if avoid_bounding_boxes and collision_avoidance and any(
                             intersects(candidate, box)
-                            for box_index, box in enumerate(bounding_rectangles)
-                            if box_index != component_index
-                            or intersects(candidate, box)
+                            for box in bounding_rectangles
                         ):
                             continue
                         return candidate
@@ -633,7 +634,7 @@ def save_sunspot_bounding_box_files(
         "label_mapping": {
             "csv_file": "sunspot_statistics.csv",
             "csv_column": "label",
-            "labels": [int(item["label"]) for item in components],
+            "labels": sorted(int(item["label"]) for item in components),
         },
         "label_layout": json.dumps(label_layout, ensure_ascii=False),
         "coordinate_origin": "top-left",
@@ -742,7 +743,7 @@ def save_sunspot_bounding_box_files(
                     f'stroke="{rgb_hex(leader_rgb)}" stroke-width="1"/>'
                 )
         svg_parts.append("</g>")
-        svg_font_size = max(6.0, font_scale * 30.0)
+        svg_font_size = max(6.0, font_scale * 22.0)
         for component in components:
             left, top, _right, _bottom = component["label_rectangle"]
             text_x = left + label_padding
@@ -770,137 +771,6 @@ def save_sunspot_bounding_box_files(
             len(components),
         )
     return len(components)
-
-
-
-    background_image: np.ndarray,
-    label_image: np.ndarray,
-    output_path: str | Path,
-    metadata: dict[str, Any] | None = None,
-) -> int:
-    """Save a diagnostic PNG with each retained component's bbox and CSV label.
-
-    The background uses percentile normalization for consistent 8-bit display,
-    including when the source image is 16-bit or floating-point. Bounding boxes
-    and their labels are derived from the same label image used in the
-    sunspot_statistics.csv label column.
-
-    Parameters
-    ----------
-    background_image : numpy.ndarray
-        Two-dimensional emphasized image used for component extraction.
-    label_image : numpy.ndarray
-        Two-dimensional integer label image after mask exclusions.
-    output_path : str | pathlib.Path
-        Destination PNG path.
-    metadata : dict[str, Any] | None, optional
-        Additional PNG metadata.
-
-    Returns
-    -------
-    int
-        Number of labeled components drawn.
-    """
-    if background_image.ndim != 2 or label_image.ndim != 2:
-        raise ValueError("背景画像と黒点ラベル画像は2次元配列にしてください。")
-    if background_image.shape != label_image.shape:
-        raise ValueError("背景画像と黒点ラベル画像のサイズが一致していません。")
-
-    source = np.asarray(background_image, dtype=np.float64)
-    finite_mask = np.isfinite(source)
-    gray_image = np.zeros(source.shape, dtype=np.uint8)
-    if np.any(finite_mask):
-        finite_values = source[finite_mask]
-        low_value, high_value = np.percentile(finite_values, [1.0, 99.5])
-        if high_value > low_value:
-            normalized = np.zeros(source.shape, dtype=np.float64)
-            normalized[finite_mask] = (
-                (finite_values - low_value) * 255.0 / (high_value - low_value)
-            )
-            gray_image = np.clip(normalized, 0.0, 255.0).astype(np.uint8)
-
-    canvas = cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
-    height, width = label_image.shape
-    labels = np.unique(label_image)
-    labels = labels[labels > 0]
-    line_width = max(1, int(round(min(height, width) / 800)))
-    font_scale = max(0.35, min(0.9, min(height, width) / 1800.0))
-    text_thickness = max(1, line_width)
-
-    for label_value in labels:
-        y_coordinates, x_coordinates = np.nonzero(label_image == label_value)
-        if x_coordinates.size == 0:
-            continue
-
-        x1 = int(x_coordinates.min())
-        x2 = int(x_coordinates.max())
-        y1 = int(y_coordinates.min())
-        y2 = int(y_coordinates.max())
-        cv2.rectangle(
-            canvas,
-            (x1, y1),
-            (x2, y2),
-            (0, 255, 0),
-            line_width,
-            lineType=cv2.LINE_AA,
-        )
-
-        label_text = str(int(label_value))
-        (text_width, text_height), baseline = cv2.getTextSize(
-            label_text,
-            cv2.FONT_HERSHEY_SIMPLEX,
-            font_scale,
-            text_thickness,
-        )
-        text_x = min(max(0, x1), max(0, width - text_width - 4))
-        if y1 >= text_height + baseline + 6:
-            text_baseline = y1 - 4
-        else:
-            text_baseline = min(height - baseline - 1, y1 + text_height + baseline + 5)
-        text_top = max(0, text_baseline - text_height - baseline)
-        text_right = min(width - 1, text_x + text_width + 4)
-        text_bottom = min(height - 1, text_baseline + baseline)
-        cv2.rectangle(
-            canvas,
-            (text_x, text_top),
-            (text_right, text_bottom),
-            (0, 0, 0),
-            thickness=-1,
-        )
-        cv2.putText(
-            canvas,
-            label_text,
-            (text_x + 2, text_baseline),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            font_scale,
-            (0, 255, 255),
-            text_thickness,
-            lineType=cv2.LINE_AA,
-        )
-
-    output_metadata: dict[str, Any] = {
-        "label_mapping": {
-            "csv_file": "sunspot_statistics.csv",
-            "csv_column": "label",
-            "labels": [int(label_value) for label_value in labels],
-        },
-        "coordinate_origin": "top-left",
-        "coordinate_indexing": "zero-based pixels",
-        "bounding_box_format": "x_min, y_min, x_max, y_max (inclusive)",
-    }
-    if metadata:
-        output_metadata.update(metadata)
-
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    rgb_canvas = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
-    svImage_withInfo(rgb_canvas, output_metadata, output_path)
-    LOGGER.info(
-        "黒点の外接矩形確認PNGを保存しました: %s (黒点数: %d)",
-        output_path,
-        len(labels),
-    )
-    return int(len(labels))
 
 
 def save_sunspot_exclusion_csv(

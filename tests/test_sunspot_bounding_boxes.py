@@ -119,6 +119,10 @@ class SunspotBoundingBoxOverlayTests(unittest.TestCase):
                 layout = json.loads(png.info["label_layout"])
 
         self.assertEqual(len(layout), len(positions))
+        self.assertTrue(
+            any(item["placement_side"] in {"below", "left", "right"} for item in layout),
+            "Crowded labels should use below/side positions when available.",
+        )
         rectangles = [
             (item["x"], item["y"], item["x"] + item["width"], item["y"] + item["height"])
             for item in layout
@@ -132,6 +136,37 @@ class SunspotBoundingBoxOverlayTests(unittest.TestCase):
                     and second[1] < first[3],
                     "Label layout rectangles must not overlap.",
                 )
+
+    def test_leader_line_color_is_configurable_in_png_and_svg(self) -> None:
+        reference = np.arange(128 * 128, dtype=np.uint16).reshape(128, 128)
+        labels = np.zeros(reference.shape, dtype=np.int32)
+        labels[54:66, 56:68] = 9
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "leader_color.png"
+            save_sunspot_bounding_box_files(
+                reference,
+                labels,
+                output_path,
+                options={
+                    "background_mode": "transparent",
+                    "show_leader_lines": True,
+                    "leader_line_color": [255, 0, 255],
+                },
+            )
+
+            with Image.open(output_path) as png:
+                rgba = np.asarray(png.convert("RGBA"))
+            svg_text = output_path.with_suffix(".svg").read_text(encoding="utf-8")
+
+        magenta_pixels = (
+            (rgba[:, :, 0] > 200)
+            & (rgba[:, :, 1] < 80)
+            & (rgba[:, :, 2] > 200)
+            & (rgba[:, :, 3] > 0)
+        )
+        self.assertTrue(np.any(magenta_pixels))
+        self.assertIn('stroke="#FF00FF"', svg_text)
 
     def test_can_disable_png_or_svg_independently(self) -> None:
         reference = np.zeros((24, 24), dtype=np.uint8)

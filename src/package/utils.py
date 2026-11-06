@@ -655,10 +655,10 @@ def save_sunspot_bounding_box_files(
     if metadata:
         output_metadata.update(metadata)
 
-    box_rgb = tuple(box_color)
-    label_rgb = tuple(label_color)
-    outline_rgb = tuple(label_outline_color)
-    leader_rgb = tuple(leader_line_color)
+    box_rgb: tuple[int, int, int] = box_color
+    label_rgb: tuple[int, int, int] = label_color
+    outline_rgb: tuple[int, int, int] = label_outline_color
+    leader_rgb: tuple[int, int, int] = leader_line_color
     rgba_canvas = np.zeros((height, width, 4), dtype=np.uint8)
 
     if save_png:

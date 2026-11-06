@@ -125,6 +125,48 @@ def _format_analysis_parameters(config: dict[str, Any]) -> str:
     return "\n\n".join(sections)
 
 
+def _resolve_bounding_box_background(
+    stage: str,
+    stage_images: dict[str, np.ndarray],
+    expected_shape: tuple[int, int],
+) -> np.ndarray:
+    """Select the configured processing-stage image for bounding-box output.
+
+    Parameters
+    ----------
+    stage : str
+        Background stage identifier.
+    stage_images : dict[str, numpy.ndarray]
+        Available images from the current processing run.
+    expected_shape : tuple[int, int]
+        Required image dimensions, normally the retained label-image shape.
+
+    Returns
+    -------
+    numpy.ndarray
+        The selected two-dimensional background image.
+
+    Raises
+    ------
+    ValueError
+        If the stage is unknown or its image does not match the label image.
+    """
+    if stage not in stage_images:
+        choices = ", ".join(sorted(stage_images))
+        raise ValueError(
+            f"未対応の BoundingBox.background_stage です: {stage} (選択可能: {choices})"
+        )
+
+    background_image = stage_images[stage]
+    if background_image.ndim != 2 or background_image.shape != expected_shape:
+        raise ValueError(
+            "外接矩形の背景画像はラベル画像と同じサイズの2次元画像にしてください。"
+            f" stage={stage}, background_shape={background_image.shape}, "
+            f"expected_shape={expected_shape}"
+        )
+    return background_image
+
+
 def process_image(
     config: dict,
     run_logger: RunLogger | None = None,
@@ -362,10 +404,17 @@ def process_image(
         mask_display_image = (
             raw_image if mask_preview_images is not None else limb_corrected_image
         )
+        mask_dialog_settings = config.get("MaskDialog", {})
+        if not isinstance(mask_dialog_settings, dict):
+            raise ValueError("MaskDialog 設定は YAML mapping にしてください。")
+        mask_dialog_enabled = mask_dialog_settings.get("enabled", True)
+        if not isinstance(mask_dialog_enabled, bool):
+            raise ValueError("MaskDialog.enabled は true / false で指定してください。")
         regions = (
             mask.selectMaskRegions(
                 mask_display_image,
-                config.get("MaskDialog", {}).get("display"),
+                mask_dialog_settings.get("display"),
+                enabled=mask_dialog_enabled,
                 preview_images=mask_preview_images,
                 editor_transform=mask_editor_transform,
                 preview_editor_index=mask_editor_index,
@@ -457,6 +506,7 @@ def process_image(
                     "image_width": int(binary_image.shape[1]),
                     "image_height": int(binary_image.shape[0]),
                     "selected_region_count": len(regions),
+                    "dialog_enabled": mask_dialog_enabled,
                     "regions": [
                         {
                             "index": index,
@@ -557,14 +607,27 @@ def process_image(
         if not isinstance(bounding_box_options, dict):
             raise ValueError("BoundingBox 設定は YAML mapping にしてください。")
         if bounding_box_options.get("enabled", True):
+            background_stage = bounding_box_options.get("background_stage", "emphasized")
+            bounding_box_background = _resolve_bounding_box_background(
+                background_stage,
+                {
+                    "input": raw_image,
+                    "limb_corrected": limb_corrected_image,
+                    "emphasized": emphasized_image,
+                    "extraction": image,
+                    "mask_applied": masked_emphasized_image,
+                },
+                tuple(masked_labels.shape),
+            )
             bounding_box_path = output_root / "sunspot_bounding_boxes.png"
             bounding_box_count = utils.save_sunspot_bounding_box_files(
-                emphasized_image,
+                bounding_box_background,
                 masked_labels,
                 bounding_box_path,
                 options=bounding_box_options,
                 metadata={
-                    "source_image": emphasis_img_name,
+                    "background_stage": background_stage,
+                    "source_image": str(image_path),
                     "extraction_method": extractionMethod,
                 },
             )
@@ -592,6 +655,7 @@ def process_image(
                         "spot_count": bounding_box_count,
                         "source_image": emphasis_img_name,
                         "background": bounding_box_options.get("background_mode", "image"),
+                        "background_stage": background_stage,
                         "options": bounding_box_options,
                     },
                 )

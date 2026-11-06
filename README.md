@@ -45,7 +45,7 @@ Python 3.13以上が必要です。システムPythonで通常起動する場合
 
 - 保存先: `Paths.output_folder/session_YYYYMMDD_HHMMSS_xxxxxx/`
 - セッションフォルダー直下に、周縁減光補正・強調・抽出の各画像を保存
-- `BoundingBox.background_stage` で選択した処理段階の画像を背景に、`sunspot_bounding_boxes.png` とベクター形式の `sunspot_bounding_boxes.svg` へ緑の外接矩形とCSVの `label` 値を表示
+- `BoundingBox.background_stage` で選択した処理段階の画像を背景に、`sunspot_bounding_boxes.png` とベクター形式の `sunspot_bounding_boxes.svg` へ緑の外接矩形とCSVの `label` 値を表示（ラベルは下・左右を優先して重なりを回避し、引出線の色もRGBで指定可能）
 - `MaskDialog.enabled: false` で矩形マスク選択ダイアログを無効化可能（比較モードで事前指定されたポリゴンマスクとRmaskは引き続き適用）
 - 強調画像はマスク適用前の画像（従来のファイル名）と、選択したマスク領域を0で除外した画像（ファイル名末尾が `_masked.png`）の両方を保存
 - サマリー画像と `.log`・`.json` の実行ログも同じ階層に保存

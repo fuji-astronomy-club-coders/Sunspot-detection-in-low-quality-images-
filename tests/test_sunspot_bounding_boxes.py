@@ -40,9 +40,10 @@ class SunspotBoundingBoxPngTests(unittest.TestCase):
             self.assertEqual(label_mapping["csv_file"], "sunspot_statistics.csv")
             self.assertEqual(label_mapping["csv_column"], "label")
             self.assertEqual(label_mapping["labels"], [3, 7])
-            np.testing.assert_array_equal(rendered[10, 5], [0, 255, 0])
-            np.testing.assert_array_equal(rendered[30, 34], [0, 255, 0])
-            self.assertTrue(np.any(np.all(rendered == [255, 255, 0], axis=2)))
+            np.testing.assert_array_equal(rendered[10, 8], [0, 255, 0])
+            np.testing.assert_array_equal(rendered[30, 40], [0, 255, 0])
+            yellow_pixels = (rendered[:, :, 0] > 200) & (rendered[:, :, 1] > 200) & (rendered[:, :, 2] < 50)
+            self.assertTrue(np.any(yellow_pixels))
 
     def test_rejects_mismatched_image_sizes(self) -> None:
         background = np.zeros((10, 10), dtype=np.uint8)

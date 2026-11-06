@@ -591,7 +591,7 @@ def process_image(
                         "csv_label_column": "label",
                         "spot_count": bounding_box_count,
                         "source_image": emphasis_img_name,
-                        "background": "transparent",
+                        "background": bounding_box_options.get("background_mode", "image"),
                         "options": bounding_box_options,
                     },
                 )

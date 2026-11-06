@@ -52,6 +52,23 @@ Extraction:
   watershed:
     min_distance: "1/100" # 太陽直径に対する割合（D=500pxで5px）
 
+# 抽出した黒点の外接矩形・ラベル画像
+BoundingBox:
+  enabled: true # falseにすると外接矩形オーバーレイを出力しない
+  save_png: true # 背景透過PNGを保存
+  save_svg: true # 矩形・文字をベクター要素としてSVG保存
+  box_color: [0, 255, 0] # 外接矩形の色（RGB）。既定は緑
+  line_width: 2 # 外接矩形の線幅（px）
+  label_color: [255, 255, 0] # ラベル文字色（RGB）
+  label_outline_color: [0, 0, 0] # 文字の視認性を高める輪郭色（RGB）
+  label_font_scale: 0.6 # OpenCV / SVG の文字サイズ係数
+  label_thickness: 1 # 文字の線幅
+  label_outline_thickness: 3 # 文字輪郭の追加線幅
+  label_padding: 3 # ラベル配置領域の内側余白（px）
+  label_gap: 5 # ラベルと黒点・他ラベルの間隔（px）
+  collision_avoidance: true # 他ラベル・矩形との重なりを避けて番号を配置
+  show_leader_lines: false # 移動したラベルと黒点を結ぶ線を表示
+
 # 黒点のマスク除外設定
 Mask:
   # overlap: 除外領域に1画素でも入った黒点を除外

@@ -241,7 +241,7 @@ results/
 | **BlackTopHat_kernel15.png** | 選択した方式による特徴強調後の画像です。Black Top-Hat方式の場合はカーネルサイズがファイル名に含まれます。 |
 | **BlackTopHat_kernel15_masked.png** | マスク領域内の画素値を0にした強調画像です。マスク適用前の強調画像とは別ファイルとして保存されます。 |
 | **watershed_c1_threshold1000_minArea2_minDistance5.png** | 黒点候補の抽出結果画像です。抽出方式と、その方式で使用した主な設定値がファイル名に含まれます。 |
-| **sunspot_bounding_boxes.png** | 強調画像を背景に、最終的に残った黒点候補を緑の外接矩形で囲み、重なりを避けて配置したCSVの label 値を表示します。 |
+| **sunspot_bounding_boxes.png** | `BoundingBox.background_stage` で選択した処理段階の画像を背景に、最終的に残った黒点候補を緑の外接矩形で囲み、CSVの label 値を表示します。 |
 | **sunspot_bounding_boxes.svg** | 選択した処理段階の背景画像を埋め込み、矩形・ラベルはSVGのベクター要素として保存します。拡大しても線や文字が劣化しません。 |
 | **img00000001_summary.png** | 入力画像、周縁減光補正後、特徴強調後、二値画像の4段階をまとめた処理結果レポートです。入力ファイル名を基に作成されます。 |
 
@@ -432,12 +432,15 @@ polynomialFitでは、補正前の画像にMIN2を適用して太陽中心と半
 
 通常maskとRmaskの両方に該当した黒点は、検出数からは1個として除外し、除外一覧CSVの `excluded_by_factor` には両方の要因を記録します。Rmaskの除外結果には、MIN2の中心座標・推定半径比・境界距離がCSVと実行ログに保存されます。
 
-### 5.7 マスク選択画面の表示設定（MaskDialog.display）
+### 5.7 マスク選択画面の設定（MaskDialog）
 
-以下の設定はマスク選択画面の表示や操作環境に関するものであり、抽出アルゴリズムのしきい値を変更するものではありません。
+`MaskDialog.enabled` は矩形マスク選択ダイアログ自体の有効・無効を切り替えます。falseの場合はダイアログを開かず、矩形マスクなしで処理を続行します。比較モードで事前に指定されたポリゴンマスクと `Mask.Rmask` は、この設定に関係なく適用されます。
+
+以下の `MaskDialog.display` 設定はマスク選択画面の表示や操作環境に関するものであり、抽出アルゴリズムのしきい値を変更するものではありません。
 
 | 設定項目 | 初期値 | 意味 |
 | --- | --- | --- |
+| **MaskDialog.enabled** | **true** | falseにすると矩形マスク選択ダイアログを開かずに処理を続行します。 |
 | **colormap** | **HOT** | マスク選択画面のカラーマップ[^20]です。**GRAY**、**AUTUMN**、**BONE**、**JET**、**WINTER**、**RAINBOW**、**OCEAN**、**SUMMER**、**SPRING**、**COOL**、**HSV**、**PINK**、**HOT**、**PARULA**、**TURBO**、**TWILIGHT**、**TWILIGHT_SHIFTED**、**VIRIDIS**、**PLASMA**、**INFERNO**、**MAGMA**、**CIVIDIS** が指定できます。 |
 | **show_coordinates** | **true** | カーソル座標、画像サイズ、選択中または直前の矩形情報を表示します。 |
 | **show_instructions** | **true** | ドラッグ、Enter、Esc、Backspaceによる操作説明を表示します。 |

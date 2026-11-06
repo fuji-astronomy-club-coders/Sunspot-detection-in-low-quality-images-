@@ -55,7 +55,7 @@ bbox_height_px = 最大Y座標 - 最小Y座標 + 1
 
 ### 外接矩形の確認画像
 
-同じセッションフォルダーに `sunspot_bounding_boxes.png` と `sunspot_bounding_boxes.svg` を保存します。PNGは背景透過で、緑の外接矩形とCSVの `label` 値だけを描画します。SVGは矩形と文字をベクター要素として保持します。ラベルは他のラベルと重ならない位置へ自動配置し、密集時には対象の矩形から少し離して表示します。画像上の番号はCSVの `label` 列と一致し、`sunspot_id` の通し番号とは異なります。マスクで除外された候補はこのオーバーレイには表示されません。出力の有効・無効、PNG/SVG、線色、文字色、サイズ等は `src/config.yaml` の `BoundingBox` で設定できます。
+同じセッションフォルダーに `sunspot_bounding_boxes.png` と `sunspot_bounding_boxes.svg` を保存します。PNGは強調画像を背景に、緑の外接矩形とCSVの `label` 値を描画します。SVGには背景画像を埋め込み、矩形と文字はベクター要素として保持します。ラベルは他のラベルと重ならない位置へ自動配置し、密集時には対象の矩形から少し離して表示します。画像上の番号はCSVの `label` 列と一致し、`sunspot_id` の通し番号とは異なります。マスクで除外された候補はこのオーバーレイには表示されません。背景画像の使用/透過、背景輝度の正規化範囲、PNG/SVG、線色、文字色、サイズ等は `src/config.yaml` の `BoundingBox` で設定できます。
 
 ### 出力例
 

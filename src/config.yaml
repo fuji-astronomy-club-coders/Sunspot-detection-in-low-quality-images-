@@ -55,9 +55,12 @@ Extraction:
 # 抽出した黒点の外接矩形・ラベル画像
 BoundingBox:
   enabled: true # falseにすると外接矩形オーバーレイを出力しない
-  save_png: true # 背景透過PNGを保存
-  save_svg: true # 矩形・文字をベクター要素としてSVG保存
+  save_png: true # PNG画像を保存
+  save_svg: true # 背景画像を埋め込み、矩形・文字をベクター要素としてSVG保存
+  background_mode: image # image: 強調画像を背景にする / transparent: 背景透過
   box_color: [0, 255, 0] # 外接矩形の色（RGB）。既定は緑
+  background_low_percentile: 1.0 # 背景画像の表示下限パーセンタイル
+  background_high_percentile: 99.5 # 背景画像の表示上限パーセンタイル
   line_width: 2 # 外接矩形の線幅（px）
   label_color: [255, 255, 0] # ラベル文字色（RGB）
   label_outline_color: [0, 0, 0] # 文字の視認性を高める輪郭色（RGB）

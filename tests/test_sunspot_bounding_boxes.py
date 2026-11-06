@@ -10,11 +10,33 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from src.main import _resolve_bounding_box_background
 from src.package.utils import save_sunspot_bounding_box_files
 
 
 class SunspotBoundingBoxOverlayTests(unittest.TestCase):
     """Check image backgrounds, transparent exports, SVG vectors, and labels."""
+
+    def test_resolves_each_supported_processing_stage(self) -> None:
+        stages = {
+            name: np.full((8, 9), index, dtype=np.uint8)
+            for index, name in enumerate(
+                ("input", "limb_corrected", "emphasized", "extraction", "mask_applied")
+            )
+        }
+        for name, expected in stages.items():
+            with self.subTest(stage=name):
+                selected = _resolve_bounding_box_background(name, stages, (8, 9))
+                self.assertIs(selected, expected)
+
+    def test_rejects_unknown_background_stage(self) -> None:
+        with self.assertRaises(ValueError):
+            _resolve_bounding_box_background("unknown", {}, (8, 9))
+
+    def test_rejects_background_shape_mismatch(self) -> None:
+        stages = {"emphasized": np.zeros((7, 9), dtype=np.uint8)}
+        with self.assertRaises(ValueError):
+            _resolve_bounding_box_background("emphasized", stages, (8, 9))
 
     def test_saves_image_background_and_vector_svg_with_csv_labels(self) -> None:
         reference = np.arange(96 * 96, dtype=np.uint16).reshape(96, 96)

@@ -72,6 +72,7 @@ BoundingBox:
   label_gap: 5 # ラベルと黒点・他ラベルの間隔（px）
   collision_avoidance: true # 他ラベル・矩形との重なりを避けて番号を配置
   show_leader_lines: false # 移動したラベルと黒点を結ぶ線を表示
+  leader_line_color: [255, 255, 255] # 引出線の色（RGB）
 
 # 黒点のマスク除外設定
 Mask:

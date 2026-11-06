@@ -7,6 +7,7 @@
 アプリケーションのメイン処理は ``src/main.py`` に、
 実行制御はプロジェクトルートの ``run.py`` に配置する。
 """
+import base64
 import csv
 import json
 import logging
@@ -393,20 +394,20 @@ def save_sunspot_bounding_box_files(
     options: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> int:
-    """Save transparent PNG and vector SVG overlays for retained sunspots.
+    """Save a source-image-backed PNG and vector SVG with sunspot annotations.
 
-    Only bounding boxes, labels, and optional leader lines are drawn. The
-    reference image is used to validate the coordinate space; its pixels are
-    deliberately not included in either output.
+    The emphasized source image is the default background. Labels and boxes
+    remain separate annotations, and SVG annotation elements stay vector
+    while the background is embedded as a raster PNG.
 
-    Label positions are selected around each component and shifted outward as
-    necessary to avoid collisions with other labels. Bounding-box collisions
-    are also avoided where space permits.
+    Set background_mode to transparent to export annotations without an image
+    background.
 
     Parameters
     ----------
     reference_image : numpy.ndarray
-        Two-dimensional source image used only for shape validation.
+        Two-dimensional emphasized image used as the background when
+        background_mode is image.
     label_image : numpy.ndarray
         Two-dimensional integer label image after mask exclusions.
     output_path : str | pathlib.Path
@@ -427,6 +428,11 @@ def save_sunspot_bounding_box_files(
         raise ValueError("参照画像と黒点ラベル画像のサイズが一致していません。")
 
     settings = options or {}
+    background_mode = settings.get("background_mode", "image")
+    if background_mode not in ("image", "transparent"):
+        raise ValueError(
+            "BoundingBox.background_mode は image / transparent のいずれかにしてください。"
+        )
 
     def read_color(name: str, default: list[int]) -> tuple[int, int, int]:
         value = settings.get(name, default)
@@ -649,7 +655,7 @@ def save_sunspot_bounding_box_files(
         "coordinate_origin": "top-left",
         "coordinate_indexing": "zero-based pixels",
         "bounding_box_format": "x_min, y_min, x_max, y_max (inclusive)",
-        "background": "transparent",
+        "background": background_mode,
         "vector_format": "SVG",
     }
     if metadata:
@@ -659,16 +665,60 @@ def save_sunspot_bounding_box_files(
     label_rgb: tuple[int, int, int] = label_color
     outline_rgb: tuple[int, int, int] = label_outline_color
     leader_rgb: tuple[int, int, int] = leader_line_color
-    rgba_canvas = np.zeros((height, width, 4), dtype=np.uint8)
+
+    # Normalize the emphasized image for an 8-bit display background. The
+    # source pixels and extraction labels remain unchanged.
+    background_gray = np.zeros((height, width), dtype=np.uint8)
+    if background_mode == "image":
+        source = np.asarray(reference_image, dtype=np.float64)
+        finite_mask = np.isfinite(source)
+        if np.any(finite_mask):
+            finite_values = source[finite_mask]
+            low_percentile = settings.get("background_low_percentile", 1.0)
+            high_percentile = settings.get("background_high_percentile", 99.5)
+            if (
+                isinstance(low_percentile, bool)
+                or isinstance(high_percentile, bool)
+                or not isinstance(low_percentile, (int, float))
+                or not isinstance(high_percentile, (int, float))
+                or not 0 <= float(low_percentile) < float(high_percentile) <= 100
+            ):
+                raise ValueError(
+                    "BoundingBox.background_low_percentile / "
+                    "background_high_percentile は 0 <= low < high <= 100 にしてください。"
+                )
+            low_value, high_value = np.percentile(
+                finite_values,
+                [float(low_percentile), float(high_percentile)],
+            )
+            if high_value > low_value:
+                normalized = np.zeros((height, width), dtype=np.float64)
+                normalized[finite_mask] = (
+                    (finite_values - low_value) * 255.0 / (high_value - low_value)
+                )
+                background_gray = np.clip(normalized, 0.0, 255.0).astype(np.uint8)
+
+    if background_mode == "image":
+        drawing_canvas = cv2.cvtColor(background_gray, cv2.COLOR_GRAY2BGR)
+        box_cv = (box_rgb[2], box_rgb[1], box_rgb[0])
+        label_cv = (label_rgb[2], label_rgb[1], label_rgb[0])
+        outline_cv = (outline_rgb[2], outline_rgb[1], outline_rgb[0])
+        leader_cv = (leader_rgb[2], leader_rgb[1], leader_rgb[0])
+    else:
+        drawing_canvas = np.zeros((height, width, 4), dtype=np.uint8)
+        box_cv = (*box_rgb[::-1], 255)
+        label_cv = (*label_rgb[::-1], 255)
+        outline_cv = (*outline_rgb[::-1], 255)
+        leader_cv = (*leader_rgb[::-1], 255)
 
     if save_png:
         for component in components:
             x1, y1, x2, y2 = component["bbox_inclusive"]
             cv2.rectangle(
-                rgba_canvas,
+                drawing_canvas,
                 (x1, y1),
                 (x2, y2),
-                (*box_rgb, 255),
+                box_cv,
                 line_width,
                 lineType=cv2.LINE_AA,
             )
@@ -679,10 +729,10 @@ def save_sunspot_bounding_box_files(
                 target_x = min(max(center_x, left), right)
                 target_y = min(max(center_y, top), bottom)
                 cv2.line(
-                    rgba_canvas,
+                    drawing_canvas,
                     (int(round(center_x)), int(round(center_y))),
                     (int(round(target_x)), int(round(target_y))),
-                    (*leader_rgb, 255),
+                    leader_cv,
                     1,
                     lineType=cv2.LINE_AA,
                 )
@@ -691,22 +741,22 @@ def save_sunspot_bounding_box_files(
             text_x = left + label_padding
             text_baseline = top + label_padding + component["text_height"]
             cv2.putText(
-                rgba_canvas,
+                drawing_canvas,
                 component["text"],
                 (text_x, text_baseline),
                 font_face,
                 font_scale,
-                (*outline_rgb, 255),
+                outline_cv,
                 label_thickness + label_outline_thickness,
                 lineType=cv2.LINE_AA,
             )
             cv2.putText(
-                rgba_canvas,
+                drawing_canvas,
                 component["text"],
                 (text_x, text_baseline),
                 font_face,
                 font_scale,
-                (*label_rgb, 255),
+                label_cv,
                 label_thickness,
                 lineType=cv2.LINE_AA,
             )
@@ -717,7 +767,11 @@ def save_sunspot_bounding_box_files(
     if save_png:
         png_metadata = dict(output_metadata)
         png_metadata["config"] = settings
-        svImage_withInfo(rgba_canvas, png_metadata, output_path)
+        if background_mode == "image":
+            png_image = cv2.cvtColor(drawing_canvas, cv2.COLOR_BGR2RGB)
+        else:
+            png_image = cv2.cvtColor(drawing_canvas, cv2.COLOR_BGRA2RGBA)
+        svImage_withInfo(png_image, png_metadata, output_path)
         saved_files.append(str(output_path))
 
     if save_svg:
@@ -731,8 +785,20 @@ def save_sunspot_bounding_box_files(
                 f'width="{width}" height="{height}" viewBox="0 0 {width} {height}">'
             ),
             f"<metadata>{xml_escape(json.dumps(output_metadata, ensure_ascii=False))}</metadata>",
-            '<g fill="none" stroke-linecap="square" stroke-linejoin="round">',
         ]
+        if background_mode == "image":
+            success, encoded_background = cv2.imencode(".png", background_gray)
+            if not success:
+                raise RuntimeError("SVG背景画像のPNGエンコードに失敗しました。")
+            background_data = base64.b64encode(encoded_background.tobytes()).decode("ascii")
+            svg_parts.append(
+                f'<image x="0" y="0" width="{width}" height="{height}" '
+                f'href="data:image/png;base64,{background_data}" '
+                'preserveAspectRatio="none"/>'
+            )
+        svg_parts.append(
+            '<g fill="none" stroke-linecap="square" stroke-linejoin="round">'
+        )
         for component in components:
             x1, y1, x2, y2 = component["bbox_inclusive"]
             svg_parts.append(

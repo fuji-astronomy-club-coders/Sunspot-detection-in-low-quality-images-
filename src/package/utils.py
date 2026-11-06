@@ -551,7 +551,7 @@ def save_sunspot_bounding_box_files(
     )
     bounding_rectangles = [item["bbox"] for item in components]
     occupied_label_rectangles: list[tuple[int, int, int, int]] = []
-    label_layout: list[dict[str, int]] = []
+    label_layout: list[dict[str, int | str]] = []
     max_dimension = max(width, height)
     for component in components:
         x1, y1, x2, y2 = component["bbox"]
@@ -560,11 +560,13 @@ def save_sunspot_bounding_box_files(
         label_height = component["label_height"]
         step_x = max(1, label_width + label_gap)
         step_y = max(1, label_height + label_gap)
+        # In dense areas, try below and beside the component before using
+        # the space above it. This spreads labels away from crowded upper rows.
         preferred_positions = [
-            (round(center_x - label_width / 2), y1 - label_height - label_gap),
-            (round(center_x - label_width / 2), y2 + label_gap),
-            (x2 + label_gap, round(center_y - label_height / 2)),
-            (x1 - label_width - label_gap, round(center_y - label_height / 2)),
+            (round(center_x - label_width / 2), y2 + label_gap),  # below
+            (x2 + label_gap, round(center_y - label_height / 2)),  # right
+            (x1 - label_width - label_gap, round(center_y - label_height / 2)),  # left
+            (round(center_x - label_width / 2), y1 - label_height - label_gap),  # above
         ]
         max_rings = min(
             64,
@@ -631,13 +633,25 @@ def save_sunspot_bounding_box_files(
 
         occupied_label_rectangles.append(chosen_rectangle)
         component["label_rectangle"] = chosen_rectangle
+        label_left, label_top, label_right, label_bottom = chosen_rectangle
+        if label_top >= y2:
+            placement_side = "below"
+        elif label_left >= x2:
+            placement_side = "right"
+        elif label_right <= x1:
+            placement_side = "left"
+        elif label_bottom <= y1:
+            placement_side = "above"
+        else:
+            placement_side = "overlap"
         label_layout.append(
             {
                 "label": component["label"],
-                "x": chosen_rectangle[0],
-                "y": chosen_rectangle[1],
+                "x": label_left,
+                "y": label_top,
                 "width": label_width,
                 "height": label_height,
+                "placement_side": placement_side,
                 "bbox_x1": component["bbox_inclusive"][0],
                 "bbox_y1": component["bbox_inclusive"][1],
                 "bbox_x2": component["bbox_inclusive"][2],

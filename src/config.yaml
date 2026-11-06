@@ -9,7 +9,7 @@
 # ============================================================
 
 Paths: # 相対パスはプロジェクトルートを基準とする
-  input_image: "?Dialog?" # You can use "?Dialog?" to select a file interactively
+  input_image: 'E:\astro\tenmon_samples\img00000002.tiff' # You can use "?Dialog?" to select a file interactively
   output_folder: '.\results'
 
 # MIN2による太陽円推定
@@ -62,17 +62,17 @@ BoundingBox:
   box_color: [0, 255, 0] # 外接矩形の色（RGB）。既定は緑
   background_low_percentile: 1.0 # 背景画像の表示下限パーセンタイル
   background_high_percentile: 99.5 # 背景画像の表示上限パーセンタイル
-  line_width: 2 # 外接矩形の線幅（px）
-  label_color: [255, 255, 0] # ラベル文字色（RGB）
+  line_width: 1 # 外接矩形の線幅（px）
+  label_color: [0, 200, 150] # ラベル文字色（RGB）
   label_outline_color: [0, 0, 0] # 文字の視認性を高める輪郭色（RGB）
-  label_font_scale: 0.6 # OpenCV / SVG の文字サイズ係数
+  label_font_scale: 0.3 # OpenCV / SVG の文字サイズ係数
   label_thickness: 1 # 文字の線幅
-  label_outline_thickness: 3 # 文字輪郭の追加線幅
-  label_padding: 3 # ラベル配置領域の内側余白（px）
+  label_outline_thickness: 1 # 文字輪郭の追加線幅
+  label_padding: 0 # ラベル配置領域の内側余白（px）
   label_gap: 5 # ラベルと黒点・他ラベルの間隔（px）
   collision_avoidance: true # 他ラベル・矩形との重なりを避けて番号を配置
-  show_leader_lines: false # 移動したラベルと黒点を結ぶ線を表示
-  leader_line_color: [255, 255, 255] # 引出線の色（RGB）
+  show_leader_lines: true # 移動したラベルと黒点を結ぶ線を表示
+  leader_line_color: [0, 255, 100] # 引出線の色（RGB）
 
 # 黒点のマスク除外設定
 Mask:
@@ -87,7 +87,7 @@ Mask:
 
 # マスク選択ダイアログ
 MaskDialog:
-  enabled: true # falseにすると矩形マスク選択ダイアログを開かずに処理を続行
+  enabled: false # falseにすると矩形マスク選択ダイアログを開かずに処理を続行
   display:
     # 表示用カラーマップ: GRAY, HOT, JET, VIRIDIS, INFERNO, PLASMA, TURBO など
     colormap: HOT
@@ -104,7 +104,7 @@ MaskDialog:
 # 実行後の結果画像プレビュー
 Display:
   colormap: HOT # 最終確認画面の輝度表示カラーマップ
-  show_final_image: true # trueにするとPyQtで最終解析画像を表示
+  show_final_image: false # trueにするとPyQtで最終解析画像を表示
   show_mask_fill: true # 最終確認画面で選択したマスク範囲を塗りつぶす
   show_invalid_sunspots: true # 最終確認画面でマスクにより除外された黒点を表示する
   show_rmask_fill: true # 最終確認画面でRmask境界円より外側を塗りつぶす

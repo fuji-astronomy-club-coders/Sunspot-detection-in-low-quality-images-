@@ -225,6 +225,7 @@ results/
    ├─ sunspot_statistics.csv
    ├─ sunspot_exclusion_list.csv
    ├─ sunspot_bounding_boxes.png
+   ├─ sunspot_bounding_boxes.svg
    ├─ img00000001_summary.png
    ├─ run_YYYYMMDD_HHMMSS_xxxxxx.log
    └─ run_YYYYMMDD_HHMMSS_xxxxxx.json
@@ -240,7 +241,8 @@ results/
 | **BlackTopHat_kernel15.png** | 選択した方式による特徴強調後の画像です。Black Top-Hat方式の場合はカーネルサイズがファイル名に含まれます。 |
 | **BlackTopHat_kernel15_masked.png** | マスク領域内の画素値を0にした強調画像です。マスク適用前の強調画像とは別ファイルとして保存されます。 |
 | **watershed_c1_threshold1000_minArea2_minDistance5.png** | 黒点候補の抽出結果画像です。抽出方式と、その方式で使用した主な設定値がファイル名に含まれます。 |
-| **sunspot_bounding_boxes.png** | 最終的に残った黒点候補を強調画像上で緑の外接矩形で囲み、矩形付近に sunspot_statistics.csv の label 値を表示します。 |
+| **sunspot_bounding_boxes.png** | 背景透過のオーバーレイです。最終的に残った黒点候補を緑の外接矩形で囲み、重なりを避けて配置したCSVの label 値を表示します。 |
+| **sunspot_bounding_boxes.svg** | 同じ矩形・ラベルをSVGのベクター要素として保存します。拡大しても線や文字が劣化しません。 |
 | **img00000001_summary.png** | 入力画像、周縁減光補正後、特徴強調後、二値画像の4段階をまとめた処理結果レポートです。入力ファイル名を基に作成されます。 |
 
 強調処理のファイル名は、選択方式に応じて次のように変わります。
@@ -271,7 +273,7 @@ results/
 | **bbox_height_px** | 候補領域を囲む矩形の高さです。 |
 | **area_px** | 黒点候補を構成する画素数です。 |
 
-PNGに表示される番号は sunspot_statistics.csv の label 列と一致します。CSV内の通し番号である sunspot_id とは異なるため、画像とCSVを照合するときは label を使用してください。座標は画像左上を原点とする0始まりのピクセル座標です。
+PNGは背景透過のオーバーレイで、黒点候補の外接矩形と番号だけを描画します。SVGも同じ座標・ラベル配置をベクター要素で保存します。番号は sunspot_statistics.csv の label 列と一致します。CSV内の通し番号である sunspot_id とは異なるため、画像とCSVを照合するときは label を使用してください。座標は画像左上を原点とする0始まりのピクセル座標です。ラベル同士は重ならない位置へ自動配置し、必要に応じて矩形から少し離して表示します。
 
 ### 4.4 黒点除外一覧CSV（sunspot_exclusion_list.csv）
 

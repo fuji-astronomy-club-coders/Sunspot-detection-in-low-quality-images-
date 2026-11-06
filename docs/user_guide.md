@@ -224,6 +224,8 @@ results/
    ├─ watershed_c1_threshold1000_minArea2_minDistance5.png
    ├─ sunspot_statistics.csv
    ├─ sunspot_exclusion_list.csv
+   ├─ sunspot_bounding_boxes.png
+   ├─ sunspot_bounding_boxes.svg
    ├─ img00000001_summary.png
    ├─ run_YYYYMMDD_HHMMSS_xxxxxx.log
    └─ run_YYYYMMDD_HHMMSS_xxxxxx.json
@@ -239,6 +241,8 @@ results/
 | **BlackTopHat_kernel15.png** | 選択した方式による特徴強調後の画像です。Black Top-Hat方式の場合はカーネルサイズがファイル名に含まれます。 |
 | **BlackTopHat_kernel15_masked.png** | マスク領域内の画素値を0にした強調画像です。マスク適用前の強調画像とは別ファイルとして保存されます。 |
 | **watershed_c1_threshold1000_minArea2_minDistance5.png** | 黒点候補の抽出結果画像です。抽出方式と、その方式で使用した主な設定値がファイル名に含まれます。 |
+| **sunspot_bounding_boxes.png** | `BoundingBox.background_stage` で選択した処理段階の画像を背景に、最終的に残った黒点候補を緑の外接矩形で囲み、CSVの label 値を表示します。 |
+| **sunspot_bounding_boxes.svg** | 選択した処理段階の背景画像を埋め込み、矩形・ラベルはSVGのベクター要素として保存します。拡大しても線や文字が劣化しません。 |
 | **img00000001_summary.png** | 入力画像、周縁減光補正後、特徴強調後、二値画像の4段階をまとめた処理結果レポートです。入力ファイル名を基に作成されます。 |
 
 強調処理のファイル名は、選択方式に応じて次のように変わります。
@@ -268,6 +272,8 @@ results/
 | **bbox_width_px** | 候補領域を囲む矩形の幅です。 |
 | **bbox_height_px** | 候補領域を囲む矩形の高さです。 |
 | **area_px** | 黒点候補を構成する画素数です。 |
+
+PNGは `BoundingBox.background_stage` で選択した処理段階の画像を背景にして黒点候補の外接矩形と番号を描画します。選択肢は `input`（元画像）、`limb_corrected`（周縁減光補正後）、`emphasized`（特徴強調後）、`extraction`（抽出結果）、`mask_applied`（マスク適用後の強調画像）です。SVGには同じ背景画像を埋め込み、矩形・文字はベクター要素として保存します。背景画像を使用しない透過形式も設定できます。番号は sunspot_statistics.csv の label 列と一致します。CSV内の通し番号である sunspot_id とは異なるため、画像とCSVを照合するときは label を使用してください。座標は画像左上を原点とする0始まりのピクセル座標です。ラベル同士は重ならない位置へ自動配置し、必要に応じて矩形から少し離して表示します。
 
 ### 4.4 黒点除外一覧CSV（sunspot_exclusion_list.csv）
 
@@ -426,12 +432,15 @@ polynomialFitでは、補正前の画像にMIN2を適用して太陽中心と半
 
 通常maskとRmaskの両方に該当した黒点は、検出数からは1個として除外し、除外一覧CSVの `excluded_by_factor` には両方の要因を記録します。Rmaskの除外結果には、MIN2の中心座標・推定半径比・境界距離がCSVと実行ログに保存されます。
 
-### 5.7 マスク選択画面の表示設定（MaskDialog.display）
+### 5.7 マスク選択画面の設定（MaskDialog）
 
-以下の設定はマスク選択画面の表示や操作環境に関するものであり、抽出アルゴリズムのしきい値を変更するものではありません。
+`MaskDialog.enabled` は矩形マスク選択ダイアログ自体の有効・無効を切り替えます。falseの場合はダイアログを開かず、矩形マスクなしで処理を続行します。比較モードで事前に指定されたポリゴンマスクと `Mask.Rmask` は、この設定に関係なく適用されます。
+
+以下の `MaskDialog.display` 設定はマスク選択画面の表示や操作環境に関するものであり、抽出アルゴリズムのしきい値を変更するものではありません。
 
 | 設定項目 | 初期値 | 意味 |
 | --- | --- | --- |
+| **MaskDialog.enabled** | **true** | falseにすると矩形マスク選択ダイアログを開かずに処理を続行します。 |
 | **colormap** | **HOT** | マスク選択画面のカラーマップ[^20]です。**GRAY**、**AUTUMN**、**BONE**、**JET**、**WINTER**、**RAINBOW**、**OCEAN**、**SUMMER**、**SPRING**、**COOL**、**HSV**、**PINK**、**HOT**、**PARULA**、**TURBO**、**TWILIGHT**、**TWILIGHT_SHIFTED**、**VIRIDIS**、**PLASMA**、**INFERNO**、**MAGMA**、**CIVIDIS** が指定できます。 |
 | **show_coordinates** | **true** | カーソル座標、画像サイズ、選択中または直前の矩形情報を表示します。 |
 | **show_instructions** | **true** | ドラッグ、Enter、Esc、Backspaceによる操作説明を表示します。 |
@@ -467,7 +476,26 @@ polynomialFitでは、補正前の画像にMIN2を適用して太陽中心と半
 これらの設定値はダイアログを開いたときの初期状態です。画面上でチェックボックスを操作しても、**src/config.yaml** の値は書き換わりません。
 
 
-## 6. 実行ログの確認例
+### 5.9 黒点外接矩形の出力設定（BoundingBox）
+
+`sunspot_bounding_boxes.png` と `sunspot_bounding_boxes.svg` の表示内容を設定します。ラベルは黒点候補の矩形の周囲に配置し、重なりを避けるときは下側・右側・左側を先に試し、空きがなければ上側やさらに離れた位置へ移動します。
+
+| 設定項目 | 初期値 | 意味 |
+| --- | --- | --- |
+| **enabled** | **true** | 外接矩形画像の出力を有効にします。 |
+| **background_stage** | **emphasized** | 背景画像の処理段階です。元画像、周縁減光補正後、特徴強調後、抽出結果、マスク適用後から選択します。 |
+| **background_mode** | **image** | `image` は選択した段階の画像を背景にし、`transparent` は背景を透過します。 |
+| **save_png / save_svg** | **true / true** | PNGとSVGの出力を個別に切り替えます。 |
+| **box_color / line_width** | **[0, 255, 0] / 2** | 外接矩形の色（RGB）と線幅です。 |
+| **label_color / label_outline_color** | **[255, 255, 0] / [0, 0, 0]** | ラベル文字色と文字輪郭色（RGB）です。 |
+| **collision_avoidance** | **true** | 他のラベルや黒点矩形と重ならない位置への配置を試します。 |
+| **label_gap / label_padding** | **5 / 3** | 黒点矩形や他ラベルからの間隔と、ラベル文字周囲の余白（px）です。 |
+| **show_leader_lines** | **false** | trueにすると、移動したラベルと元の黒点を結ぶ引出線を表示します。 |
+| **leader_line_color** | **[255, 255, 255]** | 引出線の色をRGBで指定します。PNGとSVGの両方に適用されます。 |
+
+ラベル同士が重ならない候補位置を探し、対象の矩形の下・左右・上の順に配置を試します。密集度や画像端の空きによっては矩形から距離を取る場合があります。引出線を有効にすると、移動先のラベルと元の候補の位置を色付きの線で確認できます。
+
+
 
 ターミナルには、処理の進行状況と集計情報が表示されます。提供された実行ログでは、次のような項目が確認できます。
 

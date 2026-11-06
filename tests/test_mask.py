@@ -1,6 +1,7 @@
 """Tests for rectangular and radial mask boundary policies."""
 
 import unittest
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -9,6 +10,29 @@ from src.package import mask
 
 class MaskBoundaryPolicyTests(unittest.TestCase):
     """Verify candidate handling at ordinary and radial mask boundaries."""
+
+    @patch("src.package.mask._MaskDialog")
+    @patch("src.package.mask.ensure_qapplication")
+    def test_disabled_mask_dialog_skips_qt_dialog(
+        self,
+        ensure_qapplication_mock: MagicMock,
+        dialog_mock: MagicMock,
+    ) -> None:
+        regions = mask.selectMaskRegions(
+            np.zeros((8, 8), dtype=np.uint8),
+            enabled=False,
+        )
+
+        self.assertEqual(regions, [])
+        ensure_qapplication_mock.assert_not_called()
+        dialog_mock.assert_not_called()
+
+    def test_mask_dialog_enabled_flag_must_be_boolean(self) -> None:
+        with self.assertRaises(ValueError):
+            mask.selectMaskRegions(
+                np.zeros((8, 8), dtype=np.uint8),
+                enabled="false",  # type: ignore[arg-type]
+            )
 
     def test_rectangular_overlap_policy_excludes_any_intersection(self) -> None:
         labels = np.zeros((12, 12), dtype=np.int32)

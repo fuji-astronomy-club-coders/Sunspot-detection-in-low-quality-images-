@@ -736,6 +736,7 @@ def selectMaskRegions(
     image: np.ndarray,
     display_options: dict | None = None,
     *,
+    enabled: bool = True,
     preview_images: list[
         tuple[str, np.ndarray | None, SolarTransform | None]
     ] | None = None,
@@ -753,6 +754,8 @@ def selectMaskRegions(
         選択時に表示する2次元画像。
     display_options : dict | None, optional
         ``config.yaml`` の ``MaskDialog.display`` に対応する表示設定。
+    enabled : bool, optional
+        False の場合はダイアログを開かず、空の領域リストを返す。
 
     Returns
     -------
@@ -768,6 +771,11 @@ def selectMaskRegions(
         raise ValueError("入力画像はグレースケール画像にしてください。")
     if image.size == 0:
         raise ValueError("入力画像が空です。")
+    if not isinstance(enabled, bool):
+        raise ValueError("MaskDialog.enabled は true / false で指定してください。")
+    if not enabled:
+        LOGGER.info("マスク選択ダイアログは無効です。矩形マスク選択をスキップします。")
+        return []
 
     options = {
         "colormap": "HOT",

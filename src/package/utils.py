@@ -566,7 +566,16 @@ def save_sunspot_bounding_box_files(
         )
         chosen_rectangle: tuple[int, int, int, int] | None = None
 
-        def try_layout(*, avoid_bounding_boxes: bool) -> tuple[int, int, int, int] | None:
+        def try_layout(
+            *,
+            avoid_bounding_boxes: bool,
+            max_rings: int = max_rings,
+            preferred_positions: list[tuple[int, int]] = preferred_positions,
+            step_x: int = step_x,
+            step_y: int = step_y,
+            label_width: int = label_width,
+            label_height: int = label_height,
+        ) -> tuple[int, int, int, int] | None:
             for ring in range(max_rings + 1):
                 offsets = [
                     (dx, dy)

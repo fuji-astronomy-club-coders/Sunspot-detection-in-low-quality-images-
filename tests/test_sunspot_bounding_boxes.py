@@ -58,7 +58,7 @@ class SunspotBoundingBoxOverlayTests(unittest.TestCase):
             href = image_element.attrib["href"]
             self.assertTrue(href.startswith("data:image/png;base64,"))
             embedded_png = base64.b64decode(href.split(",", maxsplit=1)[1])
-            self.assertTrue(embedded_png.startswith(b"\\x89PNG\\r\\n\\x1a\\n"))
+            self.assertTrue(embedded_png.startswith(bytes.fromhex("89504e470d0a1a0a")))
 
     def test_can_export_transparent_background_when_requested(self) -> None:
         reference = np.arange(32 * 32, dtype=np.uint16).reshape(32, 32)

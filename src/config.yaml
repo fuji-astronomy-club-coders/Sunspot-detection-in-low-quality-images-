@@ -57,7 +57,8 @@ BoundingBox:
   enabled: true # falseにすると外接矩形オーバーレイを出力しない
   save_png: true # PNG画像を保存
   save_svg: true # 背景画像を埋め込み、矩形・文字をベクター要素としてSVG保存
-  background_mode: image # image: 強調画像を背景にする / transparent: 背景透過
+  background_mode: image # image: 選択した処理段階の画像 / transparent: 背景透過
+  background_stage: emphasized # input / limb_corrected / emphasized / extraction / mask_applied
   box_color: [0, 255, 0] # 外接矩形の色（RGB）。既定は緑
   background_low_percentile: 1.0 # 背景画像の表示下限パーセンタイル
   background_high_percentile: 99.5 # 背景画像の表示上限パーセンタイル
@@ -85,6 +86,7 @@ Mask:
 
 # マスク選択ダイアログ
 MaskDialog:
+  enabled: true # falseにすると矩形マスク選択ダイアログを開かずに処理を続行
   display:
     # 表示用カラーマップ: GRAY, HOT, JET, VIRIDIS, INFERNO, PLASMA, TURBO など
     colormap: HOT

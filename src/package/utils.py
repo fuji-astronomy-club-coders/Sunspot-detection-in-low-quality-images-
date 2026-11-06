@@ -516,7 +516,6 @@ def save_sunspot_bounding_box_png(
     return int(len(labels))
 
 
-
 def save_sunspot_exclusion_csv(
     label_image: np.ndarray,
     mask_regions: list[dict[str, Any]],

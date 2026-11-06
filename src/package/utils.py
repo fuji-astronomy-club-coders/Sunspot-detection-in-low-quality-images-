@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from pprint import pformat
 from typing import Any, cast
+from xml.sax.saxutils import escape as xml_escape
 
 import cv2
 import matplotlib.pyplot as plt
@@ -385,7 +386,393 @@ def save_sunspot_statistics_csv(
     return int(len(spot_labels))
 
 
-def save_sunspot_bounding_box_png(
+def save_sunspot_bounding_box_files(
+    reference_image: np.ndarray,
+    label_image: np.ndarray,
+    output_path: str | Path,
+    options: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> int:
+    """Save transparent PNG and vector SVG overlays for retained sunspots.
+
+    Only bounding boxes, labels, and optional leader lines are drawn. The
+    reference image is used to validate the coordinate space; its pixels are
+    deliberately not included in either output.
+
+    Label positions are selected around each component and shifted outward as
+    necessary to avoid collisions with other labels. Bounding-box collisions
+    are also avoided where space permits.
+
+    Parameters
+    ----------
+    reference_image : numpy.ndarray
+        Two-dimensional source image used only for shape validation.
+    label_image : numpy.ndarray
+        Two-dimensional integer label image after mask exclusions.
+    output_path : str | pathlib.Path
+        PNG output path. The SVG uses the same path with a .svg suffix.
+    options : dict[str, Any] | None, optional
+        Options from the BoundingBox section of config.yaml.
+    metadata : dict[str, Any] | None, optional
+        Additional metadata stored in the PNG and SVG.
+
+    Returns
+    -------
+    int
+        Number of labeled components represented in the overlay.
+    """
+    if reference_image.ndim != 2 or label_image.ndim != 2:
+        raise ValueError("参照画像と黒点ラベル画像は2次元配列にしてください。")
+    if reference_image.shape != label_image.shape:
+        raise ValueError("参照画像と黒点ラベル画像のサイズが一致していません。")
+
+    settings = options or {}
+
+    def read_color(name: str, default: list[int]) -> tuple[int, int, int]:
+        value = settings.get(name, default)
+        if (
+            not isinstance(value, (list, tuple))
+            or len(value) != 3
+            or any(
+                isinstance(channel, bool)
+                or not isinstance(channel, (int, np.integer))
+                or not 0 <= int(channel) <= 255
+                for channel in value
+            )
+        ):
+            raise ValueError(f"BoundingBox.{name} は0〜255のRGB値3個で指定してください。")
+        return tuple(int(channel) for channel in value)
+
+    def read_positive_int(name: str, default: int) -> int:
+        value = settings.get(name, default)
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value <= 0:
+            raise ValueError(f"BoundingBox.{name} は正の整数にしてください。")
+        return int(value)
+
+    def read_nonnegative_int(name: str, default: int) -> int:
+        value = settings.get(name, default)
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < 0:
+            raise ValueError(f"BoundingBox.{name} は0以上の整数にしてください。")
+        return int(value)
+
+    def read_bool(name: str, default: bool) -> bool:
+        value = settings.get(name, default)
+        if not isinstance(value, bool):
+            raise ValueError(f"BoundingBox.{name} は true / false で指定してください。")
+        return value
+
+    box_color = read_color("box_color", [0, 255, 0])
+    label_color = read_color("label_color", [255, 255, 0])
+    label_outline_color = read_color("label_outline_color", [0, 0, 0])
+    leader_line_color = read_color("leader_line_color", [255, 255, 255])
+    line_width = read_positive_int("line_width", 2)
+    label_thickness = read_positive_int("label_thickness", 1)
+    label_outline_thickness = read_positive_int("label_outline_thickness", 3)
+    label_padding = read_nonnegative_int("label_padding", 3)
+    label_gap = read_nonnegative_int("label_gap", 5)
+    save_png = read_bool("save_png", True)
+    save_svg = read_bool("save_svg", True)
+    collision_avoidance = read_bool("collision_avoidance", True)
+    show_leader_lines = read_bool("show_leader_lines", False)
+    font_scale_value = settings.get("label_font_scale", 0.6)
+    if (
+        isinstance(font_scale_value, bool)
+        or not isinstance(font_scale_value, (int, float))
+        or not math.isfinite(float(font_scale_value))
+        or float(font_scale_value) <= 0
+    ):
+        raise ValueError("BoundingBox.label_font_scale は正の有限値にしてください。")
+    font_scale = float(font_scale_value)
+
+    height, width = label_image.shape
+    labels = np.unique(label_image)
+    labels = labels[labels > 0]
+    font_face = cv2.FONT_HERSHEY_SIMPLEX
+
+    def intersects(
+        first: tuple[int, int, int, int],
+        second: tuple[int, int, int, int],
+    ) -> bool:
+        return (
+            first[0] < second[2]
+            and second[0] < first[2]
+            and first[1] < second[3]
+            and second[1] < first[3]
+        )
+
+    components: list[dict[str, Any]] = []
+    for label_value in labels:
+        y_coordinates, x_coordinates = np.nonzero(label_image == label_value)
+        if x_coordinates.size == 0:
+            continue
+        x1 = int(x_coordinates.min())
+        x2 = int(x_coordinates.max())
+        y1 = int(y_coordinates.min())
+        y2 = int(y_coordinates.max())
+        label_text = str(int(label_value))
+        (text_width, text_height), baseline = cv2.getTextSize(
+            label_text,
+            font_face,
+            font_scale,
+            label_thickness,
+        )
+        label_width = text_width + 2 * label_padding
+        label_height = text_height + baseline + 2 * label_padding
+        components.append(
+            {
+                "label": int(label_value),
+                "text": label_text,
+                "bbox": (x1, y1, x2 + 1, y2 + 1),
+                "bbox_inclusive": (x1, y1, x2, y2),
+                "center": ((x1 + x2) / 2.0, (y1 + y2) / 2.0),
+                "text_width": text_width,
+                "text_height": text_height,
+                "baseline": baseline,
+                "label_width": label_width,
+                "label_height": label_height,
+            }
+        )
+
+    # Larger components get first choice of nearby label positions.
+    components.sort(
+        key=lambda item: (
+            -(
+                (item["bbox"][2] - item["bbox"][0])
+                * (item["bbox"][3] - item["bbox"][1])
+            ),
+            item["label"],
+        )
+    )
+    bounding_rectangles = [item["bbox"] for item in components]
+    occupied_label_rectangles: list[tuple[int, int, int, int]] = []
+    label_layout: list[dict[str, int]] = []
+    max_dimension = max(width, height)
+    for component_index, component in enumerate(components):
+        x1, y1, x2, y2 = component["bbox"]
+        center_x, center_y = component["center"]
+        label_width = component["label_width"]
+        label_height = component["label_height"]
+        step_x = max(1, label_width + label_gap)
+        step_y = max(1, label_height + label_gap)
+        preferred_positions = [
+            (round(center_x - label_width / 2), y1 - label_height - label_gap),
+            (round(center_x - label_width / 2), y2 + label_gap),
+            (x2 + label_gap, round(center_y - label_height / 2)),
+            (x1 - label_width - label_gap, round(center_y - label_height / 2)),
+        ]
+        max_rings = min(
+            64,
+            max(4, math.ceil(max_dimension / max(1, min(step_x, step_y)))),
+        )
+        chosen_rectangle: tuple[int, int, int, int] | None = None
+
+        def try_layout(*, avoid_bounding_boxes: bool) -> tuple[int, int, int, int] | None:
+            for ring in range(max_rings + 1):
+                offsets = [
+                    (dx, dy)
+                    for dx in range(-ring, ring + 1)
+                    for dy in range(-ring, ring + 1)
+                    if max(abs(dx), abs(dy)) == ring
+                ]
+                offsets.sort(key=lambda offset: (offset[0] ** 2 + offset[1] ** 2, offset[1], offset[0]))
+                for base_x, base_y in preferred_positions:
+                    for dx, dy in offsets:
+                        left = int(base_x + dx * step_x)
+                        top = int(base_y + dy * step_y)
+                        candidate = (left, top, left + label_width, top + label_height)
+                        if (
+                            left < 0
+                            or top < 0
+                            or candidate[2] > width
+                            or candidate[3] > height
+                        ):
+                            continue
+                        if any(intersects(candidate, occupied) for occupied in occupied_label_rectangles):
+                            continue
+                        if avoid_bounding_boxes and collision_avoidance and any(
+                            intersects(candidate, box)
+                            for box_index, box in enumerate(bounding_rectangles)
+                            if box_index != component_index
+                            or intersects(candidate, box)
+                        ):
+                            continue
+                        return candidate
+            return None
+
+        chosen_rectangle = try_layout(avoid_bounding_boxes=True)
+        if chosen_rectangle is None:
+            # In a tightly packed group, allow label padding to cross a box
+            # edge, but never allow two label backgrounds/glyph areas to overlap.
+            chosen_rectangle = try_layout(avoid_bounding_boxes=False)
+        if chosen_rectangle is None:
+            LOGGER.warning(
+                "黒点ラベル %d の重なりを完全には解消できませんでした。",
+                component["label"],
+            )
+            left = min(max(0, preferred_positions[0][0]), max(0, width - label_width))
+            top = min(max(0, preferred_positions[0][1]), max(0, height - label_height))
+            chosen_rectangle = (left, top, left + label_width, top + label_height)
+
+        occupied_label_rectangles.append(chosen_rectangle)
+        component["label_rectangle"] = chosen_rectangle
+        label_layout.append(
+            {
+                "label": component["label"],
+                "x": chosen_rectangle[0],
+                "y": chosen_rectangle[1],
+                "width": label_width,
+                "height": label_height,
+                "bbox_x1": component["bbox_inclusive"][0],
+                "bbox_y1": component["bbox_inclusive"][1],
+                "bbox_x2": component["bbox_inclusive"][2],
+                "bbox_y2": component["bbox_inclusive"][3],
+            }
+        )
+
+    output_metadata: dict[str, Any] = {
+        "label_mapping": {
+            "csv_file": "sunspot_statistics.csv",
+            "csv_column": "label",
+            "labels": [int(item["label"]) for item in components],
+        },
+        "label_layout": json.dumps(label_layout, ensure_ascii=False),
+        "coordinate_origin": "top-left",
+        "coordinate_indexing": "zero-based pixels",
+        "bounding_box_format": "x_min, y_min, x_max, y_max (inclusive)",
+        "background": "transparent",
+        "vector_format": "SVG",
+    }
+    if metadata:
+        output_metadata.update(metadata)
+
+    box_rgb = tuple(box_color)
+    label_rgb = tuple(label_color)
+    outline_rgb = tuple(label_outline_color)
+    leader_rgb = tuple(leader_line_color)
+    rgba_canvas = np.zeros((height, width, 4), dtype=np.uint8)
+
+    if save_png:
+        for component in components:
+            x1, y1, x2, y2 = component["bbox_inclusive"]
+            cv2.rectangle(
+                rgba_canvas,
+                (x1, y1),
+                (x2, y2),
+                (*box_rgb, 255),
+                line_width,
+                lineType=cv2.LINE_AA,
+            )
+        if show_leader_lines:
+            for component in components:
+                left, top, right, bottom = component["label_rectangle"]
+                center_x, center_y = component["center"]
+                target_x = min(max(center_x, left), right)
+                target_y = min(max(center_y, top), bottom)
+                cv2.line(
+                    rgba_canvas,
+                    (int(round(center_x)), int(round(center_y))),
+                    (int(round(target_x)), int(round(target_y))),
+                    (*leader_rgb, 255),
+                    1,
+                    lineType=cv2.LINE_AA,
+                )
+        for component in components:
+            left, top, _right, _bottom = component["label_rectangle"]
+            text_x = left + label_padding
+            text_baseline = top + label_padding + component["text_height"]
+            cv2.putText(
+                rgba_canvas,
+                component["text"],
+                (text_x, text_baseline),
+                font_face,
+                font_scale,
+                (*outline_rgb, 255),
+                label_thickness + label_outline_thickness,
+                lineType=cv2.LINE_AA,
+            )
+            cv2.putText(
+                rgba_canvas,
+                component["text"],
+                (text_x, text_baseline),
+                font_face,
+                font_scale,
+                (*label_rgb, 255),
+                label_thickness,
+                lineType=cv2.LINE_AA,
+            )
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    saved_files: list[str] = []
+    if save_png:
+        png_metadata = dict(output_metadata)
+        png_metadata["config"] = settings
+        svImage_withInfo(rgba_canvas, png_metadata, output_path)
+        saved_files.append(str(output_path))
+
+    if save_svg:
+        def rgb_hex(color: tuple[int, int, int]) -> str:
+            return "#{:02X}{:02X}{:02X}".format(*color)
+
+        svg_parts = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            (
+                f'<svg xmlns="http://www.w3.org/2000/svg" '
+                f'width="{width}" height="{height}" viewBox="0 0 {width} {height}">'
+            ),
+            f"<metadata>{xml_escape(json.dumps(output_metadata, ensure_ascii=False))}</metadata>",
+            '<g fill="none" stroke-linecap="square" stroke-linejoin="round">',
+        ]
+        for component in components:
+            x1, y1, x2, y2 = component["bbox_inclusive"]
+            svg_parts.append(
+                f'<rect x="{x1}" y="{y1}" width="{x2 - x1 + 1}" '
+                f'height="{y2 - y1 + 1}" stroke="{rgb_hex(box_rgb)}" '
+                f'stroke-width="{line_width}"/>'
+            )
+        if show_leader_lines:
+            for component in components:
+                left, top, right, bottom = component["label_rectangle"]
+                center_x, center_y = component["center"]
+                target_x = min(max(center_x, left), right)
+                target_y = min(max(center_y, top), bottom)
+                svg_parts.append(
+                    f'<line x1="{center_x:.2f}" y1="{center_y:.2f}" '
+                    f'x2="{target_x:.2f}" y2="{target_y:.2f}" '
+                    f'stroke="{rgb_hex(leader_rgb)}" stroke-width="1"/>'
+                )
+        svg_parts.append("</g>")
+        svg_font_size = max(6.0, font_scale * 30.0)
+        for component in components:
+            left, top, _right, _bottom = component["label_rectangle"]
+            text_x = left + label_padding
+            text_baseline = top + label_padding + component["text_height"]
+            svg_parts.append(
+                f'<text x="{text_x}" y="{text_baseline}" '
+                f'font-family="DejaVu Sans, Arial, sans-serif" '
+                f'font-size="{svg_font_size:.2f}" font-weight="bold" '
+                f'fill="{rgb_hex(label_rgb)}" stroke="{rgb_hex(outline_rgb)}" '
+                f'stroke-width="{max(1, label_outline_thickness)}" '
+                f'stroke-linejoin="round" paint-order="stroke fill">'
+                f'{xml_escape(component["text"])}</text>'
+            )
+        svg_parts.append("</svg>")
+        svg_path = output_path.with_suffix(".svg")
+        svg_path.write_text("\n".join(svg_parts) + "\n", encoding="utf-8")
+        saved_files.append(str(svg_path))
+
+    if not save_png and not save_svg:
+        LOGGER.info("BoundingBox の save_png/save_svg が両方 false のためファイルを保存しません。")
+    else:
+        LOGGER.info(
+            "黒点の外接矩形オーバーレイを保存しました: %s (黒点数: %d)",
+            ", ".join(saved_files),
+            len(components),
+        )
+    return len(components)
+
+
+
     background_image: np.ndarray,
     label_image: np.ndarray,
     output_path: str | Path,

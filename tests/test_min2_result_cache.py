@@ -115,7 +115,7 @@ class Min2SavedResultTests(unittest.TestCase):
             image_path.write_bytes(b"source")
             self._write_result(image_path)
             with patch(
-                "src.package.limb_darkening_resolution.min2",
+                "src.package.limb_darking_resolution.min2",
                 return_value=((21.0, 16.0), 12.0),
             ) as min2_mock:
                 geometry = ldr.find_solar_geometry(
@@ -168,7 +168,7 @@ class Min2SavedResultTests(unittest.TestCase):
             with (
                 self.assertLogs(ldr.LOGGER, level="WARNING") as captured,
                 patch(
-                    "src.package.limb_darkening_resolution.min2",
+                    "src.package.limb_darking_resolution.min2",
                     return_value=((22.0, 15.0), 13.0),
                 ) as min2_mock,
             ):

@@ -1,5 +1,6 @@
 """周縁減光を補正するプログラム"""
 
+import hashlib
 import json
 import logging
 from collections.abc import Mapping
@@ -43,7 +44,7 @@ _MIN2_DEFAULTS: dict[str, int | str | bool] = {
 }
 
 _MIN2_RESULT_FORMAT = "solar_disk_detection.min2_result"
-_MIN2_RESULT_FORMAT_VERSION = 1
+_MIN2_RESULT_FORMAT_VERSION = 2
 
 
 def _resolve_min2_settings(
@@ -87,6 +88,37 @@ def _load_saved_min2_result(
             raise ValueError("結果ファイルの元画像名が一致しません。")
         if source.get("shape") != [int(image.shape[0]), int(image.shape[1])]:
             raise ValueError("結果ファイルの画像サイズが現在の画像と一致しません。")
+        if source.get("size_bytes") != source_path.stat().st_size:
+            raise ValueError("結果ファイルの元画像サイズ（byte）が一致しません。")
+        saved_hash = source.get("sha256")
+        if not isinstance(saved_hash, str) or len(saved_hash) != 64:
+            raise ValueError("結果ファイルに有効な元画像SHA-256がありません。")
+        image_hash = hashlib.sha256()
+        with source_path.open("rb") as image_file:
+            for chunk in iter(lambda: image_file.read(1024 * 1024), b""):
+                image_hash.update(chunk)
+        if image_hash.hexdigest() != saved_hash.lower():
+            raise ValueError("元画像のSHA-256が一致しません。")
+
+        configuration = payload.get("configuration")
+        if (
+            not isinstance(configuration, dict)
+            or not isinstance(configuration.get("requested"), dict)
+            or not isinstance(configuration.get("effective"), dict)
+        ):
+            raise ValueError("再現に必要なMIN2設定情報がありません。")
+        trace = payload.get("detection_trace")
+        trace_fields = (
+            "sampled_edge_points",
+            "initial_retained_points",
+            "final_retained_points",
+            "excluded_points",
+            "iterations",
+        )
+        if not isinstance(trace, dict) or any(
+            not isinstance(trace.get(field), list) for field in trace_fields
+        ):
+            raise ValueError("再現に必要なMIN2点群・除外履歴がありません。")
 
         geometry = payload.get("solar_geometry")
         if not isinstance(geometry, dict):
@@ -111,7 +143,12 @@ def _load_saved_min2_result(
         )
         return None
 
-    LOGGER.info("保存済みMIN2結果を読み込みました: %s", result_path)
+    LOGGER.info(
+        "保存済みMIN2結果を読み込みました: %s (MIN2=%s, 除外点=%d)",
+        result_path,
+        payload.get("min2_version", "unknown"),
+        len(trace["excluded_points"]),
+    )
     return (center_x, center_y), radius
 
 

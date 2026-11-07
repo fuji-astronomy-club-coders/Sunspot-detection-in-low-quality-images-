@@ -252,3 +252,27 @@ session_.../
 対応付けには共通座標の重心間距離を使用します。既定の許容距離は太陽半径の0.025倍（`tolerance_normalized=0.025`、秒角ではありません）です。観測所の各ペアに対してHungarian法で一対一候補を選び、同じ観測所から複数候補が同一IDに入らないように統合します。これは自動初期対応であり、太陽自転・観測時刻差・差動回転の補正や、人手による確認を代替するものではありません。実観測画像に対して一致・不一致を検証してください。
 
 単一画像モードのCSV列・値・保存先は従来どおりです。
+
+
+## 8. 一括解析の集計CSV — batch_summary.csv
+
+一括解析モードでは、セッションフォルダー直下に batch_summary.csv を出力します。入力画像1枚につき1行を記録し、文字コードはUTF-8 BOM付きです。
+
+| 列名 | 内容 |
+|---|---|
+| file_name | 入力画像のファイル名 |
+| file_path | 入力画像の絶対パス |
+| file_type | TIFF または FITS |
+| status | success または failed |
+| image_width_px / image_height_px | 画像の幅・高さ（ピクセル）。メタデータ取得に失敗した場合は空欄 |
+| image_dtype | 読み込んだ画像配列のデータ型 |
+| sunspot_count | マスク適用後に残った黒点数。解析失敗時は空欄 |
+| excluded_sunspot_count | sunspot_exclusion_list.csv に出力された除外候補数 |
+| statistics_csv | 画像ごとの sunspot_statistics.csv の絶対パス |
+| exclusion_list_csv | 画像ごとの sunspot_exclusion_list.csv の絶対パス |
+| output_directory | 画像ごとの解析結果フォルダー |
+| error | 失敗時の例外型とメッセージ。成功時は空欄 |
+
+画像ごとの詳細CSVは images/0001_画像名/ のようなサブフォルダーに保存されます。各画像の詳細な黒点座標・外接矩形・面積・除外要因は、このフォルダー内の sunspot_statistics.csv と sunspot_exclusion_list.csv を参照してください。
+
+一部の画像が失敗した場合も後続の画像を処理し、処理済み行を集計CSVへ随時書き込みます。したがって、一括解析の途中で停止した場合でも、完了済み画像の集計結果が残ります。

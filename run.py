@@ -3,8 +3,14 @@
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from src.main import main as run_processing
+from src.package.batch_analysis import (
+    BatchInputError,
+    discover_batch_images,
+    run_batch_analysis,
+)
 from src.package.comparison import (
     ComparisonInputError,
     prepare_comparison,
@@ -21,6 +27,17 @@ def main() -> int:
     """Run either the unchanged single-image workflow or comparison mode."""
     parser = argparse.ArgumentParser(description="太陽黒点検出")
     parser.add_argument(
+        "--batch",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="INPUT_FOLDER",
+        help=(
+            "フォルダー直下のTIFF/FITS画像をすべて一括解析する。"
+            "省略時はフォルダー選択ダイアログを表示する。"
+        ),
+    )
+    parser.add_argument(
         "--compare",
         nargs="?",
         const="",
@@ -32,6 +49,55 @@ def main() -> int:
         ),
     )
     arguments = parser.parse_args()
+
+    if arguments.batch is not None and arguments.compare is not None:
+        parser.error("--batch と --compare は同時に指定できません。")
+
+    if arguments.batch is not None:
+        input_folder = arguments.batch
+        if not input_folder:
+            default_folder = PROJECT_ROOT / "source_input"
+            selected_folder = select_directory(
+                title="一括解析するTIFF/FITS画像フォルダーを選択してください",
+                directory=str(default_folder if default_folder.is_dir() else PROJECT_ROOT),
+            )
+            if selected_folder is None:
+                print("一括解析フォルダーの選択がキャンセルされました。", file=sys.stderr)
+                return 2
+            input_folder = selected_folder
+
+        selected_path = Path(input_folder).expanduser()
+        if not selected_path.is_absolute():
+            selected_path = PROJECT_ROOT / selected_path
+        selected_path = selected_path.resolve()
+        try:
+            image_files = discover_batch_images(selected_path)
+        except BatchInputError as error:
+            print(f"一括解析入力エラー: {error}", file=sys.stderr)
+            return 2
+
+        run_logger = RunLogger(config)
+        LOGGER.info("Selected batch input folder: %s", selected_path)
+        try:
+            summary = run_batch_analysis(image_files, config, run_logger)
+        except BaseException as error:
+            run_logger.fail(error)
+            raise
+
+        run_logger.finish(summary, status=summary["overall_status"])
+        print(f"一括解析結果: {summary['overall_status']}")
+        for row in summary["images"]:
+            if row["status"] == "success":
+                detail = (
+                    f"検出={row['sunspot_count']}, "
+                    f"除外={row['excluded_sunspot_count']}"
+                )
+            else:
+                detail = row["error"]
+            print(f"  - [{row['status']}] {row['file_name']}: {detail}")
+        print(f"集計CSV: {summary['summary_csv']}")
+        print(f"画像別出力: {summary['images_directory']}")
+        return 1 if summary["overall_status"] != "success" else 0
 
     if arguments.compare is not None:
         date_folder = arguments.compare
@@ -167,5 +233,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     exit_code = main()
-    if "--compare" in sys.argv:
+    if "--compare" in sys.argv or "--batch" in sys.argv:
         raise SystemExit(exit_code)

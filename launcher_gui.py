@@ -25,15 +25,24 @@ def build_batch_arguments(
     use_venv: bool = False,
     compare: bool = False,
     date_folder: str = "",
+    batch: bool = False,
+    batch_folder: str = "",
 ) -> list[str]:
-    """Build the existing run.bat arguments selected in the GUI."""
+    """Build the run.bat arguments selected in the launcher GUI."""
     if action == "app":
+        if compare and batch:
+            raise ValueError("比較モードと一括解析モードは同時に選択できません。")
         arguments: list[str] = []
         if use_venv:
             arguments.append("--venv")
         if compare:
             arguments.append("--compare")
             folder = date_folder.strip()
+            if folder:
+                arguments.append(folder)
+        elif batch:
+            arguments.append("--batch")
+            folder = batch_folder.strip()
             if folder:
                 arguments.append(folder)
         return arguments
@@ -44,7 +53,6 @@ def build_batch_arguments(
     if action == "help":
         return ["--help"]
     raise ValueError(f"Unknown launcher action: {action}")
-
 
 def validate_compare_folder(folder: str) -> str | None:
     """Return a user-facing problem with a comparison date folder, or None if it looks usable.
@@ -116,6 +124,8 @@ def main() -> int:
     use_venv_var = tk.BooleanVar(value=False)
     compare_var = tk.BooleanVar(value=False)
     folder_var = tk.StringVar(value="")
+    batch_var = tk.BooleanVar(value=False)
+    batch_folder_var = tk.StringVar(value="")
 
     outer = ttk.Frame(root, padding=16)
     outer.grid(row=0, column=0, sticky="nsew")
@@ -166,31 +176,53 @@ def main() -> int:
         application_frame,
         text="比較モードを使用する (--compare)",
         variable=compare_var,
-        command=lambda: update_controls(),
+        command=lambda: toggle_compare(),
     )
     compare_check.grid(row=0, column=0, columnspan=2, sticky="w")
-    ttk.Label(
+    batch_check = ttk.Checkbutton(
         application_frame,
-        text="日付フォルダー (任意)",
-    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
-    folder_entry = ttk.Entry(
-        application_frame,
-        textvariable=folder_var,
-        width=64,
+        text="フォルダー内のTIFF/FITS画像を一括解析する (--batch)",
+        variable=batch_var,
+        command=lambda: toggle_batch(),
     )
-    folder_entry.grid(row=2, column=0, sticky="ew", pady=(3, 0))
+    batch_check.grid(row=1, column=0, columnspan=2, sticky="w", pady=(3, 0))
+
+    ttk.Label(application_frame, text="比較モード: 日付フォルダー").grid(
+        row=2, column=0, sticky="w", pady=(8, 0)
+    )
+    folder_entry = ttk.Entry(application_frame, textvariable=folder_var, width=64)
+    folder_entry.grid(row=3, column=0, sticky="ew", pady=(3, 0))
     browse_button = ttk.Button(
         application_frame,
         text="参照...",
         command=lambda: choose_folder(),
     )
-    browse_button.grid(row=2, column=1, sticky="e", padx=(8, 0), pady=(3, 0))
-    application_frame.columnconfigure(0, weight=1)
+    browse_button.grid(row=3, column=1, sticky="e", padx=(8, 0), pady=(3, 0))
     ttk.Label(
         application_frame,
-        text="フォルダーを指定しない場合は、run.py のフォルダー選択ダイアログを表示します。",
+        text="空欄の場合は実行時に日付フォルダーを選択します。",
         wraplength=620,
-    ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(5, 0))
+    ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
+    ttk.Label(application_frame, text="一括解析: 入力画像フォルダー").grid(
+        row=5, column=0, sticky="w", pady=(8, 0)
+    )
+    batch_folder_entry = ttk.Entry(
+        application_frame, textvariable=batch_folder_var, width=64
+    )
+    batch_folder_entry.grid(row=6, column=0, sticky="ew", pady=(3, 0))
+    batch_browse_button = ttk.Button(
+        application_frame,
+        text="参照...",
+        command=lambda: choose_batch_folder(),
+    )
+    batch_browse_button.grid(row=6, column=1, sticky="e", padx=(8, 0), pady=(3, 0))
+    ttk.Label(
+        application_frame,
+        text="空欄の場合は実行時にフォルダーを選択します。フォルダー直下を対象とし、サブフォルダーは検索しません。",
+        wraplength=620,
+    ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(4, 0))
+    application_frame.columnconfigure(0, weight=1)
 
     button_frame = ttk.Frame(outer)
     button_frame.grid(row=3, column=0, sticky="e")
@@ -209,28 +241,50 @@ def main() -> int:
         if selected:
             folder_var.set(selected)
 
+    def choose_batch_folder() -> None:
+        """Choose the folder containing TIFF/FITS images."""
+        initial_directory = (
+            SOURCE_INPUT_DIR if SOURCE_INPUT_DIR.is_dir() else PROJECT_ROOT
+        )
+        selected = filedialog.askdirectory(
+            title="一括解析するTIFF/FITS画像フォルダーを選択してください",
+            initialdir=str(initial_directory),
+            mustexist=True,
+        )
+        if selected:
+            batch_folder_var.set(selected)
+
+    def toggle_compare() -> None:
+        """Keep comparison and batch analysis mutually exclusive."""
+        if compare_var.get():
+            batch_var.set(False)
+        update_controls()
+
+    def toggle_batch() -> None:
+        """Keep batch analysis and comparison mutually exclusive."""
+        if batch_var.get():
+            compare_var.set(False)
+        update_controls()
+
     def update_controls() -> None:
         """Enable only controls relevant to the selected operation."""
         app_selected = action_var.get() == "app"
         compare_selected = app_selected and compare_var.get()
-        venv_check.configure(
-            state="normal" if app_selected else "disabled"
-        )
-        compare_check.configure(
-            state="normal" if app_selected else "disabled"
-        )
-        folder_entry.configure(
-            state="normal" if compare_selected else "disabled"
-        )
-        browse_button.configure(
-            state="normal" if compare_selected else "disabled"
-        )
+        batch_selected = app_selected and batch_var.get()
+        venv_check.configure(state="normal" if app_selected else "disabled")
+        compare_check.configure(state="normal" if app_selected else "disabled")
+        batch_check.configure(state="normal" if app_selected else "disabled")
+        folder_entry.configure(state="normal" if compare_selected else "disabled")
+        browse_button.configure(state="normal" if compare_selected else "disabled")
+        batch_folder_entry.configure(state="normal" if batch_selected else "disabled")
+        batch_browse_button.configure(state="normal" if batch_selected else "disabled")
 
     def execute_selection() -> None:
         """Run the selected operation through the existing batch file."""
         nonlocal exit_code
         action = action_var.get()
         date_folder = folder_var.get().strip()
+        input_folder = batch_folder_var.get().strip()
         if action == "app" and compare_var.get() and date_folder:
             problem = validate_compare_folder(date_folder)
             if problem is not None:
@@ -240,12 +294,26 @@ def main() -> int:
                     parent=root,
                 )
                 return
+        if (
+            action == "app"
+            and batch_var.get()
+            and input_folder
+            and not Path(input_folder).expanduser().is_dir()
+        ):
+            messagebox.showerror(
+                "入力フォルダーを確認してください",
+                "指定した入力画像フォルダーが存在しません。",
+                parent=root,
+            )
+            return
 
         arguments = build_batch_arguments(
             action,
             use_venv=use_venv_var.get(),
             compare=compare_var.get(),
             date_folder=date_folder,
+            batch=batch_var.get(),
+            batch_folder=input_folder,
         )
         root.withdraw()
         try:

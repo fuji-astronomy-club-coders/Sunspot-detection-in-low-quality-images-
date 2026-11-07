@@ -50,6 +50,35 @@ class LauncherArgumentTests(unittest.TestCase):
             ["--venv", "--compare", "source_input/2026-11-02"],
         )
 
+
+    def test_batch_mode_passes_selected_folder(self) -> None:
+        self.assertEqual(
+            build_batch_arguments(
+                "app",
+                batch=True,
+                batch_folder=r"E:\\Solar Data",
+            ),
+            ["--batch", r"E:\\Solar Data"],
+        )
+
+    def test_batch_mode_without_folder_uses_run_py_dialog(self) -> None:
+        self.assertEqual(build_batch_arguments("app", batch=True), ["--batch"])
+
+    def test_batch_mode_can_force_venv(self) -> None:
+        self.assertEqual(
+            build_batch_arguments(
+                "app",
+                use_venv=True,
+                batch=True,
+                batch_folder=r"E:\\Solar Data",
+            ),
+            ["--venv", "--batch", r"E:\\Solar Data"],
+        )
+
+    def test_comparison_and_batch_modes_are_mutually_exclusive(self) -> None:
+        with self.assertRaises(ValueError):
+            build_batch_arguments("app", compare=True, batch=True)
+
     def test_setup_venv_option(self) -> None:
         self.assertEqual(
             build_batch_arguments("setup_venv"),
@@ -142,6 +171,14 @@ class LauncherBatchInvocationTests(unittest.TestCase):
 
 class BatchArgumentParserRegressionTests(unittest.TestCase):
     """Ensure the GUI-only marker is not forwarded as an application argument."""
+
+    def test_batch_options_are_supported_in_both_environment_paths(self) -> None:
+        repository_root = Path(__file__).resolve().parents[1]
+        batch_source = (repository_root / "run.bat").read_text(encoding="utf-8")
+        self.assertIn('if /i "%~1"=="--batch" (', batch_source)
+        self.assertIn('if /i "%~2"=="--batch" (', batch_source)
+        self.assertIn('set "APP_ARGS=--batch %2"', batch_source)
+        self.assertIn('set "APP_ARGS=--batch %3"', batch_source)
 
     def test_non_venv_compare_does_not_use_shift_unsafe_percent_star(self) -> None:
         repository_root = Path(__file__).resolve().parents[1]

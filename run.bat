@@ -33,6 +33,12 @@ if /i "%~1"=="--setup" (
     goto :setup_venv
 )
 if /i "%~1"=="--venv" (
+    if /i "%~2"=="--batch" (
+        if not "%~4"=="" goto :invalid_option
+        set "APP_ARGS=--batch"
+        if not "%~3"=="" set "APP_ARGS=--batch %3"
+        goto :run_venv
+    )
     if /i "%~2"=="--compare" (
         if not "%~4"=="" goto :invalid_option
         set "APP_ARGS=--compare"
@@ -41,6 +47,13 @@ if /i "%~1"=="--venv" (
     )
     if not "%~2"=="" goto :invalid_option
     goto :run_venv
+)
+if /i "%~1"=="--batch" (
+    if not "%~3"=="" goto :invalid_option
+    set "APP_ARGS=--batch"
+    if not "%~2"=="" set "APP_ARGS=--batch %2"
+    if exist "%VENV_DIR%\." goto :run_venv
+    goto :run_system
 )
 if /i "%~1"=="--compare" (
     if not "%~3"=="" goto :invalid_option
@@ -259,7 +272,7 @@ goto :error
 
 :invalid_option
 echo [ERROR] Invalid option or argument: %~1 %~2 %~3
-echo Usage: run.bat [--compare [DATE_FOLDER]^|--venv [--compare [DATE_FOLDER]]^|--setup [--global]^|--help]
+echo Usage: run.bat [--batch [INPUT_FOLDER]^|--compare [DATE_FOLDER]^|--venv [--batch [INPUT_FOLDER]]^|--venv [--compare [DATE_FOLDER]]^|--setup [--global]^|--help]
 goto :error
 
 
@@ -267,6 +280,9 @@ goto :error
 echo Usage:
 echo   run.bat                  Open the startup GUI to select an operation and options.
 echo   run.bat --venv           Force the existing .venv environment.
+echo   run.bat --batch          Start batch analysis using a folder-selection dialog.
+echo   run.bat --batch PATH     Analyze all TIFF/FITS images directly inside PATH.
+echo   run.bat --venv --batch [PATH]  Run batch analysis with the existing .venv.
 echo   run.bat --compare        Start comparison mode using a folder-selection dialog.
 echo   run.bat --compare PATH   Start comparison mode for the specified date folder.
 echo   run.bat --venv --compare [PATH]  Run comparison mode with the existing .venv.

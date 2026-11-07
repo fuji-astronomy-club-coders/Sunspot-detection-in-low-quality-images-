@@ -67,6 +67,7 @@ def _resolve_min2_settings(
 def _load_saved_min2_result(
     image: np.ndarray,
     image_path: str | Path,
+    min2_settings: Mapping[str, Any],
 ) -> tuple[tuple[float, float], float] | None:
     """Load a matching MIN2 JSON sidecar, returning None when it is absent or invalid."""
     source_path = Path(image_path)
@@ -107,6 +108,15 @@ def _load_saved_min2_result(
             or not isinstance(configuration.get("effective"), dict)
         ):
             raise ValueError("再現に必要なMIN2設定情報がありません。")
+        effective_settings = configuration["effective"]
+        expected_settings = _resolve_min2_kwargs(min2_settings)
+        for key in ("n", "light_threshold", "iter_cycles"):
+            if effective_settings.get(key) != expected_settings[key]:
+                raise ValueError(f"保存時と現在のMIN2.{key}設定が一致しません。")
+        if effective_settings.get("limb_wigth") != expected_settings["limb_wigth"]:
+            raise ValueError("保存時と現在のMIN2.limb_width設定が一致しません。")
+        if effective_settings.get("image_dtype") != str(image.dtype):
+            raise ValueError("保存時と現在の画像データ型が一致しません。")
         trace = payload.get("detection_trace")
         trace_fields = (
             "sampled_edge_points",
@@ -234,7 +244,7 @@ def find_solar_geometry(
                 "保存済み結果を検索せずMIN2で計算します。"
             )
         else:
-            saved_geometry = _load_saved_min2_result(image, image_path)
+            saved_geometry = _load_saved_min2_result(image, image_path, algorithm_settings)
             if saved_geometry is not None:
                 return saved_geometry
 

@@ -18,11 +18,12 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import gridspec
+from matplotlib.colors import is_color_like
 from matplotlib.patches import Circle
 
 from src.package.qt_dialogs import select_directory, select_file
 
-version = "MIN2 v2.5.0"  # ピクセル幅の太陽直径比指定に対応
+version = "MIN2 v2.5.1"  # MIN2プロット点のサイズ・色設定に対応
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
@@ -99,6 +100,8 @@ class MIN2Config:
     show: bool = False  # 結果を描画するか
     debug: bool = False  # ログ/途中経過を出すか
     show_simple: bool = False  # 描画をシンプル表示にするか
+    plot_point_size: float = 50.0  # MIN2プロット点のサイズ（Matplotlibのpt²）
+    plot_point_color: str = "red"  # MIN2プロット点の色（Matplotlibの色名またはHEX）
     dir_mode_limb_wigth: int | str = "3/25"  # --dir時の縁幅（D=500pxで60px）
 
     def __post_init__(self) -> None:
@@ -110,6 +113,14 @@ class MIN2Config:
                 continue
             if f.type in (bool, "bool"):
                 ok = isinstance(value, bool)
+            elif f.type is float:
+                ok = (
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and np.isfinite(value)
+                )
+            elif f.type is str:
+                ok = isinstance(value, str)
             else:  # int。bool は int のサブクラスなので除外する
                 ok = isinstance(value, int) and not isinstance(value, bool)
             if not ok:
@@ -124,6 +135,12 @@ class MIN2Config:
             raise ValueError("設定 'n'(分割数)は 2 以上にしてください。")
         if self.iter_cycles < 0:
             raise ValueError("設定 'iter_cycles' は 0 以上にしてください。")
+        if self.plot_point_size <= 0:
+            raise ValueError("設定 'plot_point_size' は正の有限値にしてください。")
+        if not is_color_like(self.plot_point_color):
+            raise ValueError(
+                "設定 'plot_point_color' はMatplotlibで使用できる色名またはHEX色にしてください。"
+            )
 
 
 _CONFIG_KEYS = {f.name for f in fields(MIN2Config)}
@@ -453,6 +470,8 @@ def show_circle(
     is_last: bool = False,
     simple: bool = False,
     n: int | None = None,
+    point_size: float | None = None,
+    point_color: str = "red",
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、近似円を描画し、各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示する。
 
@@ -466,6 +485,8 @@ def show_circle(
         is_last: Trueなら反復回数の代わりに "Last" と表示。
         simple: Trueならシンプルな表示(ポスター図用)のみを行う。
         n: 分割数。Noneならglobal変数divnumを使う。
+        point_size: エッジ点のマーカーサイズ。Noneなら表示形式ごとの従来値を使う。
+        point_color: エッジ点の色。Matplotlibの色名またはHEX色を指定する。
     """
     if simple:
         show_circle_simple(
@@ -476,6 +497,8 @@ def show_circle(
             iteration_count=iteration_count,
             is_last=is_last,
             n=n,
+            markersize=400 if point_size is None else point_size,
+            point_color=point_color,
         )
         return
 
@@ -526,7 +549,13 @@ def show_circle(
 
     x = np.array([s[0] for s in spots], dtype=float)
     y = np.array([s[1] for s in spots], dtype=float)
-    ax_main.scatter(x, y, color="red", label="Edges", s=50)
+    ax_main.scatter(
+        x,
+        y,
+        color=point_color,
+        label="Edges",
+        s=50 if point_size is None else point_size,
+    )
 
     # 座標ラベルと対応関係のための番号を表示
     for idx, (xi, yi) in enumerate(zip(x, y, strict=False)):
@@ -613,8 +642,9 @@ def show_circle_simple(
     img_path: pathlib.Path | str | None = None,
     iteration_count: int | str = 1,
     is_last: bool = False,
-    markersize: int = 400,
+    markersize: float = 400,
     n: int | None = None,
+    point_color: str = "red",
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、近似円をシンプルに描画して表示する。
 
@@ -627,6 +657,7 @@ def show_circle_simple(
         is_last: Trueなら "Last" と表示。
         markersize: 縁の点のマーカーサイズ。
         n: 分割数。Noneならglobal変数divnumを使う。
+        point_color: 縁の点の色。Matplotlibの色名またはHEX色を指定する。
     """
     image = _resolve_image(img_inst, img_path)
     n = _resolve_divnum(n)
@@ -643,7 +674,7 @@ def show_circle_simple(
         ax.scatter(
             x,
             y,
-            color="red",
+            color=point_color,
             label="Edges",
             s=markersize,
             linewidths=2,
@@ -678,6 +709,8 @@ def MIN2_ignore_sunspots(
     img_path: pathlib.Path | str | None = "",
     show_simple: bool | None = None,
     config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
+    plot_point_size: float | None = None,
+    plot_point_color: str | None = None,
 ) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
@@ -696,6 +729,8 @@ def MIN2_ignore_sunspots(
         img_path: 処理する画像のファイルパス("PATH"指定時は必須。配列を渡した場合は表示用の名前として使うだけ)。
         show_simple (bool | None): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。
         config: 設定。YAMLのパス / dict / MIN2Config / None。None なら既定値(自動探索はしない)。
+        plot_point_size: MIN2プロット点のサイズ。Noneならconfigの値を使用する。
+        plot_point_color: MIN2プロット点の色。Noneならconfigの値を使用する。
 
     上記の n〜show_simple は None のとき config の値、config にも無ければ既定値を使います。
     明示的に渡した引数が常に最優先です。
@@ -728,6 +763,17 @@ def MIN2_ignore_sunspots(
     show = cfg.show if show is None else show
     debug = cfg.debug if debug is None else debug
     show_simple = cfg.show_simple if show_simple is None else show_simple
+    plot_point_size = cfg.plot_point_size if plot_point_size is None else plot_point_size
+    plot_point_color = cfg.plot_point_color if plot_point_color is None else plot_point_color
+    if (
+        isinstance(plot_point_size, bool)
+        or not isinstance(plot_point_size, (int, float))
+        or not np.isfinite(plot_point_size)
+        or plot_point_size <= 0
+    ):
+        raise ValueError("plot_point_size は正の有限値にしてください。")
+    if not isinstance(plot_point_color, str) or not is_color_like(plot_point_color):
+        raise ValueError("plot_point_color はMatplotlibで使用できる色名またはHEX色にしてください。")
 
     if n < 2:
         raise ValueError("分割数 n は 2 以上にしてください。")
@@ -768,6 +814,8 @@ def MIN2_ignore_sunspots(
                 fig_info={"circle": "first trial"},
                 simple=show_simple,
                 n=n,
+                point_size=plot_point_size,
+                point_color=plot_point_color,
             )
 
     all_sunspots = []
@@ -818,6 +866,8 @@ def MIN2_ignore_sunspots(
                     fig_info={"circle": "only outside points "},
                     simple=show_simple,
                     n=n,
+                    point_size=plot_point_size,
+                    point_color=plot_point_color,
                 )
             print(
                 f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}"
@@ -875,6 +925,8 @@ def MIN2_ignore_sunspots(
             is_last=True,
             simple=show_simple,
             n=n,
+            point_size=plot_point_size,
+            point_color=plot_point_color,
         )
     return (cx, cy), r
 

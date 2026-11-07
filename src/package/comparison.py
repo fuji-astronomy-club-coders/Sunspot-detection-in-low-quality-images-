@@ -1050,6 +1050,7 @@ def run_comparison(
             preview_geometry_tuple = ldr.find_solar_geometry(
                 preview_image,
                 min2_config=base_config.get("MIN2"),
+                image_path=candidate.image_path,
             )
             preview_geometry = SolarGeometry(
                 preview_geometry_tuple[0],
@@ -1112,6 +1113,7 @@ def run_comparison(
                 geometry_tuple = ldr.find_solar_geometry(
                     image,
                     min2_config=base_config.get("MIN2"),
+                    image_path=sample.image_path,
                 )
                 geometry = SolarGeometry(geometry_tuple[0], geometry_tuple[1])
                 transform = SolarTransform(geometry, sample.orientation)

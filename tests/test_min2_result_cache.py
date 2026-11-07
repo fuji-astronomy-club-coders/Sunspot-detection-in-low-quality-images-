@@ -43,7 +43,7 @@ class Min2SavedResultTests(unittest.TestCase):
             },
             "configuration": {
                 "requested": {"save_result": True},
-                "effective": {"n": 10, "limb_wigth": "1/30"},
+                "effective": {"n": 10, "light_threshold": 50, "iter_cycles": 2, "limb_wigth": "1/30", "image_dtype": "uint16"},
             },
             "detection_trace": {
                 "sampled_edge_points": [[1.0, 2.0, 3.0, 0.0]],
@@ -110,6 +110,23 @@ class Min2SavedResultTests(unittest.TestCase):
                     image_path=image_path,
                 )
             self.assertEqual(geometry, ((21.0, 16.0), 12.0))
+            min2_mock.assert_called_once()
+
+    def test_changed_min2_algorithm_settings_fall_back_to_min2(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "sun.tiff"
+            image_path.write_bytes(b"source")
+            self._write_result(image_path)
+            with patch(
+                "src.package.limb_darking_resolution.min2",
+                return_value=((22.0, 15.0), 13.0),
+            ) as min2_mock:
+                geometry = ldr.find_solar_geometry(
+                    self.image,
+                    min2_config={"load_saved_result": True, "n": 12},
+                    image_path=image_path,
+                )
+            self.assertEqual(geometry, ((22.0, 15.0), 13.0))
             min2_mock.assert_called_once()
 
     def test_modified_source_image_hash_falls_back_to_min2(self) -> None:

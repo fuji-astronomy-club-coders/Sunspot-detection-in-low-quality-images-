@@ -9,6 +9,7 @@ from typing import Any, TypedDict
 
 import cv2
 import numpy as np
+from matplotlib.colors import is_color_like
 from numpy import dtype, floating, ndarray
 
 # 先輩が作った関数をインポート
@@ -31,9 +32,11 @@ class _Min2Kwargs(TypedDict):
     show: bool
     debug: bool
     show_simple: bool
+    plot_point_size: float
+    plot_point_color: str
 
 
-_MIN2_DEFAULTS: dict[str, int | str | bool] = {
+_MIN2_DEFAULTS: dict[str, int | float | str | bool] = {
     "n": 10,
     "light_threshold": 50,
     "limb_width": "1/30",
@@ -41,6 +44,8 @@ _MIN2_DEFAULTS: dict[str, int | str | bool] = {
     "show": False,
     "debug": False,
     "show_simple": False,
+    "plot_point_size": 50.0,
+    "plot_point_color": "red",
 }
 
 _MIN2_RESULT_FORMAT = "solar_disk_detection.min2_result"
@@ -229,6 +234,21 @@ def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
             raise ValueError(f"MIN2.{key} は true または false にしてください。")
         boolean_values[key] = value
 
+    point_size = settings.get("plot_point_size", _MIN2_DEFAULTS["plot_point_size"])
+    if (
+        isinstance(point_size, bool)
+        or not isinstance(point_size, (int, float))
+        or not np.isfinite(point_size)
+        or point_size <= 0
+    ):
+        raise ValueError("MIN2.plot_point_size は正の有限値にしてください。")
+
+    point_color = settings.get("plot_point_color", _MIN2_DEFAULTS["plot_point_color"])
+    if not isinstance(point_color, str) or not is_color_like(point_color):
+        raise ValueError(
+            "MIN2.plot_point_color はMatplotlibで使用できる色名またはHEX色にしてください。"
+        )
+
     return {
         "n": integer_values["n"],
         "light_threshold": integer_values["light_threshold"],
@@ -237,6 +257,8 @@ def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
         "show": boolean_values["show"],
         "debug": boolean_values["debug"],
         "show_simple": boolean_values["show_simple"],
+        "plot_point_size": float(point_size),
+        "plot_point_color": point_color,
     }
 
 

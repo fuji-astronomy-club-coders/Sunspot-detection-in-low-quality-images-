@@ -43,8 +43,7 @@ class Min2ConfigurationTests(unittest.TestCase):
             show=True,
             debug=True,
             show_simple=True,
-            plot_point_size=75.0,
-            plot_point_color="#00aaff",
+            config={"plot_point_size": 75.0, "plot_point_color": "#00aaff"},
         )
 
     @patch("src.package.limb_darking_resolution.min2")
@@ -63,8 +62,7 @@ class Min2ConfigurationTests(unittest.TestCase):
             show=False,
             debug=False,
             show_simple=False,
-            plot_point_size=50.0,
-            plot_point_color="red",
+            config={"plot_point_size": None, "plot_point_color": "red"},
         )
 
     def test_invalid_integer_settings_are_rejected(self) -> None:

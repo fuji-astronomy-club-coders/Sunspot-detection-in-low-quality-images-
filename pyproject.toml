@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sunspot-detection-in-low-quality-images"
-version = "1.2.8"
+version = "1.2.9"
 description = "Sunspot detection and multi-observatory comparison for low-quality solar images."
 requires-python = ">=3.13"
 dependencies = [

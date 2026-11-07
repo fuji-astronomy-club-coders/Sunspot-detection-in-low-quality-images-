@@ -113,6 +113,50 @@ python run.py
 
 毎回ファイル選択ダイアログを表示する必要がない場合は、**Paths.input_image** に画像ファイルのパスを直接記述します。相対パスはプロジェクトのルートフォルダーを基準に解決されます。
 
+## 2.4 フォルダー内のTIFF/FITS画像を一括解析する
+
+一括解析モードでは、選択したフォルダーの直下にあるTIFF/FITS画像をファイル名順に1枚ずつ解析します。サブフォルダーは検索しません。対応拡張子は .tif / .tiff / .fits / .fit / .fts です。各画像には通常の単一画像モードと同じ設定・検出処理・マスク設定が適用されます。MaskDialog.enabled が有効な場合は、画像ごとにマスク選択画面が表示されます。
+
+#### 起動方法
+
+run.bat をダブルクリックして起動GUIを表示し、「フォルダー内のTIFF/FITS画像を一括解析する (--batch)」を選択して入力フォルダーを指定します。フォルダーを空欄にした場合は、実行後にフォルダー選択ダイアログが表示されます。比較モードとは同時に選択できません。
+
+コマンドラインからは次のように起動できます。
+
+~~~bat
+run.bat --batch
+run.bat --batch "E:\\Solar Data\\2026-11-07"
+run.bat --venv --batch "E:\\Solar Data\\2026-11-07"
+~~~
+
+Pythonから直接起動する場合:
+
+~~~text
+python run.py --batch
+python run.py --batch "E:/Solar Data/2026-11-07"
+~~~
+
+#### 出力先
+
+通常の実行と同じ Paths.output_folder/session_.../ に1つのセッションを作成します。セッション内は次の構成です。
+
+~~~text
+session_.../
+├─ batch_summary.csv
+├─ images/
+│  ├─ 0001_imageA/
+│  │  ├─ sunspot_statistics.csv
+│  │  ├─ sunspot_exclusion_list.csv
+│  │  └─ 解析画像・確認画像...
+│  └─ 0002_imageB/
+│     ├─ sunspot_statistics.csv
+│     ├─ sunspot_exclusion_list.csv
+│     └─ 解析画像・確認画像...
+└─ run_....log / run_....json
+~~~
+
+batch_summary.csv はUTF-8 BOM付きCSVです。各画像について、ファイル名・絶対パス・形式・画像幅／高さ・データ型・最終検出黒点数・除外黒点数・詳細CSVの保存先・処理状態を1行にまとめます。失敗した画像は status=failed と error に原因を記録します。1枚の処理が失敗しても、残りの画像の解析は継続します。全画像の処理終了後、成功・失敗件数をセッションログに保存します。一部でも失敗した場合は、コマンドの終了コードは1になります（集計CSV自体は確認できます）。
+
 ## 3. 3つのダイアログの操作方法
 
 ### 3.1 入力画像選択ダイアログ

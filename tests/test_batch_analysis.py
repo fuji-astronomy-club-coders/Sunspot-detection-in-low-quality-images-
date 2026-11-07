@@ -67,7 +67,7 @@ class BatchRunTests(unittest.TestCase):
             def fake_process_image(
                 *,
                 config: dict[str, Any],
-                run_logger: Any,
+                run_logger: MagicMock,
                 output_dir: Path,
             ) -> int:
                 image_path = Path(config["Paths"]["input_image"])

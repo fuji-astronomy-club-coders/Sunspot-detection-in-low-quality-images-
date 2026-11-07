@@ -23,7 +23,7 @@ min2_version = min2_module.version
 
 
 class _Min2Kwargs(TypedDict):
-    """Keyword arguments accepted by the MIN2 implementation."""
+    """Validated MIN2 settings passed to the implementation and its config object."""
 
     n: int
     light_threshold: int
@@ -32,11 +32,11 @@ class _Min2Kwargs(TypedDict):
     show: bool
     debug: bool
     show_simple: bool
-    plot_point_size: float
+    plot_point_size: float | None
     plot_point_color: str
 
 
-_MIN2_DEFAULTS: dict[str, int | float | str | bool] = {
+_MIN2_DEFAULTS: dict[str, int | float | str | bool | None] = {
     "n": 10,
     "light_threshold": 50,
     "limb_width": "1/30",
@@ -44,7 +44,7 @@ _MIN2_DEFAULTS: dict[str, int | float | str | bool] = {
     "show": False,
     "debug": False,
     "show_simple": False,
-    "plot_point_size": 50.0,
+    "plot_point_size": None,
     "plot_point_color": "red",
 }
 
@@ -235,13 +235,13 @@ def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
         boolean_values[key] = value
 
     point_size = settings.get("plot_point_size", _MIN2_DEFAULTS["plot_point_size"])
-    if (
+    if point_size is not None and (
         isinstance(point_size, bool)
         or not isinstance(point_size, (int, float))
         or not np.isfinite(point_size)
         or point_size <= 0
     ):
-        raise ValueError("MIN2.plot_point_size は正の有限値にしてください。")
+        raise ValueError("MIN2.plot_point_size はnullまたは正の有限値にしてください。")
 
     point_color = settings.get("plot_point_color", _MIN2_DEFAULTS["plot_point_color"])
     if not isinstance(point_color, str) or not is_color_like(point_color):
@@ -257,7 +257,7 @@ def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
         "show": boolean_values["show"],
         "debug": boolean_values["debug"],
         "show_simple": boolean_values["show_simple"],
-        "plot_point_size": float(point_size),
+        "plot_point_size": None if point_size is None else float(point_size),
         "plot_point_color": point_color,
     }
 
@@ -289,8 +289,20 @@ def find_solar_geometry(
                 return saved_geometry
 
     try:
+        settings = _resolve_min2_kwargs(algorithm_settings)
         (center_x, center_y), radius = min2(
-            image, **_resolve_min2_kwargs(algorithm_settings)
+            image,
+            n=settings["n"],
+            light_threshold=settings["light_threshold"],
+            limb_wigth=settings["limb_wigth"],
+            iter_cycles=settings["iter_cycles"],
+            show=settings["show"],
+            debug=settings["debug"],
+            show_simple=settings["show_simple"],
+            config={
+                "plot_point_size": settings["plot_point_size"],
+                "plot_point_color": settings["plot_point_color"],
+            },
         )
     except Exception as error:
         raise ValueError(f"MIN2 による太陽円の推定に失敗しました: {error}") from error

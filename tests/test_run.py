@@ -98,11 +98,13 @@ class ComparisonEntryPointLoggingTests(unittest.TestCase):
         logger_class.assert_not_called()
 
     def test_batch_and_comparison_options_cannot_be_combined(self) -> None:
-        with patch.object(
-            sys, "argv", ["run.py", "--batch", "/images", "--compare", "/date"]
+        with (
+            patch.object(
+                sys, "argv", ["run.py", "--batch", "/images", "--compare", "/date"]
+            ),
+            self.assertRaises(SystemExit) as error,
         ):
-            with self.assertRaises(SystemExit) as error:
-                run.main()
+            run.main()
         self.assertEqual(error.exception.code, 2)
 
     def test_folder_selection_cancel_returns_exit_code_two(self) -> None:

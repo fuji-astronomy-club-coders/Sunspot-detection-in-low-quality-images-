@@ -294,14 +294,18 @@ def main() -> int:
                     parent=root,
                 )
                 return
-        if action == "app" and batch_var.get() and input_folder:
-            if not Path(input_folder).expanduser().is_dir():
-                messagebox.showerror(
-                    "入力フォルダーを確認してください",
-                    "指定した入力画像フォルダーが存在しません。",
-                    parent=root,
-                )
-                return
+        if (
+            action == "app"
+            and batch_var.get()
+            and input_folder
+            and not Path(input_folder).expanduser().is_dir()
+        ):
+            messagebox.showerror(
+                "入力フォルダーを確認してください",
+                "指定した入力画像フォルダーが存在しません。",
+                parent=root,
+            )
+            return
 
         arguments = build_batch_arguments(
             action,

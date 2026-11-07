@@ -4,6 +4,7 @@ import csv
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from src.package.batch_analysis import (
@@ -63,7 +64,12 @@ class BatchRunTests(unittest.TestCase):
             logger.session_dir = session_dir
             logger.data = {"events": []}
 
-            def fake_process_image(*, config, run_logger, output_dir):
+            def fake_process_image(
+                *,
+                config: dict[str, Any],
+                run_logger: Any,
+                output_dir: Path,
+            ) -> int:
                 image_path = Path(config["Paths"]["input_image"])
                 if image_path.name == "02-bad.fits":
                     raise RuntimeError("synthetic processing error")

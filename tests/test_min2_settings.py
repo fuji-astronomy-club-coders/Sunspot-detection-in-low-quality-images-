@@ -27,6 +27,8 @@ class Min2ConfigurationTests(unittest.TestCase):
             "show": True,
             "debug": True,
             "show_simple": True,
+            "plot_point_size": 75,
+            "plot_point_color": "#00aaff",
         }
 
         geometry = ldr.find_solar_geometry(self.image, min2_config=settings)
@@ -41,6 +43,8 @@ class Min2ConfigurationTests(unittest.TestCase):
             show=True,
             debug=True,
             show_simple=True,
+            plot_point_size=75.0,
+            plot_point_color="#00aaff",
         )
 
     @patch("src.package.limb_darking_resolution.min2")
@@ -59,6 +63,8 @@ class Min2ConfigurationTests(unittest.TestCase):
             show=False,
             debug=False,
             show_simple=False,
+            plot_point_size=50.0,
+            plot_point_color="red",
         )
 
     def test_invalid_integer_settings_are_rejected(self) -> None:
@@ -70,6 +76,23 @@ class Min2ConfigurationTests(unittest.TestCase):
             {"light_threshold": 50.5},
             {"limb_width": -1},
             {"iter_cycles": -1},
+        )
+        for settings in invalid_settings:
+            with self.subTest(settings=settings), patch(
+                "src.package.limb_darking_resolution.min2"
+            ) as min2_mock:
+                with self.assertRaises(ValueError):
+                    ldr.find_solar_geometry(self.image, min2_config=settings)
+                min2_mock.assert_not_called()
+
+    def test_invalid_plot_style_settings_are_rejected(self) -> None:
+        """Plot marker sizes must be positive and colors must be valid Matplotlib colors."""
+        invalid_settings = (
+            {"plot_point_size": 0},
+            {"plot_point_size": -1},
+            {"plot_point_size": "large"},
+            {"plot_point_color": "not-a-color"},
+            {"plot_point_color": 123},
         )
         for settings in invalid_settings:
             with self.subTest(settings=settings), patch(

@@ -253,6 +253,7 @@ def process_image(
                 solar_geometry = ldr.find_solar_geometry(
                     image,
                     min2_config=config.get("MIN2"),
+                    image_path=image_path,
                 )
             solar_diameter_px = 2.0 * solar_geometry[1]
             resolved_config, effective_pixel_parameters = resolve_pixel_parameters(

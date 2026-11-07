@@ -21,6 +21,8 @@ MIN2:
   show: false # 最終的なMIN2検出結果をMatplotlibで表示
   debug: false # MIN2の各反復の診断ログ・描画を有効化
   show_simple: false # show/debug時に簡易プロットを使用
+  plot_point_size: 50 # MIN2で描画するエッジ点のサイズ（Matplotlibのpt²）
+  plot_point_color: red # MIN2で描画するエッジ点の色（Matplotlibの色名またはHEX色）
   load_saved_result: true # 同じフォルダの <画像名>_min2.json を優先して再利用
 
 #周縁減光補正

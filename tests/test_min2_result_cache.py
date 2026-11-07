@@ -95,18 +95,32 @@ class Min2SavedResultTests(unittest.TestCase):
             self.assertEqual(geometry, ((22.0, 15.0), 13.0))
             min2_mock.assert_called_once()
 
-    def test_setting_is_optional_and_defaults_to_computation(self) -> None:
+    def test_saved_result_is_loaded_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "sun.tiff"
+            image_path.write_bytes(b"source")
+            self._write_result(image_path)
+            with patch("src.package.limb_darking_resolution.min2") as min2_mock:
+                geometry = ldr.find_solar_geometry(
+                    self.image,
+                    min2_config={},
+                    image_path=image_path,
+                )
+            self.assertEqual(geometry, ((23.25, 15.5), 14.75))
+            min2_mock.assert_not_called()
+
+    def test_explicit_false_disables_saved_result_loading(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             image_path = Path(directory) / "sun.tiff"
             image_path.write_bytes(b"source")
             self._write_result(image_path)
             with patch(
-                "src.package.limb_darking_resolution.min2",
+                "src.package.limb_darkening_resolution.min2",
                 return_value=((21.0, 16.0), 12.0),
             ) as min2_mock:
                 geometry = ldr.find_solar_geometry(
                     self.image,
-                    min2_config={},
+                    min2_config={"load_saved_result": False},
                     image_path=image_path,
                 )
             self.assertEqual(geometry, ((21.0, 16.0), 12.0))
@@ -129,21 +143,42 @@ class Min2SavedResultTests(unittest.TestCase):
             self.assertEqual(geometry, ((22.0, 15.0), 13.0))
             min2_mock.assert_called_once()
 
-    def test_modified_source_image_hash_falls_back_to_min2(self) -> None:
+    def test_modified_source_image_hash_warns_but_uses_saved_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             image_path = Path(directory) / "sun.tiff"
             image_path.write_bytes(b"source")
             self._write_result(image_path, sha256="0" * 64)
-            with patch(
-                "src.package.limb_darking_resolution.min2",
-                return_value=((22.0, 15.0), 13.0),
-            ) as min2_mock:
+            with (
+                self.assertLogs(ldr.LOGGER, level="WARNING") as captured,
+                patch("src.package.limb_darking_resolution.min2") as min2_mock,
+            ):
+                geometry = ldr.find_solar_geometry(
+                    self.image,
+                    min2_config={"load_saved_result": True},
+                    image_path=image_path,
+                )
+            self.assertEqual(geometry, ((23.25, 15.5), 14.75))
+            self.assertTrue(any("SHA-256" in message for message in captured.output))
+            min2_mock.assert_not_called()
+
+    def test_missing_saved_result_warns_before_recomputing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "sun.tiff"
+            image_path.write_bytes(b"source")
+            with (
+                self.assertLogs(ldr.LOGGER, level="WARNING") as captured,
+                patch(
+                    "src.package.limb_darkening_resolution.min2",
+                    return_value=((22.0, 15.0), 13.0),
+                ) as min2_mock,
+            ):
                 geometry = ldr.find_solar_geometry(
                     self.image,
                     min2_config={"load_saved_result": True},
                     image_path=image_path,
                 )
             self.assertEqual(geometry, ((22.0, 15.0), 13.0))
+            self.assertTrue(any("見つかりません" in message for message in captured.output))
             min2_mock.assert_called_once()
 
     def test_cache_option_requires_a_boolean(self) -> None:

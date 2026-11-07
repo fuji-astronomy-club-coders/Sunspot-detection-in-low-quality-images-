@@ -55,7 +55,7 @@ def _resolve_min2_settings(
         settings = {}
     if not isinstance(settings, Mapping):
         raise ValueError("MIN2 は YAML mapping にしてください。")
-    load_saved_result = settings.get("load_saved_result", False)
+    load_saved_result = settings.get("load_saved_result", True)
     if not isinstance(load_saved_result, bool):
         raise ValueError("MIN2.load_saved_result は true または false にしてください。")
     algorithm_settings = {
@@ -73,6 +73,11 @@ def _load_saved_min2_result(
     source_path = Path(image_path)
     result_path = source_path.with_name(f"{source_path.stem}_min2.json")
     if not result_path.is_file():
+        LOGGER.warning(
+            "MIN2.load_saved_result が有効ですが、保存済み結果が見つかりません。"
+            "通常のMIN2計算へ切り替えます: %s",
+            result_path,
+        )
         return None
 
     try:
@@ -92,14 +97,25 @@ def _load_saved_min2_result(
         if source.get("size_bytes") != source_path.stat().st_size:
             raise ValueError("結果ファイルの元画像サイズ（byte）が一致しません。")
         saved_hash = source.get("sha256")
-        if not isinstance(saved_hash, str) or len(saved_hash) != 64:
+        if (
+            not isinstance(saved_hash, str)
+            or len(saved_hash) != 64
+            or any(character not in "0123456789abcdefABCDEF" for character in saved_hash)
+        ):
             raise ValueError("結果ファイルに有効な元画像SHA-256がありません。")
         image_hash = hashlib.sha256()
         with source_path.open("rb") as image_file:
             for chunk in iter(lambda: image_file.read(1024 * 1024), b""):
                 image_hash.update(chunk)
-        if image_hash.hexdigest() != saved_hash.lower():
-            raise ValueError("元画像のSHA-256が一致しません。")
+        current_hash = image_hash.hexdigest()
+        if current_hash != saved_hash.lower():
+            LOGGER.warning(
+                "元画像のSHA-256が保存時と一致しませんが、ユーザー指定により"
+                "保存済みMIN2結果を読み込みます: %s (saved=%s, current=%s)",
+                result_path,
+                saved_hash.lower(),
+                current_hash,
+            )
 
         configuration = payload.get("configuration")
         if (
@@ -234,7 +250,9 @@ def find_solar_geometry(
 
     MIN2.load_saved_result が有効で、入力画像と同じフォルダに
     <画像名>_min2.json が存在する場合はその結果を再利用します。
-    ファイルが無い、または画像名・画像サイズ・内容が一致しない場合はMIN2で再計算します。
+    SHA-256が異なる場合は警告を出したうえで保存結果を読み込みます。
+    ファイルが無い、画像名・画像サイズ・設定が一致しない、または形式が不正な場合は
+    警告を出してMIN2で再計算します。
     """
     algorithm_settings, load_saved_result = _resolve_min2_settings(min2_config)
     if load_saved_result:

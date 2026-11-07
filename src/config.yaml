@@ -21,7 +21,7 @@ MIN2:
   show: false # 最終的なMIN2検出結果をMatplotlibで表示
   debug: false # MIN2の各反復の診断ログ・描画を有効化
   show_simple: false # show/debug時に簡易プロットを使用
-  load_saved_result: false # trueにすると同じフォルダの <画像名>_min2.json を再利用
+  load_saved_result: true # 同じフォルダの <画像名>_min2.json を優先して再利用
 
 #周縁減光補正
 LimbDarkingResolution:

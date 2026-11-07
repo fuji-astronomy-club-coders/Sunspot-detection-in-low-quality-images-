@@ -100,7 +100,7 @@ class MIN2Config:
     show: bool = False  # 結果を描画するか
     debug: bool = False  # ログ/途中経過を出すか
     show_simple: bool = False  # 描画をシンプル表示にするか
-    plot_point_size: float = 50.0  # MIN2プロット点のサイズ（Matplotlibのpt²）
+    plot_point_size: float | None = None  # Noneなら表示形式ごとの従来サイズ
     plot_point_color: str = "red"  # MIN2プロット点の色（Matplotlibの色名またはHEX）
     dir_mode_limb_wigth: int | str = "3/25"  # --dir時の縁幅（D=500pxで60px）
 
@@ -113,8 +113,8 @@ class MIN2Config:
                 continue
             if f.type in (bool, "bool"):
                 ok = isinstance(value, bool)
-            elif f.type is float:
-                ok = (
+            elif f.name == "plot_point_size":
+                ok = value is None or (
                     isinstance(value, (int, float))
                     and not isinstance(value, bool)
                     and np.isfinite(value)
@@ -135,8 +135,8 @@ class MIN2Config:
             raise ValueError("設定 'n'(分割数)は 2 以上にしてください。")
         if self.iter_cycles < 0:
             raise ValueError("設定 'iter_cycles' は 0 以上にしてください。")
-        if self.plot_point_size <= 0:
-            raise ValueError("設定 'plot_point_size' は正の有限値にしてください。")
+        if self.plot_point_size is not None and self.plot_point_size <= 0:
+            raise ValueError("設定 'plot_point_size' はnullまたは正の有限値にしてください。")
         if not is_color_like(self.plot_point_color):
             raise ValueError(
                 "設定 'plot_point_color' はMatplotlibで使用できる色名またはHEX色にしてください。"
@@ -709,8 +709,6 @@ def MIN2_ignore_sunspots(
     img_path: pathlib.Path | str | None = "",
     show_simple: bool | None = None,
     config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
-    plot_point_size: float | None = None,
-    plot_point_color: str | None = None,
 ) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
@@ -729,8 +727,6 @@ def MIN2_ignore_sunspots(
         img_path: 処理する画像のファイルパス("PATH"指定時は必須。配列を渡した場合は表示用の名前として使うだけ)。
         show_simple (bool | None): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。
         config: 設定。YAMLのパス / dict / MIN2Config / None。None なら既定値(自動探索はしない)。
-        plot_point_size: MIN2プロット点のサイズ。Noneならconfigの値を使用する。
-        plot_point_color: MIN2プロット点の色。Noneならconfigの値を使用する。
 
     上記の n〜show_simple は None のとき config の値、config にも無ければ既定値を使います。
     明示的に渡した引数が常に最優先です。
@@ -763,17 +759,8 @@ def MIN2_ignore_sunspots(
     show = cfg.show if show is None else show
     debug = cfg.debug if debug is None else debug
     show_simple = cfg.show_simple if show_simple is None else show_simple
-    plot_point_size = cfg.plot_point_size if plot_point_size is None else plot_point_size
-    plot_point_color = cfg.plot_point_color if plot_point_color is None else plot_point_color
-    if (
-        isinstance(plot_point_size, bool)
-        or not isinstance(plot_point_size, (int, float))
-        or not np.isfinite(plot_point_size)
-        or plot_point_size <= 0
-    ):
-        raise ValueError("plot_point_size は正の有限値にしてください。")
-    if not isinstance(plot_point_color, str) or not is_color_like(plot_point_color):
-        raise ValueError("plot_point_color はMatplotlibで使用できる色名またはHEX色にしてください。")
+    plot_point_size = cfg.plot_point_size
+    plot_point_color = cfg.plot_point_color
 
     if n < 2:
         raise ValueError("分割数 n は 2 以上にしてください。")

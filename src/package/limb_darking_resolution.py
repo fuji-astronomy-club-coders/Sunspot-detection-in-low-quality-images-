@@ -1,5 +1,6 @@
 """周縁減光を補正するプログラム"""
 
+import json
 import logging
 from collections.abc import Mapping
 from pathlib import Path
@@ -15,7 +16,7 @@ from src.module.MIN2ver2 import MIN2_ignore_sunspots as min2
 
 LOGGER = logging.getLogger("sunspot.limb_darkening")
 
-version = "0.0.1"
+version = "0.0.2"
 min2_version = min2_module.version
 
 
@@ -40,6 +41,78 @@ _MIN2_DEFAULTS: dict[str, int | str | bool] = {
     "debug": False,
     "show_simple": False,
 }
+
+_MIN2_RESULT_FORMAT = "solar_disk_detection.min2_result"
+_MIN2_RESULT_FORMAT_VERSION = 1
+
+
+def _resolve_min2_settings(
+    settings: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any], bool]:
+    """Separate application-only cache settings from MIN2 algorithm parameters."""
+    if settings is None:
+        settings = {}
+    if not isinstance(settings, Mapping):
+        raise ValueError("MIN2 は YAML mapping にしてください。")
+    load_saved_result = settings.get("load_saved_result", False)
+    if not isinstance(load_saved_result, bool):
+        raise ValueError("MIN2.load_saved_result は true または false にしてください。")
+    algorithm_settings = {
+        key: value for key, value in settings.items() if key != "load_saved_result"
+    }
+    return algorithm_settings, load_saved_result
+
+
+def _load_saved_min2_result(
+    image: np.ndarray,
+    image_path: str | Path,
+) -> tuple[tuple[float, float], float] | None:
+    """Load a matching MIN2 JSON sidecar, returning None when it is absent or invalid."""
+    source_path = Path(image_path)
+    result_path = source_path.with_name(f"{source_path.stem}_min2.json")
+    if not result_path.is_file():
+        return None
+
+    try:
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("結果ファイルのルートはJSON objectである必要があります。")
+        if payload.get("format") != _MIN2_RESULT_FORMAT:
+            raise ValueError("未対応のMIN2結果ファイル形式です。")
+        if payload.get("format_version") != _MIN2_RESULT_FORMAT_VERSION:
+            raise ValueError("未対応のMIN2結果ファイルバージョンです。")
+
+        source = payload.get("source_image")
+        if not isinstance(source, dict) or source.get("name") != source_path.name:
+            raise ValueError("結果ファイルの元画像名が一致しません。")
+        if source.get("shape") != [int(image.shape[0]), int(image.shape[1])]:
+            raise ValueError("結果ファイルの画像サイズが現在の画像と一致しません。")
+
+        geometry = payload.get("solar_geometry")
+        if not isinstance(geometry, dict):
+            raise ValueError("太陽円の結果データがありません。")
+        values = (
+            geometry["center_x_px"],
+            geometry["center_y_px"],
+            geometry["radius_px"],
+        )
+        if any(isinstance(value, bool) for value in values):
+            raise ValueError("太陽円の座標・半径が数値ではありません。")
+        center_x, center_y, radius = (float(value) for value in values)
+        if not all(np.isfinite(value) for value in (center_x, center_y, radius)):
+            raise ValueError("太陽円の座標・半径に有限値以外が含まれています。")
+        if radius <= 0:
+            raise ValueError("太陽半径は正の値である必要があります。")
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        LOGGER.warning(
+            "保存済みMIN2結果を利用できません。通常のMIN2計算へ切り替えます: %s (%s)",
+            result_path,
+            error,
+        )
+        return None
+
+    LOGGER.info("保存済みMIN2結果を読み込みました: %s", result_path)
+    return (center_x, center_y), radius
 
 
 def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
@@ -107,18 +180,31 @@ def _resolve_min2_kwargs(settings: Mapping[str, Any] | None) -> _Min2Kwargs:
 def find_solar_geometry(
     image: np.ndarray,
     min2_config: Mapping[str, Any] | None = None,
+    *,
+    image_path: str | Path | None = None,
 ) -> tuple[tuple[float, float], float]:
-    """MIN2 の設定を適用して画像内の太陽中心と半径を取得する。
+    """MIN2の設定と必要に応じて保存済み結果を使い、太陽中心・半径を取得する。
 
-    Parameters
-    ----------
-    image : numpy.ndarray
-        太陽画像。
-    min2_config : Mapping[str, Any] | None, optional
-        config.yaml の MIN2 セクション。省略した場合は既定値を使用する。
+    MIN2.load_saved_result が有効で、入力画像と同じフォルダに
+    <画像名>_min2.json が存在する場合はその結果を再利用します。
+    ファイルが無い、または画像名・画像サイズ・内容が一致しない場合はMIN2で再計算します。
     """
+    algorithm_settings, load_saved_result = _resolve_min2_settings(min2_config)
+    if load_saved_result:
+        if image_path is None:
+            LOGGER.warning(
+                "MIN2.load_saved_result が有効ですが画像パスが指定されていないため、"
+                "保存済み結果を検索せずMIN2で計算します。"
+            )
+        else:
+            saved_geometry = _load_saved_min2_result(image, image_path)
+            if saved_geometry is not None:
+                return saved_geometry
+
     try:
-        (center_x, center_y), radius = min2(image, **_resolve_min2_kwargs(min2_config))
+        (center_x, center_y), radius = min2(
+            image, **_resolve_min2_kwargs(algorithm_settings)
+        )
     except Exception as error:
         raise ValueError(f"MIN2 による太陽円の推定に失敗しました: {error}") from error
 
